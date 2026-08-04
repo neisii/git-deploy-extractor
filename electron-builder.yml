@@ -1,5 +1,5 @@
 appId: com.gitdeployextractor.app
-productName: git-deploy-extractor
+productName: Git Deploy Extractor
 directories:
   buildResources: build
 files:

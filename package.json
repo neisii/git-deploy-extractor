@@ -1,6 +1,6 @@
 {
   "name": "git-deploy-extractor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Git Commit 이력을 기반으로 배포 대상 파일을 자동 추출하는 Desktop Application",
   "main": "./out/main/index.js",
   "author": "neisii",
