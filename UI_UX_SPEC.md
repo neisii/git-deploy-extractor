@@ -105,13 +105,17 @@ AppShell
 | 헤더 "전체 선택" 체크박스 | 현재 **필터에 표시된 행 기준**으로 전체 체크/해제. 필터로 숨겨진 행은 건드리지 않는다. 표시된 행 일부만 체크된 상태면 indeterminate(가로줄) 표시 |
 | Filter dropdown | `all \| added \| modified` (클라이언트 사이드 필터, 재계산 없음. `deleted`는 이 목록 대상이 아니므로 필터 옵션에서 제외. Rename을 별도 감지하지 않으므로 `renamed` 옵션도 없음 — DR-008) |
 | 각 행 체크박스 | `included` 토글. 해제된 파일은 Export 시 deploy-files.txt와 실제 복사 대상에서 빠진다(REQ-011) |
-| Local Path / Server Path 열 | `localPath`, `serverPath`(Mapping Rule 적용 후) 나란히 표시 |
+| Local Path / Server Path 열 | `localPath`, `serverPath`(Mapping Rule 적용 후) 나란히 표시. 각 열 헤더 오른쪽 경계를 드래그하면 최소 폭을 조절할 수 있다 |
 
 **상태**: `deployFiles: { localPath: string; serverPath: string; status: 'added'|'modified'; included: boolean }[]`, `filter: 'all'|'added'|'modified'`
 
 **가상 스크롤 임계값**: 필터링된 표시 대상이 **300개를 넘으면** CommitListPanel과 동일하게 react-window 가상 스크롤을 적용한다. 이 목록은 Commit List와 달리 페이지네이션 대상이 아니다 — 계산이 이미 한 번에 끝나 전체가 메모리에 있으므로 렌더링만 가상화하면 된다. 300개는 행 하나(체크박스+경로 2열, DOM 노드 약 4개) 기준 대략치이며, 실사용 데이터로 재조정 가능하다.
 
 `전체 선택` 체크 상태는 별도 필드로 저장하지 않고 `deployFiles`에서 파생 계산한다(`filtered.every(f => f.included)` → checked, `filtered.some(f => f.included)` → indeterminate, 그 외 unchecked) — 상태 중복 저장으로 인한 불일치를 피하기 위함.
+
+**추가 (Local/Server Path 컬럼 가로 스크롤·리사이즈, 2026-08-04, 사용자 피드백)**: 긴 경로가 잘려 보이는 문제를 해결하기 위해 두 열 모두 텍스트를 자르지 않는다(ellipsis 없음) — 컬럼 폭보다 내용이 길면 패널 전체가 가로로 스크롤되어 전체 경로를 볼 수 있다. 각 열 헤더의 리사이즈 핸들을 드래그하면 "최소 폭"을 지정할 수 있는데, 실제 렌더링 폭은 항상 (지정한 최소 폭, 내용 길이) 중 큰 값이므로 아무리 좁게 줄여도 텍스트가 잘리거나 옆 열을 침범하지 않는다. 조절한 폭은 `localStorage`에 전역 설정 하나로 저장되어(저장소별 구분 없음) 앱 재실행 후에도 유지된다.
+
+**알려진 제약**: 필터링된 표시 대상이 300개를 넘어 가상 스크롤이 적용되는 경우, react-window가 세로 가상 스크롤을 위해 자기 루트에 `overflow-y:auto`를 설정하는데 CSS 스펙상 이것이 가로축에도 전이되어(visible과 non-visible을 함께 쓸 수 없음) 리스트 자신이 별도의 가로 스크롤 컨텍스트가 된다. 그 결과 리스트 내부 스크롤로 긴 경로를 전부 볼 수는 있지만, 헤더 라벨("Local Path"/"Server Path")이 그 스크롤과 동기화되지 않는다. 300개 이하(일반적인 경우)에서는 헤더와 완전히 동기화된다.
 
 ## 2.7 DeleteListPanel
 
