@@ -5,7 +5,6 @@ export function FooterActionBar(): React.JSX.Element {
   const selectedProfile = useAppStore((s) => s.selectedProfile)
   const setProfile = useAppStore((s) => s.setProfile)
   const selectedHashes = useAppStore((s) => s.selectedHashes)
-  const runPreview = useAppStore((s) => s.runPreview)
   const runExport = useAppStore((s) => s.runExport)
   const exportStatus = useAppStore((s) => s.exportStatus)
   const exportError = useAppStore((s) => s.exportError)
@@ -27,9 +26,6 @@ export function FooterActionBar(): React.JSX.Element {
           ))}
         </select>
       </label>
-      <button disabled={noSelection} onClick={() => void runPreview()}>
-        Preview
-      </button>
       <button disabled={exportDisabled} onClick={() => void runExport()}>
         {exportStatus === 'exporting' ? '내보내는 중...' : 'Export'}
       </button>

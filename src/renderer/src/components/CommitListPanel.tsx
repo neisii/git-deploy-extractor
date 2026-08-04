@@ -40,6 +40,7 @@ export function CommitListPanel(): React.JSX.Element {
   const pagination = useAppStore((s) => s.commitPagination)
   const loadNextPage = useAppStore((s) => s.loadNextPage)
   const commitListError = useAppStore((s) => s.commitListError)
+  const runPreview = useAppStore((s) => s.runPreview)
 
   const allChecked = commits.length > 0 && commits.every((c) => selectedHashes.has(c.hash))
   const someChecked = commits.some((c) => selectedHashes.has(c.hash))
@@ -80,6 +81,9 @@ export function CommitListPanel(): React.JSX.Element {
           />
           전체 선택
         </label>
+        <button disabled={selectedHashes.size === 0} onClick={() => void runPreview()}>
+          Preview
+        </button>
       </div>
       <div className="commit-list-panel__body">
         <List

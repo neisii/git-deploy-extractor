@@ -30,12 +30,14 @@ AppShell
 ├── RepositoryPanel               (저장소 선택/새로고침)
 ├── BranchSearchBar               (브랜치 선택 + 커밋 검색)
 ├── MainGrid
-│   ├── CommitListPanel           (좌: 커밋 목록, 다중 선택)
+│   ├── CommitListPanel           (좌: 커밋 목록, 다중 선택 + 전체 선택 + Preview 트리거)
 │   └── DeploymentPreviewPanel    (우: 집계 미리보기, 읽기 전용)
 ├── DeployFilesPanel              (배포 대상 파일 목록 + 개별/전체 선택)
 ├── DeleteListPanel               (삭제 대상 목록, 읽기 전용)
-└── FooterActionBar               (Mapping Profile 선택 + Preview/Export)
+└── FooterActionBar               (Mapping Profile 선택 + Export)
 ```
+
+**정정 (Preview 위치 이동, 2026-08-04, 사용자 요청)**: `[Preview]`는 원래 FooterActionBar에 있었으나, "커밋을 고르고 → 바로 그 자리에서 계산한다"는 흐름이 더 직관적이라는 사용자 피드백으로 CommitListPanel 헤더로 옮겼다 — "전체 선택" 체크박스와 같은 행, 패널 우측 끝에 배치한다(§2.4).
 
 ---
 
@@ -77,11 +79,12 @@ AppShell
 
 ## 2.4 CommitListPanel
 
-**책임**: REQ-003, REQ-004. 가상 스크롤(react-window) 목록, 체크박스 다중 선택.
+**책임**: REQ-003, REQ-004. 가상 스크롤(react-window) 목록, 체크박스 다중 선택. 헤더에 `[Preview]`도 포함한다 — 원래 FooterActionBar에 있었으나 "커밋을 고르고 바로 그 자리에서 계산한다"는 흐름이 더 직관적이라는 사용자 피드백으로 이동했다(2026-08-04).
 
 | 요소 | 동작 |
 |---|---|
-| 헤더 "전체 선택" 체크박스 | 현재 **로드된 commits 기준**으로 전체 체크/해제(아직 스크롤로 안 불러온 다음 페이지는 건드리지 않음). 일부만 체크된 상태면 indeterminate 표시 — DeployFilesPanel의 전체 선택(§2.6)과 동일한 방식(추가, 2026-08-04, 사용자 요청) |
+| 헤더 "전체 선택" 체크박스 (좌측) | 현재 **로드된 commits 기준**으로 전체 체크/해제(아직 스크롤로 안 불러온 다음 페이지는 건드리지 않음). 일부만 체크된 상태면 indeterminate 표시 — DeployFilesPanel의 전체 선택(§2.6)과 동일한 방식(추가, 2026-08-04, 사용자 요청) |
+| 헤더 `[Preview]` 버튼 (우측) | 헤더 행 최우측, "전체 선택"과 같은 줄에 배치. `selectedHashes.size === 0`일 때 비활성. 클릭 시 Commit 분석 + Mapping 엔진을 실행해 DeploymentPreviewPanel/DeployFilesPanel/DeleteListPanel을 최신 상태로 확정 표시하고 `analyzedSelection`(§2.5)을 갱신한다. **부작용 없음(파일시스템 변경 없음)** — 이 앱에서 계산이 일어나는 유일한 경로다(§2.5 참고) |
 | 각 행 | 체크박스 + `hash`(mono, 7자) + `author` + `date`(mono, ISO-strict 그대로) + `message` 순서로 표시(REQ-003의 Hash/Author/Date/Message 순서 그대로). 클릭 시 `selectedHashes` 토글 |
 | 스크롤 하단 도달 | 다음 페이지 IPC 요청 (DETAILED_DESIGN.md §3.4, `pageSize=100`) |
 
@@ -130,15 +133,16 @@ AppShell
 
 ## 2.8 FooterActionBar
 
-**책임**: REQ-009, REQ-010. Mapping Profile 선택 + 실행 트리거. (§0-3 결정으로 2버튼 구조 — `[Build]` 없음)
+**책임**: REQ-009, REQ-010. Mapping Profile 선택 + Export 실행. (§0-3 결정으로 Preview/Export 2단계 구조 확정 — `[Build]` 없음)
+
+**정정 (Preview 위치 이동, 2026-08-04, 사용자 요청)**: `[Preview]`는 원래 이 컴포넌트에 있었으나, "커밋을 고르고 → 바로 그 자리에서 계산한다"는 흐름이 더 직관적이라는 피드백으로 CommitListPanel 헤더(§2.4)로 옮겼다. FooterActionBar는 이제 Mapping Profile + `[Export]`만 담당한다.
 
 | 요소 | 동작 |
 |---|---|
-| Mapping Profile dropdown | `profiles: string[]`(userData/profiles/ 디렉터리 목록). 변경 자체는 계산을 트리거하지 않는다 — `isStale`이 즉시 true가 되어 `[Preview]`를 다시 눌러야 새 Profile 기준 `serverPath`가 반영된다 |
-| `[Preview]` | Commit 분석 + Mapping 엔진을 실행해 DeploymentPreviewPanel/DeployFilesPanel/DeleteListPanel을 최신 상태로 확정 표시하고 `analyzedSelection`을 갱신한다. **부작용 없음(파일시스템 변경 없음)**. §2.5 정정대로 이 앱에서 계산이 일어나는 유일한 경로다 |
+| Mapping Profile dropdown | `profiles: string[]`(userData/profiles/ 디렉터리 목록). 변경 자체는 계산을 트리거하지 않는다 — `isStale`이 즉시 true가 되어 `[Preview]`(§2.4)를 다시 눌러야 새 Profile 기준 `serverPath`가 반영된다 |
 | `[Export]` | Preview에 표시된 내용을 그대로 실행: `deploy/` 생성 + 파일 복사 + delete-list.txt/deploy-files.txt/deploy-summary.json 생성까지 전부 수행 (DETAILED_DESIGN.md §2, Package Builder 전체) |
 
-버튼 비활성 조건: `[Preview]`는 `selectedHashes.size === 0`일 때 비활성. `[Export]`는 그 조건에 더해 `isStale`(§2.5)일 때도 비활성 — 마지막 Preview 결과가 지금 선택과 정확히 일치할 때만 눌러진다. `isStale`인데 선택이 비어있지 않으면 "Preview를 먼저 실행하세요" 안내를 버튼 옆에 표시한다.
+버튼 비활성 조건: `[Export]`는 `selectedHashes.size === 0`이거나 `isStale`(§2.5)일 때 비활성 — 마지막 Preview 결과가 지금 선택과 정확히 일치할 때만 눌러진다. `isStale`인데 선택이 비어있지 않으면 "Preview를 먼저 실행하세요" 안내를 버튼 옆에 표시한다.
 
 **정정 (Export 직전 레이스 컨디션 방지, 2026-08-04)**: 이전 초안(자동 재계산)에서는 디바운스 대기 중에 `[Export]`를 누르면, 방금 바뀐 선택이 `selectedCommits`(즉석 계산이라 정확)엔 반영되지만 `deployFiles`/`deleteList`(디바운스 후에야 갱신되는 옛 계산 결과)엔 반영 안 된 채로 나가는 문제가 있었다 — `deploy-summary.json`은 선택한 커밋을 전부 기록하는데 실제 복사된 파일은 일부 커밋 분만 빠지는, 에러 없이 조용히 틀린 결과였다. `[Export]`를 `isStale`일 때 비활성화하는 것만으로 이 구간 자체가 없어진다(추가로 `runExport()` 내부에서도 한 번 더 확인한다).
 
