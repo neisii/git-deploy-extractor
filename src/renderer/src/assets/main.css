@@ -110,6 +110,15 @@ body,
   flex: 0 0 auto;
 }
 
+.commit-row__author {
+  color: var(--ev-c-text-2);
+  flex: 0 0 auto;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .commit-row__date {
   font-family: ui-monospace, Menlo, Consolas, monospace;
   color: var(--ev-c-text-2);

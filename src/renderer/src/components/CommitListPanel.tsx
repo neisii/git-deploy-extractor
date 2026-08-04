@@ -24,6 +24,7 @@ function CommitRow({
       <label>
         <input type="checkbox" checked={checked} onChange={() => onToggle(commit.hash)} />
         <span className="commit-row__hash">{commit.hash.slice(0, 7)}</span>
+        <span className="commit-row__author">{commit.author}</span>
         <span className="commit-row__date">{commit.date}</span>
         <span className="commit-row__message">{commit.message}</span>
       </label>

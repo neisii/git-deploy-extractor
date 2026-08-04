@@ -82,14 +82,12 @@ AppShell
 | 요소 | 동작 |
 |---|---|
 | 헤더 "전체 선택" 체크박스 | 현재 **로드된 commits 기준**으로 전체 체크/해제(아직 스크롤로 안 불러온 다음 페이지는 건드리지 않음). 일부만 체크된 상태면 indeterminate 표시 — DeployFilesPanel의 전체 선택(§2.6)과 동일한 방식(추가, 2026-08-04, 사용자 요청) |
-| 각 행 | 체크박스 + `hash`(mono, 7자) + `date`(mono, ISO-strict 그대로) + `message` 순서로 표시. 클릭 시 `selectedHashes` 토글 |
+| 각 행 | 체크박스 + `hash`(mono, 7자) + `author` + `date`(mono, ISO-strict 그대로) + `message` 순서로 표시(REQ-003의 Hash/Author/Date/Message 순서 그대로). 클릭 시 `selectedHashes` 토글 |
 | 스크롤 하단 도달 | 다음 페이지 IPC 요청 (DETAILED_DESIGN.md §3.4, `pageSize=100`) |
 
 **상태**: `commits: CommitEntry[]`, `selectedHashes: Set<string>`, `pagination: { hasMore: boolean; loading: boolean }`
 
 **빈/로딩/에러 상태**: §5 참고.
-
-**참고 (REQ-003과의 차이)**: REQ-003은 Hash/Author/Date/Message 4개 필드 표시를 요구하지만, 현재 행은 Hash/Date/Message 3개만 표시하고 **Author는 표시하지 않는다**(2026-08-04, 사용자 지시로 이 순서·구성 확정). REQ-003 대비 의도적 축소인지 확인 필요 — 필요하면 Author 열 추가.
 
 ## 2.5 DeploymentPreviewPanel
 
