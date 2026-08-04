@@ -3,7 +3,16 @@
   "version": "0.1.0",
   "description": "Git Commit 이력을 기반으로 배포 대상 파일을 자동 추출하는 Desktop Application",
   "main": "./out/main/index.js",
-  "author": "",
+  "author": "neisii",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neisii/git-deploy-extractor.git"
+  },
+  "homepage": "https://github.com/neisii/git-deploy-extractor#readme",
+  "bugs": {
+    "url": "https://github.com/neisii/git-deploy-extractor/issues"
+  },
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",

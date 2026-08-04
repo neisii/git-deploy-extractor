@@ -71,3 +71,16 @@ npm run build:mac
 ```
 
 macOS/Windows만 지원한다 (REQUIREDMENT.md §10).
+
+## Contributing
+
+이슈/버그 제보는 [GitHub Issues](https://github.com/neisii/git-deploy-extractor/issues)로
+남겨준다. PR을 보낼 땐 관련 설계 문서(`REQUIREDMENT.md` 등)와 상충하는 변경이 아닌지
+먼저 확인하고, 변경 사항이 요구사항/설계에 영향을 준다면 문서도 함께 갱신해달라.
+
+## License
+
+[MIT](LICENSE) © 2026 [neisii](https://github.com/neisii)
+
+단, `src/renderer/src/assets/goraeng.png`는 MIT 라이선스 대상에서 제외된다 —
+저작권은 neisii에게 있으며 무단전재 및 재배포를 금지한다(자세한 내용은 `LICENSE` 참고).
