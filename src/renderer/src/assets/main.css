@@ -221,19 +221,34 @@ body,
   min-height: 0;
 }
 
-/* 리사이즈는 최소 폭만 지정한다 — 실제 폭은 (최소 폭, 내용 길이) 중 큰
+/* 리사이즈는 최소 폭만 지정한다 — 실제 폭은 (최소 폭, 내용 폭) 중 큰
    값으로 정해져서 아무리 좁혀도 텍스트가 잘리거나 옆 칸을 침범하지 않고,
-   넘치는 만큼은 .deploy-files-panel__scroll의 가로 스크롤로 해결된다. */
+   넘치는 만큼은 .deploy-files-panel__scroll의 가로 스크롤로 해결된다.
+   내용 폭(--*-col-natural)은 CSS의 max-content가 아니라 JS가 실측해서
+   주입한 값이다 — 헤더와 각 행이 서로 별도의 grid 컨테이너라 max-content를
+   쓰면 행마다 독립적으로 계산되어 헤더/목록 폭이 어긋나는 문제가 있었다. */
 .deploy-files-grid-row {
   display: grid;
   grid-template-columns:
     24px
-    minmax(var(--local-col-min, 100px), max-content)
-    minmax(var(--server-col-min, 100px), max-content);
+    minmax(var(--local-col-min, 100px), var(--local-col-natural, 100px))
+    minmax(var(--server-col-min, 100px), var(--server-col-natural, 100px));
   align-items: center;
   gap: 8px;
   padding: 0 4px;
   width: max-content;
+}
+
+/* 컬럼 실측 폭 계산용 프로브 — 화면에 그려지지 않고 레이아웃에도 관여하지 않는다 */
+.deploy-files-measure-probe {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .deploy-files-panel__columns {
@@ -286,6 +301,14 @@ body,
 .deploy-files-row__server {
   font-family: ui-monospace, Menlo, Consolas, monospace;
   white-space: nowrap;
+}
+
+.deploy-files-row__local--clickable {
+  cursor: pointer;
+}
+
+.deploy-files-row__local--clickable:hover {
+  text-decoration: underline;
 }
 
 .deploy-files-row__server {
