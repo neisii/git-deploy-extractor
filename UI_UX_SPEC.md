@@ -16,7 +16,7 @@ REQUIREDMENT.md 8번 섹션 와이어프레임을 컴포넌트/상태/인터랙�
 |---|---|---|
 | 1 | 상단 타이틀바의 `contract2/main ▼`와 "Branch :" 행의 `contract2/main ▼`가 와이어프레임에 중복 등장 | **채택**: 인터랙티브 컨트롤은 "Branch :" 행 하나만, 타이틀바는 읽기 전용 텍스트 |
 | 2 | Deploy Files 목록의 체크박스(`☑`)가 표시용인지 조작 가능한지 REQ에 명시 없음 | **확정**: 인터랙티브. 실제로 필요한 파일만 선택해서 추출할 수 있어야 하기 때문. **전체 선택/해제 토글도 추가** → REQ-011로 REQUIREDMENT.md에 반영 완료 |
-| 3 | `[Preview] [Export] [Build]` 세 버튼의 차이가 REQUIREDMENT.md에 없음 | **[Build] 버튼 제거, 2버튼 구조로 확정**: Preview=배포될 디렉터리 구조와 파일 목록을 보여주는 확인 단계(부작용 없음) / Export=Preview에서 확인한 내용 그대로 실제 추출(파일 복사 + deploy/ 생성 + txt/json 산출물까지 전부, 기존 "Build"가 하던 일을 흡수). 근거: REQUIREDMENT.md 원본 와이어프레임에 있던 `[Build]`는 "코드 컴파일"이 아니라 "배포 패키지 조립"을 뜻했는데(DR-011이 이미 컴파일은 범위 밖으로 확정), 사용자가 의도한 건 애초에 Preview/Export 2단계 구조였음 |
+| 3 | `[Preview] [Export] [Build]` 세 버튼의 차이가 REQUIREDMENT.md에 없음 | **[Build] 버튼 제거, 2버튼 구조로 확정**: Preview=배포될 디렉터리 구조와 파일 목록을 보여주는 확인 단계(부작용 없음) / Export=Preview에서 확인한 내용 그대로 실제 추출(파일 복사 + git-deploy-extracted/ 생성 + txt/json 산출물까지 전부, 기존 "Build"가 하던 일을 흡수). 근거: REQUIREDMENT.md 원본 와이어프레임에 있던 `[Build]`는 "코드 컴파일"이 아니라 "배포 패키지 조립"을 뜻했는데(DR-011이 이미 컴파일은 범위 밖으로 확정), 사용자가 의도한 건 애초에 Preview/Export 2단계 구조였음 |
 
 **시각 자료**: 위 3가지를 그림으로 정리한 자료 — `ambiguity-explainer.html` (같은 프로젝트 루트에 위치)
 
@@ -141,7 +141,7 @@ AppShell
 | 요소 | 동작 |
 |---|---|
 | Mapping Profile dropdown | `profiles: string[]`(userData/profiles/ 디렉터리 목록). 변경 자체는 계산을 트리거하지 않는다 — `isStale`이 즉시 true가 되어 `[Preview]`(§2.4)를 다시 눌러야 새 Profile 기준 `serverPath`가 반영된다 |
-| `[Export]` | Preview에 표시된 내용을 그대로 실행: `deploy/` 생성 + 파일 복사 + delete-list.txt/deploy-files.txt/deploy-summary.json 생성까지 전부 수행 (DETAILED_DESIGN.md §2, Package Builder 전체) |
+| `[Export]` | Preview에 표시된 내용을 그대로 실행: `git-deploy-extracted/` 생성 + 파일 복사 + delete-list.txt/deploy-files.txt/deploy-summary.json 생성까지 전부 수행 (DETAILED_DESIGN.md §2, Package Builder 전체) |
 
 버튼 비활성 조건: `[Export]`는 `selectedHashes.size === 0`이거나 `isStale`(§2.5)일 때 비활성 — 마지막 Preview 결과가 지금 선택과 정확히 일치할 때만 눌러진다. `isStale`인데 선택이 비어있지 않으면 "Preview를 먼저 실행하세요" 안내를 버튼 옆에 표시한다.
 

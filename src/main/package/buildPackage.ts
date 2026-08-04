@@ -52,7 +52,7 @@ export async function buildPackage(params: BuildPackageParams): Promise<BuildPac
     throw new Error(`대소문자만 다른 경로 충돌이 발견되어 중단합니다: ${detail}`)
   }
 
-  const deployDir = join(repoPath, 'deploy')
+  const deployDir = join(repoPath, 'git-deploy-extracted')
   // 재실행 시 이전 Export의 잔여 파일이 이번 선택 범위와 섞이지 않도록
   // 매번 완전히 비우고 새로 만든다.
   await fs.rm(deployDir, { recursive: true, force: true })

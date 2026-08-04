@@ -104,7 +104,7 @@ interface MappingOverride {
 
 ## 2.1 deploy-files.txt
 
-배포 대상 파일의 **Server Path**(Mapping Rule 적용 결과, `deploy/` 기준 상대경로)를 한 줄에 하나씩 기록한다.
+배포 대상 파일의 **Server Path**(Mapping Rule 적용 결과, `git-deploy-extracted/` 기준 상대경로)를 한 줄에 하나씩 기록한다.
 
 ```
 src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeListController.java
@@ -253,7 +253,7 @@ git -C <repo> diff-tree --no-commit-id --name-status -r 4b825dc642cb6eb9a060e54b
 
 **확정**: 모든 경로 비교(§1.1 Mapping Rule 매칭 포함)는 항상 대소문자를 구분한다. 배포 대상인 내부망 서버가 대소문자를 구분하는 환경이기 때문이다.
 
-**리스크**: 개발 장비가 Windows 11(NTFS, 기본적으로 대소문자를 구분하지 않음)이다. Git 저장소 자체는 대소문자를 구분해서 저장하므로, 이론상 대소문자만 다른 두 경로가 서로 다른 파일로 존재할 수 있다. 이 경우 Package Builder가 `deploy/`에 파일을 쓸 때 로컬 파일시스템이 두 경로를 같은 파일로 인식해 하나가 다른 하나를 조용히 덮어쓸 수 있다.
+**리스크**: 개발 장비가 Windows 11(NTFS, 기본적으로 대소문자를 구분하지 않음)이다. Git 저장소 자체는 대소문자를 구분해서 저장하므로, 이론상 대소문자만 다른 두 경로가 서로 다른 파일로 존재할 수 있다. 이 경우 Package Builder가 `git-deploy-extracted/`에 파일을 쓸 때 로컬 파일시스템이 두 경로를 같은 파일로 인식해 하나가 다른 하나를 조용히 덮어쓸 수 있다.
 
 **대응**: 파일을 쓰기 전, 계산된 배포 대상 경로 목록에서 대소문자만 다른 경로 쌍이 있는지 사전 검사한다. 발견되면 자동으로 진행하지 않고 즉시 에러로 중단하며 어떤 두 경로가 충돌하는지 사용자에게 보여준다(자동 덮어쓰기 금지 — DR-002 "정확하게 추출" 원칙에 따라 조용한 데이터 손실보다 명시적 실패가 낫다).
 
@@ -261,7 +261,7 @@ git -C <repo> diff-tree --no-commit-id --name-status -r 4b825dc642cb6eb9a060e54b
 
 **배경**: Windows + IntelliJ System-Dependent 조합이면 로컬에서 새로 저장되는 줄은 CRLF로 기록될 가능성이 높다. 다만 Package Builder는 파일 내용을 워킹트리가 아니라 `git show <branch>:<path>`(§3.2)로 읽는다 — 이 명령은 체크아웃 필터(`core.autocrlf`)를 거치지 않고 커밋된 blob 원본 바이트를 그대로 반환하므로, 우리 프로세스가 별도로 손대지 않는 한 원본 그대로 재현된다.
 
-**확정**: Package Builder가 이 내용을 `deploy/` 하위에 쓸 때는 반드시 **binary/raw 모드**로 쓴다(Node.js에서 텍스트 모드로 쓰면 줄바꿈이 조용히 변환될 수 있음). 즉 git이 반환한 바이트를 그대로, 어떤 형태의 텍스트 처리(인코딩 재해석, 줄바꿈 정규화)도 거치지 않고 디스크에 옮긴다. 이 규칙은 §2.3의 UTF-8/LF 고정 규칙과는 별개다 — 그건 Export 산출물 3종(deploy-files.txt 등 메타데이터)에만 적용되고, 이 규칙은 복사되는 소스 파일 자체에 적용된다.
+**확정**: Package Builder가 이 내용을 `git-deploy-extracted/` 하위에 쓸 때는 반드시 **binary/raw 모드**로 쓴다(Node.js에서 텍스트 모드로 쓰면 줄바꿈이 조용히 변환될 수 있음). 즉 git이 반환한 바이트를 그대로, 어떤 형태의 텍스트 처리(인코딩 재해석, 줄바꿈 정규화)도 거치지 않고 디스크에 옮긴다. 이 규칙은 §2.3의 UTF-8/LF 고정 규칙과는 별개다 — 그건 Export 산출물 3종(deploy-files.txt 등 메타데이터)에만 적용되고, 이 규칙은 복사되는 소스 파일 자체에 적용된다.
 
 ---
 

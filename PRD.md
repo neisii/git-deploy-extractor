@@ -81,7 +81,7 @@
 | REQ-007 | 선택 Commit 시점 이후 같은 파일이 추가로 수정된 이력이 있음 | Deploy Files가 계산됨 | 복사되는 파일 내용은 Commit 시점이 아니라 기준 Branch HEAD의 최신 버전이다(DR-003) |
 | REQ-008 | Spring 표준 구조(src/main/java, src/main/resources) 프로젝트 | Mapping Rule이 적용됨 | Local Path와 Server Path가 동일하게 유지된다(별도 설정 불필요) |
 | | Mapping Profile에 특정 경로 override가 정의된 경우 | 해당 경로의 파일이 포함됨 | override에 정의된 target 경로로 변환되어 표시된다(DR-010) |
-| REQ-009 | Deploy Files 목록이 확정된 상태 | 사용자가 [Export] 클릭 | `deploy/` 디렉터리가 생성되고 대상 파일이 원본 구조 그대로 복사된다 |
+| REQ-009 | Deploy Files 목록이 확정된 상태 | 사용자가 [Export] 클릭 | `git-deploy-extracted/` 디렉터리가 생성되고 대상 파일이 원본 구조 그대로 복사된다 |
 | REQ-010 | [Export] 실행 완료 | Export 결과 확인 | `deploy-files.txt`, `delete-list.txt`, `deploy-summary.json` 3개 파일이 UTF-8/LF로 생성된다 |
 | REQ-011 | Deploy Files 목록에 여러 파일이 표시됨 | 사용자가 개별 파일 체크박스를 해제 | 해당 파일이 deploy-files.txt와 실제 복사 대상에서 제외된다 |
 | | 필터로 일부 파일만 표시된 상태 | 사용자가 "전체 선택" 토글 클릭 | **표시된 행만** 일괄 체크/해제되고, 숨겨진 행은 영향받지 않는다(UI_UX_SPEC.md §2.6) |

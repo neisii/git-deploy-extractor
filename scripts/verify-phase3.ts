@@ -99,7 +99,7 @@ async function verifyByteFidelityAndExportFiles(fixture: Fixture): Promise<strin
 
   console.log('deployDir:', result.deployDir)
 
-  // 원본 git 저장소의 파일과 deploy/ 산출물이 바이트 단위로 동일한지 확인
+  // 원본 git 저장소의 파일과 git-deploy-extracted/ 산출물이 바이트 단위로 동일한지 확인
   const compare = (relPath: string, serverRelPath: string = relPath): void => {
     const original = readFileSync(join(dir, relPath))
     const copied = readFileSync(join(result.deployDir, serverRelPath))
@@ -180,7 +180,10 @@ async function verifyReExportWipesStaleFiles(dir: string): Promise<void> {
     'src/main/java/com/example/sell/GuaranteeListController.java'
   )
   console.log('이전 실행에서 생성됐던 파일이 남아있는지:', existsSync(staleJavaFile))
-  assert.ok(!existsSync(staleJavaFile), '이전 Export의 잔여 파일이 새 deploy/에 남아있으면 안 됨')
+  assert.ok(
+    !existsSync(staleJavaFile),
+    '이전 Export의 잔여 파일이 새 git-deploy-extracted/에 남아있으면 안 됨'
+  )
   assert.ok(existsSync(join(result.deployDir, 'crlf.txt')))
 }
 
@@ -201,9 +204,9 @@ async function verifyCaseCollisionAborts(fixture: Fixture): Promise<void> {
   const hashes = fixture.hashes
   const plan = await computeDeployPlan(dir, 'main', [hashes.c1], collidingProfile)
 
-  // 충돌 시도 전, deploy/에 이전 정상 실행의 결과물이 남아있는지 스냅샷을 남겨서
+  // 충돌 시도 전, git-deploy-extracted/에 이전 정상 실행의 결과물이 남아있는지 스냅샷을 남겨서
   // "충돌하면 아무것도 건드리지 않고 중단한다"를 검증한다.
-  const deployDir = join(dir, 'deploy')
+  const deployDir = join(dir, 'git-deploy-extracted')
   const beforeExists = existsSync(deployDir)
   const beforeSnapshot = beforeExists
     ? readFileSync(join(deployDir, 'deploy-files.txt'), 'utf8')
@@ -222,18 +225,24 @@ async function verifyCaseCollisionAborts(fixture: Fixture): Promise<void> {
       }),
     /대소문자만 다른 경로 충돌/
   )
-  console.log('예상대로 충돌 에러 발생, deploy/ 미변경 확인')
+  console.log('예상대로 충돌 에러 발생, git-deploy-extracted/ 미변경 확인')
 
   if (beforeExists) {
     const afterSnapshot = readFileSync(join(deployDir, 'deploy-files.txt'), 'utf8')
-    assert.equal(afterSnapshot, beforeSnapshot, '충돌 시 기존 deploy/가 변경되면 안 됨')
+    assert.equal(
+      afterSnapshot,
+      beforeSnapshot,
+      '충돌 시 기존 git-deploy-extracted/가 변경되면 안 됨'
+    )
   } else {
-    assert.ok(!existsSync(deployDir), '충돌 시 deploy/가 새로 생기면 안 됨')
+    assert.ok(!existsSync(deployDir), '충돌 시 git-deploy-extracted/가 새로 생기면 안 됨')
   }
 }
 
 async function verifyFullPipeline(): Promise<void> {
-  console.log('\n-- (d) Phase 1~3 전체 파이프라인 (Repository -> Commit 선택 -> deploy/) --')
+  console.log(
+    '\n-- (d) Phase 1~3 전체 파이프라인 (Repository -> Commit 선택 -> git-deploy-extracted/) --'
+  )
   const dir = mkdtempSync(join(tmpdir(), 'gde-phase3-pipeline-'))
   try {
     sh(dir, ['init', '-q'])

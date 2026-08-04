@@ -73,6 +73,7 @@ REQUIREDMENT.md 작성 이후 발견·확정된 결정을 시간순으로 정리
 | 17 | Commit 목록에서 개별 체크박스만 있고 전체 선택이 없어 Deploy Files 패널(전체선택 있음)과 UX가 불일치, 작성자/일시 정보도 없어 커밋 식별이 hash+message만으로는 부족하다는 사용자 피드백 | hash + message만 표시, 전체 선택 없음 | `DeployFilesPanel`의 전체선택 패턴과 동일하게 `toggleAllCommits()` 추가, 행 표시를 `hash → author → date → message`로 확장. `[Preview]` 버튼도 이 전체선택 체크박스와 수평 정렬되도록 CommitListPanel 헤더로 이동(기존엔 FooterActionBar에 있었음) | UI_UX_SPEC.md §2.2, §2.4 |
 | 18 | 화면 우측 하단에 제작자 정보를 상시 노출하고 싶다는 사용자 요청 | (없음) | 문자열 링크안으로 검토했으나 사용자가 자작 캐릭터 이미지(원본 `.gif` 확장자, 실제로는 PNG 데이터)로 교체 요청. `src/renderer/src/assets/goraeng.png`로 확장자를 내용에 맞게 정정해 배치, `position: fixed`로 다른 패널 레이아웃에 영향 없이 50×50 그대로 표시, 클릭 시 `https://github.com/neisii`를 시스템 브라우저로 오픈 | UI_UX_SPEC.md §2.9 |
 | 19 | #18 작업 중 Playwright 재현 테스트로 FooterActionBar의 "Export 완료: {경로}" 메시지가 긴 절대 경로에서 여러 줄로 줄바꿈되어 패널·뷰포트 아래로 넘쳐 잘리는 기존 버그를 발견(이미지 추가와 무관하게 원래부터 있던 문제) | 텍스트 줄바꿈 허용, 넘치는 부분이 잘려서 안 보임 | 메시지를 한 줄로 고정하고 ellipsis로 자름 + 전체 경로는 `title` 툴팁 + 클릭 시 클립보드 복사(`navigator.clipboard.writeText`)로 보완. 우측 하단 고정 이미지(#18)와 겹치지 않도록 `footer-action-bar`에 `padding-right: 60px` 추가 | UI_UX_SPEC.md §2.8 |
+| 20 | Export 산출물 디렉터리명 "deploy"가 "이 도구가 배포까지 한다"는 오해를 줄 수 있다는 사용자 피드백 — 사용자가 직접 디렉터리명을 입력하는 UI도 검토했으나, 경로 조작·Windows 예약어 등 새 검증 리스크만 늘고 실행마다/사람마다 산출물 폴더명이 달라지면 오히려 "표준 산출물"이라는 예측 가능성이 떨어진다고 판단해 기각 | `deploy/` | `git-deploy-extracted/`로 고정 명칭 변경(설정 UI 없음). `deploy-files.txt`/`deploy-summary.json`/`delete-list.txt` 등 하위 파일명은 그대로 유지 | REQUIREDMENT.md §9, ARCHITECTURE.md §4.4, DETAILED_DESIGN.md §2, `src/main/package/buildPackage.ts` |
 
 ---
 

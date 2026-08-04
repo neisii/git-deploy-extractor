@@ -93,7 +93,7 @@ Git 프로세스 실행, 파일시스템 쓰기(Deploy Package 생성)는 전부
 │  └──────────┬──────────┘                                        │
 │             │                                                    │
 │  ┌──────────▼──────────┐   REQ-009~010                          │
-│  │ Package Builder      │   deploy/ 생성, 파일 복사,             │
+│  │ Package Builder      │   git-deploy-extracted/ 생성, 파일 복사,             │
 │  │                      │   Export(txt/json) 생성                │
 │  └─────────────────────┘                                        │
 └───────────────────────────────────────────────────────────────┘
@@ -149,7 +149,7 @@ Rename을 별도 상태로 분류하지 않는다(DR-008) — Delete+Add를 각�
 
 **책임**: Deploy Package 생성 및 Export. REQ-009~010 담당.
 
-1. `deploy/` 디렉터리 생성
+1. `git-deploy-extracted/` 디렉터리 생성
 2. Mapping Rule 엔진 출력에 따라 각 파일을 HEAD 버전 내용으로 복사 (원본 디렉터리 구조 유지, DR-011/012)
 3. `delete-list.txt` 기록 (DR-007)
 4. `deploy-files.txt` 기록
@@ -194,7 +194,7 @@ REQUIREDMENT.md 섹션 8 와이어프레임 기준. 담당 화면 요소:
 [Renderer] Deployment Preview / Deploy Files 렌더링 (사용자 확인, 개별/전체 파일 선택 — REQ-011)
         │ IPC ([Preview] 재계산 → [Export] 트리거)
         ▼
-[Main] Package Builder ── 파일 복사·delete-list 기록 ──► deploy/
+[Main] Package Builder ── 파일 복사·delete-list 기록 ──► git-deploy-extracted/
         ▼
 [Main] Package Builder ── Export ──► deploy-files.txt, delete-list.txt, deploy-summary.json
 ```

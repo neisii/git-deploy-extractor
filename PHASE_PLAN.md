@@ -69,14 +69,14 @@ ARCHITECTURE.md §4.2, §4.3과 DETAILED_DESIGN.md §1을 구현한다.
 
 DETAILED_DESIGN.md §2(Export 포맷), §4(대소문자 검사, binary 쓰기 모드)를 구현한다.
 
-- REQ-009: `deploy/` 생성 + 파일 복사 (원본 구조 유지)
+- REQ-009: `git-deploy-extracted/` 생성 + 파일 복사 (원본 구조 유지)
 - REQ-010: `deploy-files.txt`, `delete-list.txt`, `deploy-summary.json` 생성
 
-**UI 없이 검증**: Phase 2 출력을 입력으로 받아 실제로 로컬 디스크에 `deploy/` 폴더를 만들어본다.
+**UI 없이 검증**: Phase 2 출력을 입력으로 받아 실제로 로컬 디스크에 `git-deploy-extracted/` 폴더를 만들어본다.
 
-**완료 기준**: 생성된 `deploy/` 폴더의 파일 내용·줄바꿈이 원본 git blob과 바이트 단위로 동일하고(§4.2), 대소문자만 다른 경로 충돌 시 에러로 중단되며(§4.1), Export 3종 파일이 UTF-8/LF로 생성된다.
+**완료 기준**: 생성된 `git-deploy-extracted/` 폴더의 파일 내용·줄바꿈이 원본 git blob과 바이트 단위로 동일하고(§4.2), 대소문자만 다른 경로 충돌 시 에러로 중단되며(§4.1), Export 3종 파일이 UTF-8/LF로 생성된다.
 
-이 시점에서 Phase 1~3만으로 **UI 없이 CLI 인자로 전체 파이프라인(Repository → Commit 선택 → deploy/ 생성)을 한 번에 실행할 수 있는 스크립트**를 하나 만들어두면 이후 UI 버그와 로직 버그를 분리해서 디버깅할 때 유용하다.
+이 시점에서 Phase 1~3만으로 **UI 없이 CLI 인자로 전체 파이프라인(Repository → Commit 선택 → git-deploy-extracted/ 생성)을 한 번에 실행할 수 있는 스크립트**를 하나 만들어두면 이후 UI 버그와 로직 버그를 분리해서 디버깅할 때 유용하다.
 
 ## 2.4 Phase 4 — Electron + React UI 연결
 

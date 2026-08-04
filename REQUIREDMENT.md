@@ -93,7 +93,7 @@ Git Deploy Extractor
 
 ↓
 
-deploy/
+git-deploy-extracted/
 
 ↓
 
@@ -246,13 +246,13 @@ src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeListContro
 
 ↓
 
-deploy/src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeListController.java
+git-deploy-extracted/src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeListController.java
 
 src/main/resources/static/js/guarantee/list.js
 
 ↓
 
-deploy/src/main/resources/static/js/guarantee/list.js
+git-deploy-extracted/src/main/resources/static/js/guarantee/list.js
 
 ---
 
@@ -406,7 +406,7 @@ src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeListContro
 
 ↓
 
-deploy/src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeListController.java
+git-deploy-extracted/src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeListController.java
 
 컴파일은 내부망 GitLab CI 단계에서 수행하므로, 원본 패키지 경로가 그대로 유지되어야 한다.
 
@@ -426,13 +426,13 @@ src/main/resources/static/js/guarantee/list.js
 
 ↓
 
-deploy/src/main/resources/static/js/guarantee/list.js
+git-deploy-extracted/src/main/resources/static/js/guarantee/list.js
 
 src/main/resources/templates/guarantee/list.html
 
 ↓
 
-deploy/src/main/resources/templates/guarantee/list.html
+git-deploy-extracted/src/main/resources/templates/guarantee/list.html
 
 ---
 
@@ -477,7 +477,7 @@ deploy/src/main/resources/templates/guarantee/list.html
 # 9. Deploy Package 구조
 
 ```
-deploy/
+git-deploy-extracted/
 ├── src/main/
 │   ├── java/              ← 원본 패키지 경로 구조 그대로 (DR-011)
 │   │   ├── com/example/sell/interfaces/receipt/controller/GuaranteeListController.java
