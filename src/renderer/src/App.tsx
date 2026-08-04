@@ -8,6 +8,7 @@ import { DeploymentPreviewPanel } from './components/DeploymentPreviewPanel'
 import { DeployFilesPanel } from './components/DeployFilesPanel'
 import { DeleteListPanel } from './components/DeleteListPanel'
 import { FooterActionBar } from './components/FooterActionBar'
+import { Credit } from './components/Credit'
 
 function App(): React.JSX.Element {
   const initProfiles = useAppStore((s) => s.initProfiles)
@@ -28,6 +29,7 @@ function App(): React.JSX.Element {
       <DeployFilesPanel />
       <DeleteListPanel />
       <FooterActionBar />
+      <Credit />
     </div>
   )
 }

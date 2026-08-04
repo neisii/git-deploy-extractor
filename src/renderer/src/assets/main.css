@@ -15,6 +15,21 @@ body,
   font-size: 13px;
 }
 
+.credit-link {
+  position: fixed;
+  right: 10px;
+  bottom: 6px;
+  font-size: 11px;
+  color: var(--ev-c-text-3);
+  text-decoration: none;
+  z-index: 10;
+}
+
+.credit-link:hover {
+  color: var(--ev-c-text-2);
+  text-decoration: underline;
+}
+
 .title-bar {
   padding: 6px 10px;
   background: var(--color-background-soft);
