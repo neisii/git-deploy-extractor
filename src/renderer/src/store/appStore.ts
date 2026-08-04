@@ -87,6 +87,7 @@ interface AppState {
   setMaxCount: (maxCount: number) => Promise<void>
   loadNextPage: () => Promise<void>
   toggleCommit: (hash: string) => void
+  toggleAllCommits: () => void
   setDeployFilesFilter: (filter: DeployFilesFilter) => void
   toggleDeployFileIncluded: (localPath: string) => void
   toggleAllDeployFiles: () => void
@@ -371,6 +372,33 @@ export const useAppStore = create<AppState>((set, get) => {
       // 선택이 비어있지 않은 채로 바뀌었을 때는 아무 계산도 트리거하지
       // 않는다 — selectIsAnalysisStale()이 자동으로 "재계산 필요"를
       // 감지하고, 사용자가 Preview를 눌러야 실제로 계산된다.
+    },
+
+    // DeployFilesPanel의 전체 선택과 같은 방식 — 현재 "로드된" commits
+    // 기준으로만 동작한다(아직 스크롤로 안 불러온 다음 페이지는 건드리지
+    // 않는다). 전부 선택된 상태면 전체 해제, 그 외(일부/전무)면 전체 선택.
+    toggleAllCommits: () => {
+      const { commits, selectedHashes } = get()
+      if (commits.length === 0) return
+
+      const allSelected = commits.every((c) => selectedHashes.has(c.hash))
+      const next = new Set(selectedHashes)
+      for (const c of commits) {
+        if (allSelected) next.delete(c.hash)
+        else next.add(c.hash)
+      }
+      set({ selectedHashes: next })
+
+      if (next.size === 0) {
+        set({
+          summary: null,
+          deployFiles: [],
+          deleteList: [],
+          warnings: [],
+          analysisError: null,
+          analyzedSelection: null
+        })
+      }
     },
 
     setDeployFilesFilter: (filter) => set({ deployFilesFilter: filter }),
