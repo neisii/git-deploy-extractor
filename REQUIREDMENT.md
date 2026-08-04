@@ -132,7 +132,7 @@ GitLab CI
 운영 서버 배포
 ```
 
-Git Deploy Extractor는 deploy 폴더 생성까지만 책임진다.
+Git Deploy Extractor는 git-deploy-extracted 폴더 생성까지만 책임진다.
 
 ---
 

@@ -40,6 +40,10 @@ AppShell
 
 **정정 (Preview 위치 이동, 2026-08-04, 사용자 요청)**: `[Preview]`는 원래 FooterActionBar에 있었으나, "커밋을 고르고 → 바로 그 자리에서 계산한다"는 흐름이 더 직관적이라는 사용자 피드백으로 CommitListPanel 헤더로 옮겼다 — "전체 선택" 체크박스와 같은 행, 패널 우측 끝에 배치한다(§2.4).
 
+**정정 (MainGrid 비율 80:20, 2026-08-04, 사용자 요청)**: CommitListPanel과 DeploymentPreviewPanel은 원래 폭을 50:50으로 균등 분할했으나, CommitListPanel은 hash/author/date/message 네 개 컬럼을 담아야 하는 반면 DeploymentPreviewPanel은 짧은 집계 숫자 4줄뿐이라 균등 분할이 불필요하게 넓다는 사용자 피드백으로 대략 80:20 비율(CSS `grid-template-columns: minmax(320px, 4fr) minmax(180px, 1fr)`)로 바꿨다. 각 영역은 지정된 최소 폭(320px/180px) 아래로는 줄어들지 않으며, 창을 그 합보다 더 좁히면 우측이 잘려 보이지 않도록 MainGrid에 `overflow-x: auto`를 안전망으로 뒀다.
+
+**정정 (DeployFilesPanel 최소 높이 = MainGrid, 2026-08-04, 사용자 요청)**: DeployFilesPanel은 MainGrid보다 최소 높이가 낮게 잡혀 있어(flex-basis 160px/min-height 120px) MainGrid(240px/200px)보다 눈에 띄게 낮게 보였다. 여러 파일을 보여줘야 하는 영역인데 공간이 상대적으로 적게 배정돼 있었다는 점에서 위 80:20 비율 건과 같은 성격의 문제라, DeployFilesPanel의 flex-basis·min-height를 MainGrid와 동일한 값(240px/200px)으로 맞췄다 — 두 영역이 같은 flex-grow 비율로 남은 세로 공간을 나눠 가지므로 사실상 항상 같은 높이로 자란다.
+
 ---
 
 # 2. 컴포넌트 정의
@@ -107,11 +111,13 @@ AppShell
 
 **책임**: REQ-007, REQ-008, REQ-011. 배포 대상 파일 목록(HEAD 최신본, Mapping Rule 적용 결과) + 개별/전체 파일 수동 제외.
 
+최소 높이가 MainGrid(위쪽 CommitListPanel/DeploymentPreviewPanel 행)와 동일하게 맞춰져 있다 — §1 참고.
+
 | 요소 | 동작 |
 |---|---|
 | 헤더 "전체 선택" 체크박스 | 현재 **필터에 표시된 행 기준**으로 전체 체크/해제. 필터로 숨겨진 행은 건드리지 않는다. 표시된 행 일부만 체크된 상태면 indeterminate(가로줄) 표시 |
 | Filter dropdown | `all \| added \| modified` (클라이언트 사이드 필터, 재계산 없음. `deleted`는 이 목록 대상이 아니므로 필터 옵션에서 제외. Rename을 별도 감지하지 않으므로 `renamed` 옵션도 없음 — DR-008) |
-| 각 행 체크박스 | `included` 토글. 해제된 파일은 Export 시 deploy-files.txt와 실제 복사 대상에서 빠진다(REQ-011) |
+| 각 행 체크박스 | `included` 토글. 해제된 파일은 Export 시 deploy-files.txt와 실제 복사 대상에서 빠진다(REQ-011). Local Path 열의 파일명 텍스트를 클릭해도 동일하게 토글된다(추가, 2026-08-04) — Server Path 열은 클릭 대상이 아니다 |
 | Local Path / Server Path 열 | `localPath`, `serverPath`(Mapping Rule 적용 후) 나란히 표시. 각 열 헤더 오른쪽 경계를 드래그하면 최소 폭을 조절할 수 있다 |
 
 **상태**: `deployFiles: { localPath: string; serverPath: string; status: 'added'|'modified'; included: boolean }[]`, `filter: 'all'|'added'|'modified'`
@@ -122,7 +128,9 @@ AppShell
 
 **추가 (Local/Server Path 컬럼 가로 스크롤·리사이즈, 2026-08-04, 사용자 피드백)**: 긴 경로가 잘려 보이는 문제를 해결하기 위해 두 열 모두 텍스트를 자르지 않는다(ellipsis 없음) — 컬럼 폭보다 내용이 길면 패널 전체가 가로로 스크롤되어 전체 경로를 볼 수 있다. 각 열 헤더의 리사이즈 핸들을 드래그하면 "최소 폭"을 지정할 수 있는데, 실제 렌더링 폭은 항상 (지정한 최소 폭, 내용 길이) 중 큰 값이므로 아무리 좁게 줄여도 텍스트가 잘리거나 옆 열을 침범하지 않는다. 조절한 폭은 `localStorage`에 전역 설정 하나로 저장되어(저장소별 구분 없음) 앱 재실행 후에도 유지된다.
 
-**알려진 제약**: 필터링된 표시 대상이 300개를 넘어 가상 스크롤이 적용되는 경우, react-window가 세로 가상 스크롤을 위해 자기 루트에 `overflow-y:auto`를 설정하는데 CSS 스펙상 이것이 가로축에도 전이되어(visible과 non-visible을 함께 쓸 수 없음) 리스트 자신이 별도의 가로 스크롤 컨텍스트가 된다. 그 결과 리스트 내부 스크롤로 긴 경로를 전부 볼 수는 있지만, 헤더 라벨("Local Path"/"Server Path")이 그 스크롤과 동기화되지 않는다. 300개 이하(일반적인 경우)에서는 헤더와 완전히 동기화된다.
+**정정 (헤더-목록 컬럼 폭 불일치 버그 수정, 2026-08-04, 사용자 발견)**: 위 "내용 길이 중 큰 값" 계산을 헤더 행과 각 데이터 행이 서로 별도의 CSS Grid 컨테이너로 구현하다 보니, 각 컨테이너가 `max-content`를 자기 내용(헤더는 "Local Path"라는 라벨 텍스트, 각 행은 그 행 자신의 파일 경로)만 기준으로 독립 계산해 헤더와 목록의 폭이 어긋나는 버그가 있었다. CSS의 `max-content`에 맡기는 대신 JS(`canvas.measureText` + `getComputedStyle`)로 현재 필터링된 전체 행과 헤더 라벨 중 가장 넓은 폭을 실측해 모든 행(가상 스크롤 포함)에 동일한 값을 주입하는 방식으로 바꿔 해소했다.
+
+**알려진 제약**: 위 수정으로 컬럼 **폭 자체**는 필터링된 표시 대상 개수와 무관하게 항상 헤더와 목록이 일치한다. 다만 필터링된 표시 대상이 300개를 넘어 가상 스크롤이 적용되는 경우, react-window가 세로 가상 스크롤을 위해 자기 루트에 `overflow-y:auto`를 설정하는데 CSS 스펙상 이것이 가로축에도 전이되어(visible과 non-visible을 함께 쓸 수 없음) 리스트 자신이 별도의 가로 **스크롤 위치** 컨텍스트가 된다. 그 결과 리스트 내부 스크롤로 긴 경로를 전부 볼 수는 있지만, 사용자가 리스트를 가로로 스크롤하면 헤더 라벨("Local Path"/"Server Path")의 스크롤 위치가 그걸 따라가지 않는다(폭 불일치가 아니라 스크롤 위치 동기화 문제). 300개 이하(일반적인 경우)에서는 폭·스크롤 위치 모두 헤더와 완전히 동기화된다.
 
 ## 2.7 DeleteListPanel
 
