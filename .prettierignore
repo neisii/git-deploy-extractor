@@ -4,3 +4,17 @@ pnpm-lock.yaml
 LICENSE.md
 tsconfig.json
 tsconfig.*.json
+
+# 확정된 기획/설계 문서 — 코드 포매터 대상 아님
+ARCHITECTURE.md
+DETAILED_DESIGN.md
+DOCUMENT_CHECKLIST.md
+HANDOFF.md
+PHASE_PLAN.md
+PRD.md
+REQUIREDMENT.md
+RISK_ISSUES.md
+UI_UX_SPEC.md
+ambiguity-explainer.html
+core-scenario-diagram.html
+ui-wireframe.html
