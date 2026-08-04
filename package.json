@@ -18,7 +18,8 @@
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
     "verify:phase1": "tsx scripts/verify-phase1.ts",
-    "verify:phase2": "tsx scripts/verify-phase2.ts"
+    "verify:phase2": "tsx scripts/verify-phase2.ts",
+    "verify:phase3": "tsx scripts/verify-phase3.ts"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
