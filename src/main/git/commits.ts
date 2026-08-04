@@ -1,21 +1,10 @@
 import { runGit } from './exec'
 import type { CommitEntry } from './types'
+import type { ListCommitsParams, ListCommitsResult } from '../../shared/types'
+import { getDefaultDateRange } from '../../shared/dateRange'
 
-export interface ListCommitsParams {
-  repoPath: string
-  branch: string
-  startDate: string // YYYY-MM-DD
-  endDate: string // YYYY-MM-DD
-  maxCount: number
-  skip: number
-  pageSize: number
-  searchTerm?: string
-}
-
-export interface ListCommitsResult {
-  commits: CommitEntry[]
-  hasMore: boolean
-}
+export type { ListCommitsParams, ListCommitsResult }
+export { getDefaultDateRange }
 
 const FIELD_SEP = '\x1f'
 const RECORD_SEP = '\x1e'
@@ -61,20 +50,4 @@ export async function listCommits(params: ListCommitsParams): Promise<ListCommit
   const commits = parseCommitRecords(result.stdout)
   const hasMore = commits.length === limit && skip + commits.length < maxCount
   return { commits, hasMore }
-}
-
-function formatDate(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-export function getDefaultDateRange(today: Date = new Date()): {
-  startDate: string
-  endDate: string
-} {
-  const start = new Date(today)
-  start.setDate(start.getDate() - 7)
-  return { startDate: formatDate(start), endDate: formatDate(today) }
 }

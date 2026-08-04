@@ -1,8 +1,40 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type {
+  BuildPackageParams,
+  BuildPackageResult,
+  DeployPlan,
+  ListCommitsParams,
+  ListCommitsResult,
+  PreviewRequest,
+  RepositoryValidation
+} from '../shared/types'
 
 // Custom APIs for renderer
-const api = {}
+const api = {
+  repository: {
+    browse: (): Promise<string | null> => ipcRenderer.invoke('repository:browse'),
+    validate: (repoPath: string): Promise<RepositoryValidation> =>
+      ipcRenderer.invoke('repository:validate', repoPath)
+  },
+  git: {
+    listBranches: (repoPath: string): Promise<string[]> =>
+      ipcRenderer.invoke('git:listBranches', repoPath),
+    listCommits: (params: ListCommitsParams): Promise<ListCommitsResult> =>
+      ipcRenderer.invoke('git:listCommits', params)
+  },
+  mapping: {
+    listProfiles: (): Promise<string[]> => ipcRenderer.invoke('mapping:listProfiles')
+  },
+  analysis: {
+    preview: (req: PreviewRequest): Promise<DeployPlan> =>
+      ipcRenderer.invoke('analysis:preview', req)
+  },
+  package: {
+    export: (params: BuildPackageParams): Promise<BuildPackageResult> =>
+      ipcRenderer.invoke('package:export', params)
+  }
+}
 
 // Use `contextBridge` APIs to expose Electron APIs to
 // renderer only if context isolation is enabled, otherwise

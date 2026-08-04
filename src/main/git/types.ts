@@ -4,9 +4,4 @@ export interface GitCommandResult {
   exitCode: number
 }
 
-export interface CommitEntry {
-  hash: string
-  author: string
-  date: string
-  message: string
-}
+export type { CommitEntry } from '../../shared/types'

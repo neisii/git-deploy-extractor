@@ -1,9 +1,9 @@
 import { runGit } from './exec'
+import type { RepositoryValidation } from '../../shared/types'
+import { pickDefaultBranch } from '../../shared/branch'
 
-export interface RepositoryValidation {
-  valid: boolean
-  error?: string
-}
+export type { RepositoryValidation }
+export { pickDefaultBranch }
 
 export async function validateRepository(repoPath: string): Promise<RepositoryValidation> {
   let result
@@ -35,10 +35,4 @@ export async function listBranches(repoPath: string): Promise<string[]> {
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
-}
-
-export function pickDefaultBranch(branches: string[]): string | null {
-  if (branches.includes('main')) return 'main'
-  if (branches.includes('master')) return 'master'
-  return null
 }

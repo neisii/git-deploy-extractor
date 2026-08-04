@@ -1,16 +1,12 @@
 import { getCommitFileChanges, headFileExists } from '../git/diff'
 import type { FileChange } from '../git/diff'
+import type { AnalysisWarning, DeployFileStatus } from '../../shared/types'
 
-export type DeployFileStatus = 'added' | 'modified'
+export type { AnalysisWarning, DeployFileStatus }
 
 export interface DeployTargetFile {
   path: string
   status: DeployFileStatus
-}
-
-export interface AnalysisWarning {
-  path: string
-  reason: string
 }
 
 export interface AnalyzeCommitsResult {

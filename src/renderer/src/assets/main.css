@@ -1,1 +1,189 @@
 @import './base.css';
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 8px;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.title-bar {
+  padding: 6px 10px;
+  background: var(--color-background-soft);
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.panel {
+  padding: 8px 10px;
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 4px;
+  background: var(--color-background-soft);
+  overflow: auto;
+}
+
+.repository-panel,
+.branch-search-bar,
+.footer-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.repository-panel__path {
+  flex: 1;
+  min-width: 200px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--ev-c-text-2);
+}
+
+.status-text {
+  color: var(--ev-c-text-2);
+}
+
+.status-text--error {
+  color: #e5675f;
+}
+
+.status-text--success {
+  color: #67c090;
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  flex: 1 1 240px;
+  min-height: 200px;
+}
+
+.commit-list-panel {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.commit-list-panel--error {
+  padding: 8px 10px;
+  color: #e5675f;
+}
+
+.commit-row {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--ev-c-gray-3);
+}
+
+.commit-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  cursor: pointer;
+}
+
+.commit-row__hash {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--ev-c-text-2);
+}
+
+.commit-row__message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deployment-preview-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.deploy-files-panel {
+  flex: 1 1 160px;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+}
+
+.deploy-files-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.deploy-files-panel__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.deploy-files-panel__table th,
+.deploy-files-panel__table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--ev-c-gray-3);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.warning-banner {
+  background: #4a3a1a;
+  color: #f0c674;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.delete-list-panel {
+  flex: 0 0 auto;
+  max-height: 120px;
+}
+
+.delete-list-panel__header {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--ev-button-alt-border);
+  color: var(--ev-button-alt-text);
+  background: var(--ev-button-alt-bg);
+  border-radius: 4px;
+  padding: 4px 12px;
+}
+
+button:hover:not(:disabled) {
+  background: var(--ev-button-alt-hover-bg);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input,
+select {
+  background: var(--color-background);
+  color: var(--color-text);
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 4px;
+  padding: 3px 6px;
+}

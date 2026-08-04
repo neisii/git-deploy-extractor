@@ -1,43 +1,9 @@
 import { promises as fs } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { CommitEntry } from '../git/types'
 import { getHeadFileContent } from '../git/showFile'
-import type { AnalysisWarning, DeployTargetFile } from '../analysis/analyzeCommits'
-import type { MappingProfile } from '../mapping/types'
-import { resolveServerPath } from '../mapping/resolveServerPath'
+import type { BuildPackageParams, BuildPackageResult, DeploySummary } from '../../shared/types'
 
-export interface BuildPackageParams {
-  repoPath: string
-  branch: string
-  mappingProfile: MappingProfile
-  selectedCommits: CommitEntry[]
-  deployTargets: DeployTargetFile[]
-  deleteList: string[]
-  warnings: AnalysisWarning[]
-}
-
-export interface DeploySummaryFile {
-  localPath: string
-  serverPath: string
-  status: 'added' | 'modified'
-}
-
-export interface DeploySummary {
-  generatedAt: string
-  repository: string
-  branch: string
-  mappingProfile: string
-  commits: CommitEntry[]
-  summary: { files: number; added: number; modified: number; deleted: number }
-  files: DeploySummaryFile[]
-  deleted: string[]
-  warnings: AnalysisWarning[]
-}
-
-export interface BuildPackageResult {
-  deployDir: string
-  summary: DeploySummary
-}
+export type { BuildPackageParams, BuildPackageResult, DeploySummary }
 
 function formatIsoWithOffset(date: Date): string {
   const pad = (n: number): string => String(n).padStart(2, '0')
@@ -68,15 +34,15 @@ function toLfText(lines: string[]): string {
 }
 
 export async function buildPackage(params: BuildPackageParams): Promise<BuildPackageResult> {
-  const { repoPath, branch, mappingProfile, selectedCommits, deployTargets, deleteList, warnings } =
-    params
-
-  const files: DeploySummaryFile[] = deployTargets.map((target) => ({
-    localPath: target.path,
-    serverPath: resolveServerPath(target.path, mappingProfile),
-    status: target.status
-  }))
-  const deletedServerPaths = deleteList.map((path) => resolveServerPath(path, mappingProfile))
+  const {
+    repoPath,
+    branch,
+    mappingProfileName,
+    selectedCommits,
+    files,
+    deletedServerPaths,
+    warnings
+  } = params
 
   // §4.1: 파일을 쓰기 전에 대소문자만 다른 경로 충돌부터 검사한다.
   // 발견되면 아무것도 쓰지 않고 즉시 중단한다(자동 덮어쓰기 금지).
@@ -110,7 +76,7 @@ export async function buildPackage(params: BuildPackageParams): Promise<BuildPac
     generatedAt: formatIsoWithOffset(new Date()),
     repository: repoPath,
     branch,
-    mappingProfile: mappingProfile.profileName,
+    mappingProfile: mappingProfileName,
     commits: selectedCommits,
     summary: {
       files: files.length,

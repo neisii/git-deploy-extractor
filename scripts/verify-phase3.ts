@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { listBranches, pickDefaultBranch } from '../src/main/git/repository'
 import { listCommits, getDefaultDateRange } from '../src/main/git/commits'
-import { analyzeCommits } from '../src/main/analysis/analyzeCommits'
+import { computeDeployPlan } from '../src/main/analysis/computeDeployPlan'
 import { buildPackage } from '../src/main/package/buildPackage'
 import type { MappingProfile } from '../src/main/mapping/types'
 
@@ -81,20 +81,20 @@ async function verifyByteFidelityAndExportFiles(fixture: Fixture): Promise<strin
     ]
   }
 
-  const analysis = await analyzeCommits(dir, 'main', [hashes.c1, hashes.c2])
-  console.log('analysis:', JSON.stringify(analysis, null, 2))
+  const plan = await computeDeployPlan(dir, 'main', [hashes.c1, hashes.c2], profile)
+  console.log('plan:', JSON.stringify(plan, null, 2))
 
   const result = await buildPackage({
     repoPath: dir,
     branch: 'main',
-    mappingProfile: profile,
+    mappingProfileName: profile.profileName,
     selectedCommits: [
       { hash: hashes.c1, author: 'Tester', date: '2026-01-01T00:00:00+09:00', message: 'c1' },
       { hash: hashes.c2, author: 'Tester', date: '2026-01-02T00:00:00+09:00', message: 'c2' }
     ],
-    deployTargets: analysis.deployTargets,
-    deleteList: analysis.deleteList,
-    warnings: analysis.warnings
+    files: plan.files,
+    deletedServerPaths: plan.deletedServerPaths,
+    warnings: plan.warnings
   })
 
   console.log('deployDir:', result.deployDir)
@@ -164,15 +164,15 @@ async function verifyReExportWipesStaleFiles(dir: string): Promise<void> {
   execFileSync('git', ['commit', '-q', '-m', 'crlf.txt만 재수정'], { cwd: dir })
   const onlyCrlfHash = sh(dir, ['rev-parse', 'HEAD'])
 
-  const analysis = await analyzeCommits(dir, 'main', [onlyCrlfHash])
+  const plan = await computeDeployPlan(dir, 'main', [onlyCrlfHash], profile)
   const result = await buildPackage({
     repoPath: dir,
     branch: 'main',
-    mappingProfile: profile,
+    mappingProfileName: profile.profileName,
     selectedCommits: [],
-    deployTargets: analysis.deployTargets,
-    deleteList: analysis.deleteList,
-    warnings: analysis.warnings
+    files: plan.files,
+    deletedServerPaths: plan.deletedServerPaths,
+    warnings: plan.warnings
   })
 
   const staleJavaFile = join(
@@ -199,7 +199,7 @@ async function verifyCaseCollisionAborts(fixture: Fixture): Promise<void> {
   }
 
   const hashes = fixture.hashes
-  const analysis = await analyzeCommits(dir, 'main', [hashes.c1])
+  const plan = await computeDeployPlan(dir, 'main', [hashes.c1], collidingProfile)
 
   // 충돌 시도 전, deploy/에 이전 정상 실행의 결과물이 남아있는지 스냅샷을 남겨서
   // "충돌하면 아무것도 건드리지 않고 중단한다"를 검증한다.
@@ -214,11 +214,11 @@ async function verifyCaseCollisionAborts(fixture: Fixture): Promise<void> {
       buildPackage({
         repoPath: dir,
         branch: 'main',
-        mappingProfile: collidingProfile,
+        mappingProfileName: collidingProfile.profileName,
         selectedCommits: [],
-        deployTargets: analysis.deployTargets,
-        deleteList: analysis.deleteList,
-        warnings: analysis.warnings
+        files: plan.files,
+        deletedServerPaths: plan.deletedServerPaths,
+        warnings: plan.warnings
       }),
     /대소문자만 다른 경로 충돌/
   )
@@ -260,20 +260,21 @@ async function verifyFullPipeline(): Promise<void> {
     })
     assert.equal(commits.length, 1)
 
-    const analysis = await analyzeCommits(
+    const profile: MappingProfile = { profileName: 'default', version: '1.0', overrides: [] }
+    const plan = await computeDeployPlan(
       dir,
       branch!,
-      commits.map((c) => c.hash)
+      commits.map((c) => c.hash),
+      profile
     )
-    const profile: MappingProfile = { profileName: 'default', version: '1.0', overrides: [] }
     const result = await buildPackage({
       repoPath: dir,
       branch: branch!,
-      mappingProfile: profile,
+      mappingProfileName: profile.profileName,
       selectedCommits: commits,
-      deployTargets: analysis.deployTargets,
-      deleteList: analysis.deleteList,
-      warnings: analysis.warnings
+      files: plan.files,
+      deletedServerPaths: plan.deletedServerPaths,
+      warnings: plan.warnings
     })
 
     assert.ok(
