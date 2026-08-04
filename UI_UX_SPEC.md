@@ -92,9 +92,11 @@ AppShell
 
 **책임**: REQ-005~007 계산 결과 집계를 읽기 전용으로 보여준다(Files/Added/Modified/Deleted — Renamed 없음, DR-008).
 
-`selectedHashes`가 바뀔 때마다 500ms 디바운스 후 Commit 분석 엔진 IPC를 호출해 `summary`를 갱신한다. 계산 결과는 DeployFilesPanel/DeleteListPanel과 동일한 소스에서 파생되므로 세 컴포넌트는 항상 같은 계산 1회의 결과를 나눠서 보여준다(중복 계산 없음).
+**정정 (자동 재계산 제거, Preview가 유일한 트리거, 2026-08-04)**: 이전 초안은 `selectedHashes`가 바뀔 때마다 500ms 디바운스 후 자동으로 재계산하도록 설계했다. 하지만 이 방식은 "선택은 바뀌었는데 화면은 옛 결과"인 구간(디바운스 대기 중)이 항상 존재해, 그 구간에 `[Export]`를 누르면 방금 추가/해제한 커밋이 반영 안 된 채로 조용히 나갈 수 있는 위험이 있었다(§2.8 참고). 커밋 체크박스/Mapping Profile 변경은 이제 어떤 계산도 트리거하지 않는다 — `[Preview]` 클릭이 유일한 계산 트리거다.
 
-**상태**: `summary: { files, added, modified, deleted } | null`, `analyzing: boolean`
+화면이 최신 상태인지는 `selectedHashes`/`selectedBranch`/`selectedProfile`(현재 선택)과 `analyzedSelection`(마지막으로 Preview가 실제로 계산한 입력)을 비교해 파생 계산한다(`isStale`). 선택이 있는데 아직 한 번도 Preview를 안 눌렀거나, Preview 이후 선택/브랜치/Profile이 하나라도 바뀌면 `isStale = true`이며, 이때는 집계 숫자 대신 "선택이 변경되었습니다 — Preview를 눌러 계산하세요"를 표시한다. 계산 결과는 DeployFilesPanel/DeleteListPanel과 동일한 소스에서 파생되므로 세 컴포넌트는 항상 같은 계산 1회의 결과를 나눠서 보여주고, `isStale`도 동일한 기준으로 세 컴포넌트가 함께 판단한다(중복 계산·중복 판정 없음).
+
+**상태**: `summary: { files, added, modified, deleted } | null`, `analyzing: boolean`, `analyzedSelection: { hashes: string[]; branch: string; profileName: string } | null`(마지막 Preview 계산 입력, `isStale` 파생용)
 
 ## 2.6 DeployFilesPanel
 
@@ -131,11 +133,13 @@ AppShell
 
 | 요소 | 동작 |
 |---|---|
-| Mapping Profile dropdown | `profiles: string[]`(userData/profiles/ 디렉터리 목록), 변경 시 DeployFilesPanel의 `serverPath` 재계산 |
-| `[Preview]` | 강제 재계산해 DeploymentPreviewPanel/DeployFilesPanel/DeleteListPanel을 최신 상태로 확정 표시. **부작용 없음(파일시스템 변경 없음)** — 사용자가 Export 전 마지막으로 확인하는 단계 |
+| Mapping Profile dropdown | `profiles: string[]`(userData/profiles/ 디렉터리 목록). 변경 자체는 계산을 트리거하지 않는다 — `isStale`이 즉시 true가 되어 `[Preview]`를 다시 눌러야 새 Profile 기준 `serverPath`가 반영된다 |
+| `[Preview]` | Commit 분석 + Mapping 엔진을 실행해 DeploymentPreviewPanel/DeployFilesPanel/DeleteListPanel을 최신 상태로 확정 표시하고 `analyzedSelection`을 갱신한다. **부작용 없음(파일시스템 변경 없음)**. §2.5 정정대로 이 앱에서 계산이 일어나는 유일한 경로다 |
 | `[Export]` | Preview에 표시된 내용을 그대로 실행: `deploy/` 생성 + 파일 복사 + delete-list.txt/deploy-files.txt/deploy-summary.json 생성까지 전부 수행 (DETAILED_DESIGN.md §2, Package Builder 전체) |
 
-버튼 비활성 조건: `selectedHashes.size === 0`일 때 두 버튼 모두 비활성.
+버튼 비활성 조건: `[Preview]`는 `selectedHashes.size === 0`일 때 비활성. `[Export]`는 그 조건에 더해 `isStale`(§2.5)일 때도 비활성 — 마지막 Preview 결과가 지금 선택과 정확히 일치할 때만 눌러진다. `isStale`인데 선택이 비어있지 않으면 "Preview를 먼저 실행하세요" 안내를 버튼 옆에 표시한다.
+
+**정정 (Export 직전 레이스 컨디션 방지, 2026-08-04)**: 이전 초안(자동 재계산)에서는 디바운스 대기 중에 `[Export]`를 누르면, 방금 바뀐 선택이 `selectedCommits`(즉석 계산이라 정확)엔 반영되지만 `deployFiles`/`deleteList`(디바운스 후에야 갱신되는 옛 계산 결과)엔 반영 안 된 채로 나가는 문제가 있었다 — `deploy-summary.json`은 선택한 커밋을 전부 기록하는데 실제 복사된 파일은 일부 커밋 분만 빠지는, 에러 없이 조용히 틀린 결과였다. `[Export]`를 `isStale`일 때 비활성화하는 것만으로 이 구간 자체가 없어진다(추가로 `runExport()` 내부에서도 한 번 더 확인한다).
 
 ---
 
@@ -160,6 +164,7 @@ interface AppState {
 
   analyzing: boolean;
   analysisError: string | null;     // §5 에러 상태("계산 실패 메시지")에 대응
+  analyzedSelection: { hashes: string[]; branch: string; profileName: string } | null;  // §2.5 isStale 파생용
   summary: { files: number; added: number; modified: number; deleted: number } | null;
   deployFiles: DeployFileEntry[];
   deployFilesFilter: 'all' | 'added' | 'modified';   // §2.6 Filter dropdown 상태
@@ -175,7 +180,7 @@ interface AppState {
 }
 ```
 
-**파생 계산 흐름**: `selectedHashes` 또는 `selectedBranch` 또는 `selectedProfile` 변경 → 디바운스 → 단일 IPC 호출(Commit 분석 엔진 + Mapping Rule 엔진 결과) → `summary`/`deployFiles`/`deleteList`/`warnings` 동시 갱신. 개별 `included` 토글(DeployFilesPanel)만 예시로 로컬 갱신(재계산 없음).
+**파생 계산 흐름 (정정, 2026-08-04)**: `selectedHashes`/`selectedBranch`/`selectedProfile` 변경은 더 이상 IPC를 트리거하지 않는다 — `[Preview]` 클릭만이 단일 IPC 호출(Commit 분석 엔진 + Mapping Rule 엔진 결과)을 일으키고, 그 결과로 `summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection`이 동시 갱신된다. `isStale = 현재 (selectedHashes, selectedBranch, selectedProfile) ≠ analyzedSelection`으로 파생 계산하며, 세 미리보기 패널(§2.5~2.7)과 `[Export]` 비활성 조건(§2.8)이 모두 이 값을 공유한다. 개별 `included` 토글(DeployFilesPanel)만 예외로 로컬 갱신(재계산도, staleness 판정도 없음 — 이미 계산된 목록 안에서의 선택/해제이기 때문).
 
 ---
 
@@ -189,14 +194,14 @@ interface AppState {
 | `startDate`/`endDate`/`maxCount` 변경 | `commits = []`, `selectedHashes = {}`, `commitPagination.loading = true` | `git log --since --until` 첫 페이지 | REQ-003 |
 | 커밋 목록 스크롤 하단 도달 | `commitPagination.loading = true`. 이미 `maxCount`만큼 로드했으면 요청하지 않음(`hasMore = false`) | `git log --skip` 다음 페이지 | REQ-003 |
 | Search 입력 (디바운스) | 없음 (요청 중 표시만) | `git log --grep` | REQ-003 |
-| 커밋 체크박스 토글 | `selectedHashes` add/remove → `analyzing = true`(디바운스 후) | Commit 분석 + Mapping 엔진 | REQ-004~008 |
-| Mapping Profile 변경 | `analyzing = true` | Commit 분석 + Mapping 엔진 전체 재실행 (구현 단계에서 정정, 2026-08-04 — 아래 참고) | REQ-008 |
+| 커밋 체크박스 토글 | `selectedHashes` add/remove. IPC도, 어떤 계산도 트리거하지 않는다 — `isStale`이 즉시 파생 계산으로 true가 된다 | 없음 | REQ-004~008 |
+| Mapping Profile 변경 | `selectedProfile` 갱신. 마찬가지로 계산을 트리거하지 않는다 | 없음 | REQ-008 |
 | DeployFilesPanel 체크박스 토글 | 해당 항목 `included` 반전 | 없음 (로컬) | REQ-011 |
 | DeployFilesPanel 전체 선택 토글 | 필터에 표시된 행 전체 `included` 일괄 반전 | 없음 (로컬) | REQ-011 |
-| `[Preview]` 클릭 | 강제 재계산(디바운스 무시) | Commit 분석 + Mapping 엔진 | REQ-005~008 |
+| `[Preview]` 클릭 | `analyzing = true` → 완료 시 `summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection` 동시 갱신 | Commit 분석 + Mapping 엔진 | REQ-005~008 |
 | `[Export]` 클릭 | `exportStatus = 'exporting'` → `'done'`\|`'error'` | Package Builder(전체: 파일 복사 + 3종 Export) | REQ-009, REQ-010 |
 
-**정정 (Mapping Profile 변경 시 캐싱 계획 폐기, 2026-08-04)**: 이전 초안은 Mapping Profile만 바뀌었을 때 Commit 분석 결과(diff-tree/cat-file 호출 결과)를 캐시로 재사용하고 Mapping 엔진만 다시 돌리는 최적화를 계획했다. 하지만 이 최적화가 의미 있으려면 "이미 선택해둔 커밋 묶음에 대해 Profile 여러 개를 비교해보는" 사용 패턴이 실제로 있어야 하는데, 이를 뒷받침할 실사용 근거가 없다 — 사전 설계 단계의 추측성 최적화로 판단해 폐기했다(DETAILED_DESIGN.md §0.2). 구현은 Profile 변경 시에도 Commit 체크박스 토글과 동일하게 Commit 분석 + Mapping 엔진을 매번 전체 재실행한다.
+**정정 (자동 재계산 완전 제거, `[Preview]`가 유일한 트리거, 2026-08-04)**: 이전 초안(및 그 초안을 최적화하려던 캐싱 계획)은 커밋 체크박스나 Mapping Profile이 바뀔 때마다 디바운스 후 자동으로 재계산하는 것을 전제로 했다. 하지만 이 방식은 "선택은 바뀌었는데 화면·Export 대상은 옛 결과"인 구간(디바운스 대기 중)이 항상 존재해, 그 구간에 `[Export]`를 누르면 방금 바뀐 선택 일부가 반영 안 된 채로 조용히 나갈 수 있는 위험이 있었다(§2.8 "Export 직전 레이스 컨디션 방지" 참고). 자동 재계산 자체를 없애고 `[Preview]`를 유일한 계산 트리거로 확정하면서, 애초에 "자동 재계산을 최적화(캐싱)할지" 논의 자체가 무의미해졌다 — 자동 재계산이 없으니 최적화할 대상도 없다.
 
 ---
 
@@ -211,6 +216,8 @@ interface AppState {
 | FooterActionBar | — | `exportStatus`에 따라 `[Export]` label을 "내보내는 중..." 등으로 변경, 중복 클릭 방지 | 실패 사유를 인라인 배너로 표시, DR-009 Warning은 에러가 아니라 별도 경고 배지로 구분 |
 
 DR-009(HEAD 미존재)로 인한 `warnings`는 에러가 아니라 **경고**다 — 계산은 정상 완료된 상태이므로 Export를 막지 않고, DeployFilesPanel 상단에 노란 배너로 "N개 파일이 HEAD에 없어 제외되었습니다"만 표시한다.
+
+**추가 상태 — Stale (2026-08-04)**: 빈/로딩/에러 외에 네 번째 상태가 있다. 선택은 비어있지 않은데 `isStale`(§2.5)이 true인 경우로, DeploymentPreviewPanel/DeployFilesPanel/DeleteListPanel 모두 "선택이 변경되었습니다 — Preview를 눌러 계산하세요"를 표시하고, FooterActionBar는 `[Export]`를 비활성화한 채 "Preview를 먼저 실행하세요"를 보여준다. 커밋을 하나라도 체크한 직후(아직 한 번도 Preview를 안 누른 상태)는 이 Stale 상태의 특수한 경우다.
 
 ---
 

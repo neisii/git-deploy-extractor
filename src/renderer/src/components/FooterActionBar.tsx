@@ -1,4 +1,4 @@
-import { useAppStore } from '../store/appStore'
+import { useAppStore, selectIsAnalysisStale } from '../store/appStore'
 
 export function FooterActionBar(): React.JSX.Element {
   const profiles = useAppStore((s) => s.profiles)
@@ -10,8 +10,10 @@ export function FooterActionBar(): React.JSX.Element {
   const exportStatus = useAppStore((s) => s.exportStatus)
   const exportError = useAppStore((s) => s.exportError)
   const lastExportDir = useAppStore((s) => s.lastExportDir)
+  const isStale = useAppStore(selectIsAnalysisStale)
 
-  const disabled = selectedHashes.size === 0
+  const noSelection = selectedHashes.size === 0
+  const exportDisabled = noSelection || isStale || exportStatus === 'exporting'
 
   return (
     <div className="panel footer-action-bar">
@@ -25,12 +27,13 @@ export function FooterActionBar(): React.JSX.Element {
           ))}
         </select>
       </label>
-      <button disabled={disabled} onClick={() => void runPreview()}>
+      <button disabled={noSelection} onClick={() => void runPreview()}>
         Preview
       </button>
-      <button disabled={disabled || exportStatus === 'exporting'} onClick={() => void runExport()}>
+      <button disabled={exportDisabled} onClick={() => void runExport()}>
         {exportStatus === 'exporting' ? '내보내는 중...' : 'Export'}
       </button>
+      {!noSelection && isStale && <div className="status-text">Preview를 먼저 실행하세요</div>}
       {exportStatus === 'done' && lastExportDir && (
         <div className="status-text status-text--success">Export 완료: {lastExportDir}</div>
       )}

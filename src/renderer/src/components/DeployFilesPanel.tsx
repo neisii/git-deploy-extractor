@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
 import { List } from 'react-window'
 import type { RowComponentProps } from 'react-window'
-import { useAppStore } from '../store/appStore'
+import { useAppStore, selectIsAnalysisStale } from '../store/appStore'
 import type { DeployFileEntry, DeployFilesFilter } from '../store/appStore'
 import { loadColumnWidths, saveColumnWidths } from '../lib/columnWidths'
 import type { ColumnWidths } from '../lib/columnWidths'
@@ -64,6 +64,7 @@ export function DeployFilesPanel(): React.JSX.Element {
   const warnings = useAppStore((s) => s.warnings)
   const toggleIncluded = useAppStore((s) => s.toggleDeployFileIncluded)
   const toggleAll = useAppStore((s) => s.toggleAllDeployFiles)
+  const isStale = useAppStore(selectIsAnalysisStale)
 
   const filtered = useMemo(
     () => (filter === 'all' ? deployFiles : deployFiles.filter((f) => f.status === filter)),
@@ -136,6 +137,14 @@ export function DeployFilesPanel(): React.JSX.Element {
     },
     []
   )
+
+  if (isStale) {
+    return (
+      <div className="panel deploy-files-panel">
+        선택이 변경되었습니다 — Preview를 눌러 계산하세요
+      </div>
+    )
+  }
 
   return (
     <div className="panel deploy-files-panel">

@@ -1,10 +1,11 @@
-import { useAppStore } from '../store/appStore'
+import { useAppStore, selectIsAnalysisStale } from '../store/appStore'
 
 export function DeploymentPreviewPanel(): React.JSX.Element {
   const summary = useAppStore((s) => s.summary)
   const analyzing = useAppStore((s) => s.analyzing)
   const analysisError = useAppStore((s) => s.analysisError)
   const selectedHashes = useAppStore((s) => s.selectedHashes)
+  const isStale = useAppStore(selectIsAnalysisStale)
 
   if (analysisError) {
     return (
@@ -18,8 +19,16 @@ export function DeploymentPreviewPanel(): React.JSX.Element {
     return <div className="panel deployment-preview-panel">커밋을 선택하세요</div>
   }
 
-  if (analyzing || !summary) {
+  if (analyzing) {
     return <div className="panel deployment-preview-panel">계산 중...</div>
+  }
+
+  if (isStale || !summary) {
+    return (
+      <div className="panel deployment-preview-panel">
+        선택이 변경되었습니다 — Preview를 눌러 계산하세요
+      </div>
+    )
   }
 
   return (
