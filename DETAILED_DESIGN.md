@@ -238,7 +238,8 @@ git -C <repo> diff-tree --no-commit-id --name-status -r 4b825dc642cb6eb9a060e54b
 
 - 페이지 크기: 100 (초기값, UI 스크롤 체감에 따라 조정 가능)
 - Renderer가 스크롤 하단 도달 시 다음 페이지 IPC 요청 (`--skip` 증가), 단 누적 로드 개수가 `maxCount`에 도달하면 요청하지 않는다
-- Main Process는 `(repo, branch, startDate, endDate, maxCount, skip)` 키로 최근 조회 결과를 메모리 캐시 — 동일 세션 내 스크롤 왕복 시 재조회 방지. 앱 종료 시 캐시는 소멸(영속 캐시 아님, 오프라인 요구사항과 무관하므로 단순화).
+
+**정정 (Main Process 메모리 캐시 계획 폐기, 2026-08-04)**: 이전 초안은 Main Process가 `(repo, branch, startDate, endDate, maxCount, skip)` 키로 조회 결과를 메모리 캐시해 동일 세션 내 스크롤 왕복 시 재조회를 막는 것을 계획했다. 하지만 실제 구현은 Renderer(Zustand 스토어)가 로드된 commits를 페이지 단위로 누적 보관하고, 다음 페이지 IPC는 "아직 로드하지 않은 페이지"에 도달했을 때만 요청한다 — 이미 로드한 페이지를 스크롤로 다시 보는 동작 자체가 IPC를 발생시키지 않으므로, Main Process 캐시가 막으려던 재조회가 애초에 일어나지 않는다. 같은 목표를 다른(더 단순한) 방식으로 이미 달성하고 있어 별도 캐시 계층은 만들지 않는다. 단, `startDate`/`endDate`/`maxCount`/검색어를 이전 값으로 되돌리는 경우는 이 대상이 아니며(그 경우 Renderer는 항상 초기화 후 재조회한다), 이는 실사용 근거가 없는 훨씬 좁은 케이스로 별도 최적화하지 않는다.
 
 **성능 캐비어트(완화됨)**: `--skip`은 매 호출마다 HEAD부터 다시 그래프를 걸어야 하므로 깊은 히스토리에서 느려질 수 있다는 우려가 있었으나, `maxCount` 상한이 있는 이상 `--skip`은 최대 `maxCount`까지만 진행되고 그 이상 깊이 들어가지 않는다. 사용자가 `maxCount`를 크게 늘리는 경우(예: 수천 개)에만 여전히 유효한 우려이며, 그 경우엔 실제 저장소로 측정 후 필요 시 커서 방식(`git log <lastHash>..<branch>`)으로 교체한다.
 

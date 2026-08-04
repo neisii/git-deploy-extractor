@@ -147,14 +147,18 @@ interface AppState {
   startDate: string;   // YYYY-MM-DD, 기본 오늘-7일
   endDate: string;     // YYYY-MM-DD, 기본 오늘
   maxCount: number;    // 기본 100
+  searchTerm: string;
 
   commits: CommitEntry[];
   selectedHashes: Set<string>;
   commitPagination: { hasMore: boolean; loading: boolean };
+  commitListError: string | null;   // §5 에러 상태("커밋 조회 실패")에 대응
 
   analyzing: boolean;
+  analysisError: string | null;     // §5 에러 상태("계산 실패 메시지")에 대응
   summary: { files: number; added: number; modified: number; deleted: number } | null;
   deployFiles: DeployFileEntry[];
+  deployFilesFilter: 'all' | 'added' | 'modified';   // §2.6 Filter dropdown 상태
   deleteList: DeleteEntry[];
   warnings: { path: string; reason: string }[];
 
@@ -162,6 +166,8 @@ interface AppState {
   selectedProfile: string;
 
   exportStatus: 'idle' | 'exporting' | 'done' | 'error';
+  exportError: string | null;       // §5 에러 상태("실패 사유를 인라인 배너로 표시")에 대응
+  lastExportDir: string | null;     // Export 완료 후 결과 경로 표시용
 }
 ```
 
@@ -180,11 +186,13 @@ interface AppState {
 | 커밋 목록 스크롤 하단 도달 | `commitPagination.loading = true`. 이미 `maxCount`만큼 로드했으면 요청하지 않음(`hasMore = false`) | `git log --skip` 다음 페이지 | REQ-003 |
 | Search 입력 (디바운스) | 없음 (요청 중 표시만) | `git log --grep` | REQ-003 |
 | 커밋 체크박스 토글 | `selectedHashes` add/remove → `analyzing = true`(디바운스 후) | Commit 분석 + Mapping 엔진 | REQ-004~008 |
-| Mapping Profile 변경 | `analyzing = true` | Mapping 엔진 재실행(Commit 분석은 캐시 재사용, Mapping만 재계산) | REQ-008 |
+| Mapping Profile 변경 | `analyzing = true` | Commit 분석 + Mapping 엔진 전체 재실행 (구현 단계에서 정정, 2026-08-04 — 아래 참고) | REQ-008 |
 | DeployFilesPanel 체크박스 토글 | 해당 항목 `included` 반전 | 없음 (로컬) | REQ-011 |
 | DeployFilesPanel 전체 선택 토글 | 필터에 표시된 행 전체 `included` 일괄 반전 | 없음 (로컬) | REQ-011 |
 | `[Preview]` 클릭 | 강제 재계산(디바운스 무시) | Commit 분석 + Mapping 엔진 | REQ-005~008 |
 | `[Export]` 클릭 | `exportStatus = 'exporting'` → `'done'`\|`'error'` | Package Builder(전체: 파일 복사 + 3종 Export) | REQ-009, REQ-010 |
+
+**정정 (Mapping Profile 변경 시 캐싱 계획 폐기, 2026-08-04)**: 이전 초안은 Mapping Profile만 바뀌었을 때 Commit 분석 결과(diff-tree/cat-file 호출 결과)를 캐시로 재사용하고 Mapping 엔진만 다시 돌리는 최적화를 계획했다. 하지만 이 최적화가 의미 있으려면 "이미 선택해둔 커밋 묶음에 대해 Profile 여러 개를 비교해보는" 사용 패턴이 실제로 있어야 하는데, 이를 뒷받침할 실사용 근거가 없다 — 사전 설계 단계의 추측성 최적화로 판단해 폐기했다(DETAILED_DESIGN.md §0.2). 구현은 Profile 변경 시에도 Commit 체크박스 토글과 동일하게 Commit 분석 + Mapping 엔진을 매번 전체 재실행한다.
 
 ---
 

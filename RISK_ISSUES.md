@@ -66,6 +66,9 @@ REQUIREDMENT.md 작성 이후 발견·확정된 결정을 시간순으로 정리
 | 10 | `--since`/`--until`에 시간 미명시 시 경계 커밋 누락 재현 확인 | (없음) | `T00:00:00`/`T23:59:59` 항상 명시 | DETAILED_DESIGN.md §3.2 |
 | 11 | "Rename을 자동 판단하지 말고 사용자가 직접 보게 하자"는 제안 | #5의 Rename 추적 로직 전체(threshold, `oldPath`, `#` 주석) | **Rename 감지 자체를 제거.** Delete+Add로만 처리, 최종 파일명 기준 처리는 DR-007+REQ-007 조합으로 자연히 성립 | REQUIREDMENT.md DR-008, DETAILED_DESIGN.md 전반 |
 | 12 | Deploy Files 목록 크기 리스크 논의 | (없음) | 300개 초과 시 가상 스크롤 | UI_UX_SPEC.md §2.6 |
+| 13 | 구현 중 Branch 드롭다운에 원격 추적 브랜치(`origin/main` 등)가 섞여 나오는 것을 발견 | `refs/heads/`·`refs/remotes/` 둘 다 조회(REQUIREDMENT.md 원 설계) | `refs/heads/`만 조회. 원격 추적 브랜치는 fetch 시점 스냅샷이라 stale할 수 있는데 "로컬 기준"으로 착각할 위험이 있어 선택지에서 제외 | DETAILED_DESIGN.md §3.2 |
+| 14 | Mapping Profile 변경 시 재계산 캐싱의 실효성 논의 | Commit 분석 결과 캐시 재사용, Mapping만 재계산(원 설계) | 캐싱 계획 폐기, 매번 전체 재계산. Profile은 DR-011/012로 이미 대부분 파일이 조회 대상에서 빠져 드물게만 쓰이는 기능이라, 그 전환 속도를 최적화할 실사용 근거가 없음(과설계 정정) | UI_UX_SPEC.md §4 |
+| 15 | Commit 목록 스크롤 왕복 재조회 방지 방식 재검토 | Main Process가 조회 결과를 메모리 캐시(원 설계) | Main 캐시 계획 폐기. Renderer가 로드된 commits를 누적 보관해 이미 로드한 페이지는 재스크롤해도 IPC 자체가 발생하지 않음 — 같은 목표를 더 단순한 방식으로 이미 달성하고 있어 별도 캐시 불필요 | DETAILED_DESIGN.md §3.4 |
 
 ---
 
