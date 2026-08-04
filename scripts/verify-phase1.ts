@@ -99,6 +99,15 @@ async function main(): Promise<void> {
       rmSync(masterDir, { recursive: true, force: true })
     }
 
+    // 원격 추적 브랜치(refs/remotes/)는 선택지에서 제외되어야 함
+    console.log('\n-- (b-1) 원격 추적 브랜치 제외 --')
+    const headHash = execFileSync('git', ['-C', dir, 'rev-parse', 'main']).toString().trim()
+    sh(dir, ['update-ref', 'refs/remotes/origin/main', headHash])
+    sh(dir, ['update-ref', 'refs/remotes/origin/develop', headHash])
+    const branchesWithRemote = await listBranches(dir)
+    console.log('원격 추적 ref를 만든 뒤 조회한 branches:', branchesWithRemote)
+    assert.deepEqual(branchesWithRemote, ['main'], 'origin/* 는 목록에 없어야 함')
+
     // (c) 기본 기간(오늘-7일~오늘)/최대 100개 제한
     console.log('\n-- (c) 기본 기간/최대 100개 제한 --')
     const { startDate, endDate } = getDefaultDateRange()
