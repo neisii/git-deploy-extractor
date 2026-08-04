@@ -186,9 +186,11 @@ body,
   gap: 4px;
 }
 
+/* main-grid(위쪽 CommitListPanel/Summary 행)와 동일한 flex-basis·min-height를
+   줘서 최소 높이가 CommitListPanel 쪽과 같게 자란다. */
 .deploy-files-panel {
-  flex: 1 1 160px;
-  min-height: 120px;
+  flex: 1 1 240px;
+  min-height: 200px;
   display: flex;
   flex-direction: column;
 }
