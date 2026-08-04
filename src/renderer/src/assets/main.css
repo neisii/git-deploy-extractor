@@ -124,24 +124,71 @@ body,
   margin-bottom: 8px;
 }
 
-.deploy-files-panel__body {
+/* 가로+세로 스크롤을 이 컨테이너 하나가 전담한다. body에 overflow-y:auto를
+   따로 주면(overflow-x:visible과 섞임) CSS 스펙상 visible이 auto로
+   강제 승격되어 body가 자기 자신만의 별도 가로 스크롤 컨텍스트가
+   되어버리고, 그러면 헤더(.deploy-files-panel__columns)와 스크롤이
+   따로 놀게 된다 — 실측으로 확인한 문제라 단일 스크롤 컨테이너 +
+   sticky 헤더 방식으로 바꿨다. */
+.deploy-files-panel__scroll {
   flex: 1;
   min-height: 100px;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 
+.deploy-files-panel__body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 리사이즈는 최소 폭만 지정한다 — 실제 폭은 (최소 폭, 내용 길이) 중 큰
+   값으로 정해져서 아무리 좁혀도 텍스트가 잘리거나 옆 칸을 침범하지 않고,
+   넘치는 만큼은 .deploy-files-panel__scroll의 가로 스크롤로 해결된다. */
 .deploy-files-grid-row {
   display: grid;
-  grid-template-columns: 24px 1fr 1fr;
+  grid-template-columns:
+    24px
+    minmax(var(--local-col-min, 100px), max-content)
+    minmax(var(--server-col-min, 100px), max-content);
   align-items: center;
   gap: 8px;
   padding: 0 4px;
+  width: max-content;
 }
 
 .deploy-files-panel__columns {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex: 0 0 auto;
+  background: var(--color-background-soft);
   font-weight: 600;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--ev-c-gray-3);
+}
+
+.deploy-files-panel__col-header {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding-right: 10px;
+}
+
+.deploy-files-resize-handle {
+  position: absolute;
+  right: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 1;
+}
+
+.deploy-files-resize-handle:hover,
+.deploy-files-resize-handle:active {
+  background: var(--ev-c-gray-1);
 }
 
 .deploy-files-row {
@@ -151,8 +198,6 @@ body,
 .deploy-files-row__local,
 .deploy-files-row__server {
   font-family: ui-monospace, Menlo, Consolas, monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
