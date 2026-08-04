@@ -19,15 +19,14 @@ body,
   position: fixed;
   right: 10px;
   bottom: 6px;
-  font-size: 11px;
-  color: var(--ev-c-text-3);
-  text-decoration: none;
+  display: block;
+  line-height: 0;
   z-index: 10;
+  opacity: 0.85;
 }
 
 .credit-link:hover {
-  color: var(--ev-c-text-2);
-  text-decoration: underline;
+  opacity: 1;
 }
 
 .title-bar {
@@ -55,6 +54,12 @@ body,
   gap: 12px;
 }
 
+/* 우측 하단 고정 이미지(.credit-link, 50px)와 겹치지 않도록 그만큼
+   오른쪽 여백을 확보한다. */
+.footer-action-bar {
+  padding-right: 60px;
+}
+
 .repository-panel__path {
   flex: 1;
   min-width: 200px;
@@ -72,6 +77,22 @@ body,
 
 .status-text--success {
   color: #67c090;
+}
+
+/* 긴 절대 경로가 여러 줄로 줄바꿈되어 패널/뷰포트 밖으로 넘치는 걸
+   막는다 — 한 줄로 고정하고 넘치는 부분은 ellipsis로 자른다. 전체
+   내용은 title 툴팁과 클릭 시 클립보드 복사로 확인한다. */
+.status-text--copyable {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.status-text--copyable:hover {
+  text-decoration: underline;
 }
 
 .main-grid {

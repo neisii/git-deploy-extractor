@@ -31,7 +31,13 @@ export function FooterActionBar(): React.JSX.Element {
       </button>
       {!noSelection && isStale && <div className="status-text">Preview를 먼저 실행하세요</div>}
       {exportStatus === 'done' && lastExportDir && (
-        <div className="status-text status-text--success">Export 완료: {lastExportDir}</div>
+        <div
+          className="status-text status-text--success status-text--copyable"
+          title={lastExportDir}
+          onClick={() => void navigator.clipboard.writeText(lastExportDir)}
+        >
+          Export 완료: {lastExportDir}
+        </div>
       )}
       {exportStatus === 'error' && exportError && (
         <div className="status-text status-text--error">{exportError}</div>
