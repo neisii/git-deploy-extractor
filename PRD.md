@@ -69,9 +69,12 @@
 | REQ-001 | 유효한 Git Repository 경로가 주어짐 | 사용자가 [Browse...]로 해당 경로를 선택 | Repository가 유효한 것으로 표시되고 Branch 목록이 로드된다 |
 | | | 유효하지 않은 경로(Git repo 아님)를 선택 | "Git 저장소가 아닙니다" 등 구체적 에러가 표시되고 이후 단계로 진행되지 않는다 |
 | REQ-002 | Repository가 유효하게 선택된 상태 | 사용자가 Branch dropdown에서 브랜치를 변경 | Commit List가 초기화되고 새 브랜치의 첫 페이지 Commit이 로드된다 |
+| | Repository 선택 완료, Branch 목록 로드됨 | (자동) | `main`이 있으면 `main`, 없으면 `master`가 자동 선택된다. 둘 다 없으면 자동 선택하지 않는다 |
 | REQ-003 | 브랜치가 선택된 상태 | Commit List가 로드됨 | 각 행에 Hash/Author/Date/Message가 표시된다 |
+| | 조회 기간/최대 개수를 변경하지 않은 상태 | Commit List가 로드됨 | 기본값(오늘-7일~오늘, 최대 100개) 범위 내 Commit만 조회된다 — Branch 전체 이력을 한 번에 조회하지 않는다 |
 | | | 사용자가 Search에 검색어 입력 | 해당 검색어가 포함된 Commit만 필터링되어 표시된다 |
-| | | 사용자가 목록 하단까지 스크롤 | 다음 페이지 Commit이 이어서 로드된다(REQ-003, 수천 개 규모에서도 무한 스크롤 유지) |
+| | | 사용자가 목록 하단까지 스크롤 | 누적 로드 개수가 `maxCount` 미만이면 다음 페이지가 로드되고, `maxCount`에 도달하면 더 이상 요청하지 않는다 |
+| | | 사용자가 조회 기간 또는 최대 개수를 변경 | Commit List가 초기화되고 새 조건으로 재조회된다 |
 | REQ-004 | Commit List가 로드된 상태 | 사용자가 여러 행의 체크박스를 선택 | 선택된 모든 Commit이 이후 계산의 입력으로 사용된다 |
 | REQ-005 | 선택된 Commit 중 Merge Commit이 포함됨 | 변경 파일 계산이 실행됨 | Merge/Squash/Rebase/Cherry-pick 여부와 무관하게 각 Commit의 변경 파일 집합이 정확히 계산된다(DR-005) |
 | REQ-006 | 동일 파일이 선택된 여러 Commit에서 각각 수정됨 | 변경 파일 목록이 계산됨 | 최종 Deploy Files 목록에 해당 파일이 1회만 나타난다 |

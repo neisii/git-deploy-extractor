@@ -81,8 +81,9 @@ Git 프로세스 실행, 파일시스템 쓰기(Deploy Package 생성)는 전부
 │             │                                                    │
 │  ┌──────────▼──────────┐   REQ-005~007, DR-002~009               │
 │  │ Commit 분석 엔진     │   변경 파일 수집, 중복 제거,           │
-│  │                      │   상태 분류(Added/Modified/Deleted/    │
-│  │                      │   Renamed), HEAD 미존재 Warning        │
+│  │                      │   상태 분류(Added/Modified/Deleted,    │
+│  │                      │   Rename 미감지-DR-008), HEAD 미존재   │
+│  │                      │   Warning                              │
 │  └──────────┬──────────┘                                        │
 │             │                                                    │
 │  ┌──────────▼──────────┐   REQ-008, DR-010~012                   │
@@ -152,7 +153,7 @@ Rename을 별도 상태로 분류하지 않는다(DR-008) — Delete+Add를 각�
 2. Mapping Rule 엔진 출력에 따라 각 파일을 HEAD 버전 내용으로 복사 (원본 디렉터리 구조 유지, DR-011/012)
 3. `delete-list.txt` 기록 (DR-007)
 4. `deploy-files.txt` 기록
-5. `deploy-summary.json` 생성 (Files/Added/Modified/Deleted/Renamed 카운트 등 — 필드 스키마는 상세 설계에서 확정)
+5. `deploy-summary.json` 생성 (Files/Added/Modified/Deleted 카운트 등 — 필드 스키마는 상세 설계에서 확정)
 
 ## 4.5 UI 계층
 
@@ -160,7 +161,7 @@ REQUIREDMENT.md 섹션 8 와이어프레임 기준. 담당 화면 요소:
 
 - Repository 선택 / Branch 선택 / Commit 검색
 - Commit List (가상 스크롤, 다중 선택 체크박스)
-- Deployment Preview (Files/Added/Modified/Deleted/Renamed 집계)
+- Deployment Preview (Files/Added/Modified/Deleted 집계, Rename 미감지 — DR-008)
 - Deploy Files 목록 (Mapping 결과 미리보기, 개별/전체 선택 — REQ-011)
 - Delete List
 - Mapping Profile 선택, Preview/Export 액션 (2버튼 — UI_UX_SPEC.md §0-3)
@@ -210,10 +211,12 @@ Main Process 내부 모듈 간 호출은 함수 호출이며, Renderer와의 경
 
 ---
 
-# 7. 오픈 이슈 (상세 설계에서 확정 필요)
+# 7. 오픈 이슈 → 전부 DETAILED_DESIGN.md에서 확정됨 (해결됨)
 
-DOCUMENT_CHECKLIST.md 3번(상세 설계 문서)으로 이관되는 항목:
+DOCUMENT_CHECKLIST.md 3번(상세 설계 문서)으로 이관했던 항목이며, 전부 해결되었다:
 
-- `deploy-summary.json` 필드 스키마
-- Mapping Profile 저장 파일 포맷 및 스키마
-- Commit 목록 페이지네이션 크기 및 캐싱 전략
+- `deploy-summary.json` 필드 스키마 → DETAILED_DESIGN.md §2.3
+- Mapping Profile 저장 파일 포맷 및 스키마 → DETAILED_DESIGN.md §1.3
+- Commit 목록 페이지네이션 크기 및 캐싱 전략 → DETAILED_DESIGN.md §3.4
+
+새로 남은 리스크/미해결 항목은 RISK_ISSUES.md에서 추적한다.
