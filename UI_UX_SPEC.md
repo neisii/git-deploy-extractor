@@ -34,7 +34,8 @@ AppShell
 │   └── DeploymentPreviewPanel    (우: 집계 미리보기, 읽기 전용)
 ├── DeployFilesPanel              (배포 대상 파일 목록 + 개별/전체 선택)
 ├── DeleteListPanel               (삭제 대상 목록, 읽기 전용)
-└── FooterActionBar               (Mapping Profile 선택 + Export)
+├── FooterActionBar               (Mapping Profile 선택 + Export)
+└── Credit                        (화면 우측 하단 고정, 제작자 GitHub 링크)
 ```
 
 **정정 (Preview 위치 이동, 2026-08-04, 사용자 요청)**: `[Preview]`는 원래 FooterActionBar에 있었으나, "커밋을 고르고 → 바로 그 자리에서 계산한다"는 흐름이 더 직관적이라는 사용자 피드백으로 CommitListPanel 헤더로 옮겼다 — "전체 선택" 체크박스와 같은 행, 패널 우측 끝에 배치한다(§2.4).
@@ -145,6 +146,20 @@ AppShell
 버튼 비활성 조건: `[Export]`는 `selectedHashes.size === 0`이거나 `isStale`(§2.5)일 때 비활성 — 마지막 Preview 결과가 지금 선택과 정확히 일치할 때만 눌러진다. `isStale`인데 선택이 비어있지 않으면 "Preview를 먼저 실행하세요" 안내를 버튼 옆에 표시한다.
 
 **정정 (Export 직전 레이스 컨디션 방지, 2026-08-04)**: 이전 초안(자동 재계산)에서는 디바운스 대기 중에 `[Export]`를 누르면, 방금 바뀐 선택이 `selectedCommits`(즉석 계산이라 정확)엔 반영되지만 `deployFiles`/`deleteList`(디바운스 후에야 갱신되는 옛 계산 결과)엔 반영 안 된 채로 나가는 문제가 있었다 — `deploy-summary.json`은 선택한 커밋을 전부 기록하는데 실제 복사된 파일은 일부 커밋 분만 빠지는, 에러 없이 조용히 틀린 결과였다. `[Export]`를 `isStale`일 때 비활성화하는 것만으로 이 구간 자체가 없어진다(추가로 `runExport()` 내부에서도 한 번 더 확인한다).
+
+**추가 (Export 완료 메시지 — 한 줄 고정 + title + 클립보드 복사, 2026-08-04, 사용자 요청)**: `exportStatus === 'done'`일 때 표시되는 "Export 완료: {절대 경로}" 메시지는 한 줄로 고정되고 넘치는 부분은 ellipsis(`...`)로 잘린다 — 경로가 길면 여러 줄로 줄바꿈되며 패널/뷰포트 밖으로 넘쳐 잘리는 버그가 재현 테스트로 발견되어(§6 참고) 이 방식으로 막았다. 전체 경로는 `title` 툴팁(호버)으로 확인하고, 메시지를 클릭하면 `navigator.clipboard.writeText()`로 클립보드에 복사된다. Credit(§2.9)이 화면 우측 하단에 고정 배치되면서 FooterActionBar 우측 끝과 겹칠 수 있어, `padding-right: 60px`(Credit 이미지 폭만큼)도 함께 추가했다.
+
+## 2.9 Credit
+
+**책임**: 없음(REQ/DR 대상 아님). 제작자 GitHub 링크, 화면 우측 하단 고정. 2026-08-04 사용자 요청으로 추가된, 요구사항 문서 범위 밖의 장식용 UI 요소다.
+
+| 요소 | 동작 |
+|---|---|
+| 이미지 링크 | 제작자 자작 캐릭터 이미지(50×50, `src/renderer/src/assets/goraeng.png`)를 원본 크기로 표시. 클릭 시 `https://github.com/neisii`를 시스템 기본 브라우저로 연다(`target="_blank"` + `rel="noopener noreferrer"`, Main Process의 `webContents.setWindowOpenHandler`가 새 창 생성을 가로채 `shell.openExternal`로 위임 — 앱 내부 네비게이션 없음). 호버 시 `title="클릭 시 제작자의 Github로 이동합니다."` 툴팁 표시 |
+
+**상태 없음** — 정적 요소, Zustand 스토어와 무관하다. `position: fixed`로 배치되어 다른 패널의 레이아웃(높이 등)에 영향을 주지 않는다.
+
+**접근성**: `alt=""`로 장식용 이미지임을 명시(스크린리더가 무시하도록 하는 유효한 시맨틱 — 완전히 생략하는 것과 다르다). 스크린리더 전반 지원은 이 앱의 목표가 아니라는 게 사용자 확인 사항이다(2026-08-04).
 
 ---
 

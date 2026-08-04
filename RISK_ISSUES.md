@@ -70,6 +70,9 @@ REQUIREDMENT.md 작성 이후 발견·확정된 결정을 시간순으로 정리
 | 14 | Mapping Profile 변경 시 재계산 캐싱의 실효성 논의 | Commit 분석 결과 캐시 재사용, Mapping만 재계산(원 설계) | 캐싱 계획 폐기, 매번 전체 재계산(← #16에서 "자동 재계산 자체가 없음"으로 다시 정정됨) | UI_UX_SPEC.md §4 |
 | 15 | Commit 목록 스크롤 왕복 재조회 방지 방식 재검토 | Main Process가 조회 결과를 메모리 캐시(원 설계) | Main 캐시 계획 폐기. Renderer가 로드된 commits를 누적 보관해 이미 로드한 페이지는 재스크롤해도 IPC 자체가 발생하지 않음 — 같은 목표를 더 단순한 방식으로 이미 달성하고 있어 별도 캐시 불필요 | DETAILED_DESIGN.md §3.4 |
 | 16 | Export 직전 레이스 컨디션 발견 — 디바운스 대기 중(선택은 바뀌었는데 화면·`deployFiles`는 옛 계산 결과인 구간)에 `[Export]`를 누르면 방금 바뀐 선택 일부가 반영 안 된 채로 조용히 나갈 수 있음 | 커밋 체크박스/Mapping Profile 변경 시 디바운스 후 자동 재계산(#14의 "매번 전체 재계산") | 자동 재계산을 완전히 제거하고 `[Preview]`를 유일한 계산 트리거로 확정. `analyzedSelection`(마지막 Preview 계산 입력)과 현재 선택을 비교해 `isStale`을 파생 계산하고, `isStale`이면 `[Export]`를 비활성화 | UI_UX_SPEC.md §2.5, §2.8, §4 |
+| 17 | Commit 목록에서 개별 체크박스만 있고 전체 선택이 없어 Deploy Files 패널(전체선택 있음)과 UX가 불일치, 작성자/일시 정보도 없어 커밋 식별이 hash+message만으로는 부족하다는 사용자 피드백 | hash + message만 표시, 전체 선택 없음 | `DeployFilesPanel`의 전체선택 패턴과 동일하게 `toggleAllCommits()` 추가, 행 표시를 `hash → author → date → message`로 확장. `[Preview]` 버튼도 이 전체선택 체크박스와 수평 정렬되도록 CommitListPanel 헤더로 이동(기존엔 FooterActionBar에 있었음) | UI_UX_SPEC.md §2.2, §2.4 |
+| 18 | 화면 우측 하단에 제작자 정보를 상시 노출하고 싶다는 사용자 요청 | (없음) | 문자열 링크안으로 검토했으나 사용자가 자작 캐릭터 이미지(원본 `.gif` 확장자, 실제로는 PNG 데이터)로 교체 요청. `src/renderer/src/assets/goraeng.png`로 확장자를 내용에 맞게 정정해 배치, `position: fixed`로 다른 패널 레이아웃에 영향 없이 50×50 그대로 표시, 클릭 시 `https://github.com/neisii`를 시스템 브라우저로 오픈 | UI_UX_SPEC.md §2.9 |
+| 19 | #18 작업 중 Playwright 재현 테스트로 FooterActionBar의 "Export 완료: {경로}" 메시지가 긴 절대 경로에서 여러 줄로 줄바꿈되어 패널·뷰포트 아래로 넘쳐 잘리는 기존 버그를 발견(이미지 추가와 무관하게 원래부터 있던 문제) | 텍스트 줄바꿈 허용, 넘치는 부분이 잘려서 안 보임 | 메시지를 한 줄로 고정하고 ellipsis로 자름 + 전체 경로는 `title` 툴팁 + 클릭 시 클립보드 복사(`navigator.clipboard.writeText`)로 보완. 우측 하단 고정 이미지(#18)와 겹치지 않도록 `footer-action-bar`에 `padding-right: 60px` 추가 | UI_UX_SPEC.md §2.8 |
 
 ---
 
