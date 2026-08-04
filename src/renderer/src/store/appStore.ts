@@ -77,6 +77,8 @@ interface AppState {
   loadNextPage: () => Promise<void>
   toggleCommit: (hash: string) => void
   setDeployFilesFilter: (filter: DeployFilesFilter) => void
+  toggleDeployFileIncluded: (localPath: string) => void
+  toggleAllDeployFiles: () => void
   setProfile: (profileName: string) => void
   runPreview: () => Promise<void>
   runExport: () => Promise<void>
@@ -338,6 +340,35 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     setDeployFilesFilter: (filter) => set({ deployFilesFilter: filter }),
+
+    toggleDeployFileIncluded: (localPath) => {
+      set((state) => ({
+        deployFiles: state.deployFiles.map((f) =>
+          f.localPath === localPath ? { ...f, included: !f.included } : f
+        )
+      }))
+    },
+
+    // 필터에 표시된 행만 대상으로 한다 — 숨겨진 행은 건드리지 않는다
+    // (UI_UX_SPEC.md §2.6). 현재 필터된 행이 전부 included면 전체 해제,
+    // 그 외(일부만/전혀 없음)면 전체 선택 — indeterminate 상태를 별도
+    // 저장하지 않고 파생 계산하는 것과 같은 이유로 이 판정도 매번 계산한다.
+    toggleAllDeployFiles: () => {
+      set((state) => {
+        const filtered =
+          state.deployFilesFilter === 'all'
+            ? state.deployFiles
+            : state.deployFiles.filter((f) => f.status === state.deployFilesFilter)
+        const filteredPaths = new Set(filtered.map((f) => f.localPath))
+        const allIncluded = filtered.length > 0 && filtered.every((f) => f.included)
+        const nextIncluded = !allIncluded
+        return {
+          deployFiles: state.deployFiles.map((f) =>
+            filteredPaths.has(f.localPath) ? { ...f, included: nextIncluded } : f
+          )
+        }
+      })
+    },
 
     setProfile: (profileName) => {
       set({ selectedProfile: profileName })
