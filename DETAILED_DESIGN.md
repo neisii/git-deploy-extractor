@@ -1,0 +1,260 @@
+# Git Deploy Extractor 상세 설계 문서
+
+> Version: 0.1
+> Status: Draft
+> 기준 문서: REQUIREDMENT.md, ARCHITECTURE.md
+
+이 문서는 ARCHITECTURE.md 7번(오픈 이슈)에서 상세 설계로 이관된 항목을 확정한다.
+
+---
+
+# 1. Mapping Rule 스펙
+
+## 1.1 매핑 결정 알고리즘
+
+ARCHITECTURE.md 4.3에서 정의한 "기본값 identity, 예외만 Mapping Profile로 override" 원칙을 실행 가능한 알고리즘으로 정의한다.
+
+**정정**: 이전 초안은 Mapping Rule을 glob 패턴(`**`) + `{rest}` 캡처·치환을 지원하는 범용 템플릿 엔진으로 설계했다. 하지만 REQUIREDMENT.md 전체에서 디렉터리 단위 리매핑이 실제로 필요했던 사례는 한 번도 없었고, DR-010이 요구하는 건 "기본 구조와 다른 배포 경로가 필요한 경우"에 대한 override일 뿐이다. 검증되지 않은 확장성을 미리 설계에 넣은 것이므로, **경로 하나하나를 정확히 지정하는 1:1 override 테이블**로 단순화한다. 와일드카드/패턴 매칭은 없다.
+
+```
+function resolveServerPath(localPath, mappingProfile):
+    if match(localPath, "src/main/java/**"):
+        return localPath                          # DR-011, override 테이블 조회 안 함
+    if match(localPath, "src/main/resources/**"):
+        return localPath                          # DR-012, override 테이블 조회 안 함
+
+    override = mappingProfile.overrides.find(o => o.from == localPath)   # 대소문자 구분, 정확히 일치할 때만
+    if override:
+        return override.to
+
+    return localPath                               # override 없음 → 기본값 identity
+```
+
+**대소문자 구분 (확정)**: `from == localPath` 비교는 항상 대소문자를 구분한다. 배포 대상인 내부망 서버가 대소문자를 구분하는 환경이므로, 매칭도 동일하게 구분해야 한다. 구현 시 대소문자를 무시하는 비교 함수(예: `toLowerCase()` 정규화)를 쓰지 않도록 주의한다 — 자세한 배경은 §4 참고.
+
+`match(localPath, "src/main/java/**")`의 `**`는 사용자 설정이 아니라 DR-011/012에 고정된 두 구조적 접두사(`src/main/java/`, `src/main/resources/`)를 가리키는 표기일 뿐, Mapping Profile이 다루는 대상이 아니다.
+
+**결정**: `.java`, `src/main/resources/**`는 Mapping Profile을 아예 조회하지 않는다 — Profile에 실수로 이 경로에 대한 override를 추가해도 무시된다(DR-011/012는 하드 규칙). 그 외 경로는 override가 없으면 기본값도 identity다. 즉 Mapping Profile은 "예외 경로를 하나씩 나열하는 opt-in 설정"이며, 비워두면 전체가 identity mapping으로 동작한다.
+
+## 1.2 Override 데이터 구조
+
+```ts
+interface MappingOverride {
+  from: string;   // 정확한 Local Path (저장소 루트 기준 상대경로, 와일드카드 없음)
+  to: string;     // 정확한 Server Path
+  description?: string;
+}
+```
+
+**검증 규칙**: 같은 프로필 안에서 `from` 값은 중복될 수 없다(로드 시점에 거부). `to` 값이 우연히 겹치는 경우(서로 다른 두 override가 같은 target을 가리켜 배포 패키지에서 덮어쓰는 경우)는 자동 검증하지 않는다 — 목록이 사람이 직접 작성하는 명시적인 짧은 표라서, 발생하면 리뷰 과정에서 바로 눈에 띄는 실수이기 때문이다.
+
+## 1.3 Profile 저장 포맷
+
+**저장 위치**: Electron `app.getPath('userData')/profiles/<profileName>.json` (프로필 1개 = 파일 1개, 디렉터리 목록으로 프로필 목록 UI 구성)
+
+- macOS: `~/Library/Application Support/git-deploy-extractor/profiles/`
+- Windows: `%APPDATA%/git-deploy-extractor/profiles/`
+
+**스키마**:
+
+```json
+{
+  "profileName": "contract2-prod",
+  "version": "1.0",
+  "overrides": [
+    {
+      "from": "config/deploy-only.properties",
+      "to": "config/override/deploy-only.properties",
+      "description": "예: 사내망 전용 설정 파일을 별도 경로로 배치해야 하는 경우"
+    }
+  ]
+}
+```
+
+`overrides`가 빈 배열이면 순수 identity mapping 프로필이며, MVP의 기본 프로필(예: `default`)은 이 형태로 제공한다.
+
+**최초 실행 시드**: 앱 최초 실행 시 `profiles/` 디렉터리가 비어 있으면 `overrides: []`인 `default.json`을 자동 생성한다. 이 시드 로직은 Main Process 시작 시 1회 실행한다.
+
+---
+
+# 2. Export 포맷
+
+## 2.1 deploy-files.txt
+
+배포 대상 파일의 **Server Path**(Mapping Rule 적용 결과, `deploy/` 기준 상대경로)를 한 줄에 하나씩 기록한다.
+
+```
+src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeListController.java
+src/main/resources/static/js/guarantee/list.js
+src/main/resources/templates/guarantee/list.html
+```
+
+## 2.2 delete-list.txt
+
+내부망에서 삭제해야 할 파일의 Server Path를 한 줄에 하나씩 기록한다.
+
+```
+old.js
+src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeController.java
+```
+
+**정정 (Rename 처리 단순화, 2026-08-04)**: 이전 초안은 Rename된 파일의 이전 경로에 `#` 주석으로 새 이름을 남기는 방식을 썼다. 하지만 DR-008이 "Rename을 별도로 감지하지 않는다"로 바뀌면서, 애초에 도구가 "이 삭제가 Rename 때문"이라는 사실 자체를 알지 못한다 — `--find-renames` 없이 git이 넘겨주는 정보는 그냥 삭제/추가일 뿐이다. 그래서 이 파일에는 더 이상 주석이 붙지 않는다. 위 예시의 `GuaranteeController.java`가 실제로는 `GuaranteeListController.java`로 이름이 바뀐 것인지는, Preview 화면에서 Added/Deleted 목록을 같이 보고 **사용자가 직접** 판단한다.
+
+## 2.3 deploy-summary.json
+
+```json
+{
+  "generatedAt": "2026-08-04T09:12:00+09:00",
+  "repository": "D:\\workspace\\contract2",
+  "branch": "contract2/main",
+  "mappingProfile": "contract2-prod",
+  "commits": [
+    { "hash": "b61e2ab", "author": "hong", "date": "2026-07-30T11:02:00+09:00", "message": "guarantee html" },
+    { "hash": "8dd9e91", "author": "hong", "date": "2026-07-30T11:40:00+09:00", "message": "guarantee backend" }
+  ],
+  "summary": {
+    "files": 18,
+    "added": 4,
+    "modified": 14,
+    "deleted": 2
+  },
+  "files": [
+    {
+      "localPath": "src/main/resources/templates/guarantee/list.html",
+      "serverPath": "src/main/resources/templates/guarantee/list.html",
+      "status": "modified"
+    },
+    {
+      "localPath": "src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeListController.java",
+      "serverPath": "src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeListController.java",
+      "status": "added"
+    }
+  ],
+  "deleted": [
+    "old.js",
+    "src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeController.java"
+  ],
+  "warnings": [
+    { "path": "src/main/java/com/example/sell/legacy/Deprecated.java", "reason": "HEAD에 존재하지 않음 (DR-009)" }
+  ]
+}
+```
+
+| 필드 | 설명 | 대응 |
+|---|---|---|
+| `commits` | 선택된 Commit 목록 (REQ-004) | UI Commit List 선택 결과 |
+| `summary` | 섹션 8 Deployment Preview 패널과 동일 집계 | Files/Added/Modified/Deleted (Renamed 없음, DR-008) |
+| `files[].status` | `added` \| `modified` (deleted는 별도 배열) | DR-008 |
+| `deleted` | 삭제된 파일(DR-007). Rename으로 인한 삭제와 구분하지 않는다 | delete-list.txt와 1:1 대응 |
+| `warnings` | HEAD 미존재로 제외된 파일 | DR-009 |
+
+두 번째 `files[]` 예시(`GuaranteeListController.java`)와 `deleted`의 `GuaranteeController.java`가 실제로는 같은 파일의 Rename이지만, JSON도 이 둘을 연결 짓는 필드를 두지 않는다 — 그 판단은 도구가 아니라 Preview를 보는 사용자의 몫이다.
+
+**인코딩/줄바꿈 결정**: 세 Export 파일 모두 UTF-8(BOM 없음), LF(`\n`) 줄바꿈으로 고정한다. Windows에서 생성하더라도 CRLF를 쓰지 않는다 — 내부망 git이 이 파일을 그대로 diff/commit할 때 줄바꿈 문자로 인한 불필요한 변경이 발생하지 않도록 하기 위함이다.
+
+---
+
+# 3. Git 연동 설계
+
+## 3.1 공통 실행 규칙
+
+모든 git 호출은 아래 규칙을 따른다.
+
+- `-C <repoPath>` 로 대상 저장소 명시 (process cwd 변경 대신)
+- `-c core.quotepath=false` 항상 추가 — 비-ASCII(한글) **파일명**이 8진수로 이스케이프되는 것을 방지
+- `git log`/`diff-tree` 등 커밋 메시지를 포함하는 명령에는 `--encoding=UTF-8`을 항상 추가 — **커밋 메시지 내용**은 파일명과 별개 문제다. 과거 `i18n.commitEncoding=euc-kr`로 설정된 환경에서 만들어진 커밋이 섞여 있으면 원본 바이트가 EUC-KR일 수 있는데, 이 플래그가 git 스스로 UTF-8로 재인코딩해서 출력하게 만든다. (일반 `LANG`/`LC_ALL` 환경변수는 git 자신의 안내 메시지 로케일에만 영향을 주고 `--pretty=format` 출력 인코딩을 보장하지 않으므로 근본 대책이 아니다 — 이전 초안의 착오를 이번 검토에서 수정함)
+- stdout/stderr는 buffer로 받아 명시적으로 `utf8`로 디코딩 (OS 로케일에 의존하지 않음)
+- **인자는 항상 배열로 전달**한다 (Node `execFile`/`spawn`, 셸 문자열 조합 금지). Commit 검색어(REQ-003 Search)처럼 사용자 입력이 그대로 git 인자가 되는 경로가 있으므로, 셸을 거치는 `exec`류를 쓰면 명령 인젝션 위험이 생긴다.
+
+```ts
+interface GitCommandResult { stdout: string; stderr: string; exitCode: number; }
+function runGit(repoPath: string, args: string[]): Promise<GitCommandResult>
+// 구현은 반드시 execFile('git', args, { cwd: repoPath }) 형태 — exec(command: string) 금지
+```
+
+## 3.2 기능별 명령어 매핑
+
+| 기능 | 명령 | 대응 요구사항 |
+|---|---|---|
+| Repository 유효성 검사 | `git -C <repo> rev-parse --is-inside-work-tree` | REQ-001 |
+| Branch 목록 | `git -C <repo> for-each-ref --format="%(refname:short)" refs/heads/ refs/remotes/` | REQ-002 |
+| Commit 목록 (페이지네이션) | `git -C <repo> log <branch> --since="<startDate>T00:00:00" --until="<endDate>T23:59:59" --encoding=UTF-8 --pretty=format:"%H%x1f%an%x1f%ad%x1f%s%x1e" --date=iso-strict --skip=<offset> -n <min(pageSize, maxCount-offset)>` | REQ-003 |
+| Commit 검색 | `git -C <repo> log <branch> --since="<startDate>T00:00:00" --until="<endDate>T23:59:59" --encoding=UTF-8 --grep=<term> -i --pretty=format:"%H%x1f%an%x1f%ad%x1f%s%x1e" --date=iso-strict` | REQ-003 (Search) |
+| Commit별 변경 파일 | `git -C <repo> diff-tree --no-commit-id --name-status -r <commit>^1 <commit>` (root commit은 3.3 참고, `--find-renames` 미사용 — DR-008) | REQ-005, DR-005, DR-008 |
+| HEAD 파일 내용 | `git -C <repo> show <branch>:<path>` | REQ-007, DR-003 |
+
+필드 구분자로 `%x1f`(Unit Separator), 레코드 구분자로 `%x1e`(Record Separator)를 사용해 커밋 메시지에 포함될 수 있는 임의 문자(줄바꿈 포함)로부터 파싱을 안전하게 만든다. `%s`는 첫 줄(subject)만 포함한다 — REQ-003 목록에는 짧은 Message만 필요하므로 의도된 선택이다. Commit 검색도 현재 조회 기간(`startDate`~`endDate`) 밖의 결과를 보여주면 화면 다른 곳과 불일치하므로 동일하게 `--since`/`--until`을 적용한다.
+
+**`--since`/`--until` 시간 명시 필수 (실측 확인, 2026-08-04)**: `--since`/`--until`에 시간 없이 날짜만 주면(`--since="2026-07-01"`), git은 그 날짜의 자정이 아니라 **명령 실행 시점의 시:분:초를 그 날짜에 붙여** 경계로 사용한다. 예를 들어 지금이 10:38이면 `--since="2026-07-01"`은 `2026-07-01T10:38:31`처럼 해석되어, 같은 날 그보다 이른 시각(예: 10:00)에 만들어진 커밋이 누락된다. 실제 저장소로 재현 확인함. 그래서 **`startDate`는 항상 `T00:00:00`을, `endDate`는 항상 `T23:59:59`를 붙여서** git에 전달해야 시작일~종료일 전체가 빠짐없이 포함된다(위 명령어들에 이미 반영).
+
+## 3.3 Merge Commit 처리 (DR-005)
+
+**정정**: 초안에서는 `diff-tree -m`이 "첫 번째 부모 기준 diff"를 만든다고 서술했으나 사실이 아니다. git 문서상 `-m`은 병합 커밋을 **모든 부모 각각과** diff하는 옵션이라, 부모가 2개면 diff 결과가 2세트 나와 파일 집합이 중복/왜곡될 수 있다. 이번 검토에서 발견해 아래로 교체한다.
+
+**채택 방식**: 병합 커밋인지 여부와 무관하게, 선택된 커밋과 그 **첫 번째 부모** 두 트리를 직접 diff한다.
+
+```
+git -C <repo> diff-tree --no-commit-id --name-status -r <commit>^1 <commit>
+```
+
+이 방식은 병합 커밋이든 일반 커밋이든 동일한 명령 형태로 "커밋 하나당 변경 파일 집합 하나"를 계산하므로 Merge/Squash Merge/Rebase/Cherry-pick 여부와 무관하다는 DR-005 요건을 만족하면서, 별도 분기 로직도 필요 없다. `--find-renames`를 쓰지 않으므로(DR-008) 결과는 항상 A(추가)/M(수정)/D(삭제) 세 가지 상태로만 나온다.
+
+**엣지 케이스 — Root Commit**: 저장소의 첫 커밋은 부모가 없어 `<commit>^1`이 존재하지 않는다. 이 경우 git의 empty tree 상수(`4b825dc642cb6eb9a060e54bf8d69288fbee4904`, 모든 git 저장소에서 동일)를 부모 대신 사용한다.
+
+```
+git -C <repo> diff-tree --no-commit-id --name-status -r 4b825dc642cb6eb9a060e54bf8d69288fbee4904 <commit>
+```
+
+**재검토 필요**: "첫 번째 부모 기준" 자체가 실제 프로젝트의 병합 전략(예: 배포 대상 변경사항이 두 번째 부모 쪽에만 있는 경우)과 맞는지는 실제 병합 커밋 사례로 검증이 필요하다.
+
+## 3.4 Commit 목록 페이지네이션/캐싱
+
+**REQ-003 기본값(최근 7일, 최대 100개)이 조회 범위 자체를 좁힌다.** "Branch 전체 이력을 무한 스크롤로 다 훑는다"는 이전 설계를 대체한다 — 기본값 상태에서는 `maxCount`(100)가 페이지 크기(100)와 같아 첫 페이지 한 번으로 끝나고, `--skip`을 아예 쓸 일이 없다.
+
+- 페이지 크기: 100 (초기값, UI 스크롤 체감에 따라 조정 가능)
+- Renderer가 스크롤 하단 도달 시 다음 페이지 IPC 요청 (`--skip` 증가), 단 누적 로드 개수가 `maxCount`에 도달하면 요청하지 않는다
+- Main Process는 `(repo, branch, startDate, endDate, maxCount, skip)` 키로 최근 조회 결과를 메모리 캐시 — 동일 세션 내 스크롤 왕복 시 재조회 방지. 앱 종료 시 캐시는 소멸(영속 캐시 아님, 오프라인 요구사항과 무관하므로 단순화).
+
+**성능 캐비어트(완화됨)**: `--skip`은 매 호출마다 HEAD부터 다시 그래프를 걸어야 하므로 깊은 히스토리에서 느려질 수 있다는 우려가 있었으나, `maxCount` 상한이 있는 이상 `--skip`은 최대 `maxCount`까지만 진행되고 그 이상 깊이 들어가지 않는다. 사용자가 `maxCount`를 크게 늘리는 경우(예: 수천 개)에만 여전히 유효한 우려이며, 그 경우엔 실제 저장소로 측정 후 필요 시 커서 방식(`git log <lastHash>..<branch>`)으로 교체한다.
+
+---
+
+# 4. Package Builder 구현 규칙
+
+개발 환경 정보(2026-08-04 확인: 개발 장비 Windows 11, IDE는 JetBrains IntelliJ이며 Line separator 설정이 System-Dependent)를 반영해 두 가지를 확정한다.
+
+## 4.1 대소문자 구분
+
+**확정**: 모든 경로 비교(§1.1 Mapping Rule 매칭 포함)는 항상 대소문자를 구분한다. 배포 대상인 내부망 서버가 대소문자를 구분하는 환경이기 때문이다.
+
+**리스크**: 개발 장비가 Windows 11(NTFS, 기본적으로 대소문자를 구분하지 않음)이다. Git 저장소 자체는 대소문자를 구분해서 저장하므로, 이론상 대소문자만 다른 두 경로가 서로 다른 파일로 존재할 수 있다. 이 경우 Package Builder가 `deploy/`에 파일을 쓸 때 로컬 파일시스템이 두 경로를 같은 파일로 인식해 하나가 다른 하나를 조용히 덮어쓸 수 있다.
+
+**대응**: 파일을 쓰기 전, 계산된 배포 대상 경로 목록에서 대소문자만 다른 경로 쌍이 있는지 사전 검사한다. 발견되면 자동으로 진행하지 않고 즉시 에러로 중단하며 어떤 두 경로가 충돌하는지 사용자에게 보여준다(자동 덮어쓰기 금지 — DR-002 "정확하게 추출" 원칙에 따라 조용한 데이터 손실보다 명시적 실패가 낫다).
+
+## 4.2 파일 쓰기 모드 (줄바꿈 보존)
+
+**배경**: Windows + IntelliJ System-Dependent 조합이면 로컬에서 새로 저장되는 줄은 CRLF로 기록될 가능성이 높다. 다만 Package Builder는 파일 내용을 워킹트리가 아니라 `git show <branch>:<path>`(§3.2)로 읽는다 — 이 명령은 체크아웃 필터(`core.autocrlf`)를 거치지 않고 커밋된 blob 원본 바이트를 그대로 반환하므로, 우리 프로세스가 별도로 손대지 않는 한 원본 그대로 재현된다.
+
+**확정**: Package Builder가 이 내용을 `deploy/` 하위에 쓸 때는 반드시 **binary/raw 모드**로 쓴다(Node.js에서 텍스트 모드로 쓰면 줄바꿈이 조용히 변환될 수 있음). 즉 git이 반환한 바이트를 그대로, 어떤 형태의 텍스트 처리(인코딩 재해석, 줄바꿈 정규화)도 거치지 않고 디스크에 옮긴다. 이 규칙은 §2.3의 UTF-8/LF 고정 규칙과는 별개다 — 그건 Export 산출물 3종(deploy-files.txt 등 메타데이터)에만 적용되고, 이 규칙은 복사되는 소스 파일 자체에 적용된다.
+
+---
+
+# 5. 결정 사항 요약
+
+| 항목 | 결정 | 근거 | 재검토 필요도 |
+|---|---|---|---|
+| Mapping Profile 규칙 매칭 순서 | 배열 순서, 첫 매치 적용 | 구현/디버깅 단순성 | 낮음 |
+| Rename 감지 여부 | Rename을 감지하지 않는다. Delete+Add로 그대로 처리 | DR-008 재정정(2026-08-04) — 이전엔 `#` 주석/`oldPath`로 추적했으나, "어떤 삭제/추가가 Rename인지는 Preview에서 사용자가 직접 보고 판단"하는 쪽이 로직이 더 단순하고 정확성 리스크(threshold 오탐)도 없앰 | 해결됨 |
+| Export 파일 인코딩/줄바꿈 | UTF-8, LF 고정 | 내부망 git diff 노이즈 방지, 이번 세션 인코딩 이슈 재발 방지 | 낮음 |
+| Merge Commit diff 방식 | `diff-tree <commit>^1 <commit>` 두 트리 직접 비교 | 1차 초안의 `-m` 옵션은 실제로 "모든 부모와 diff"라 오류였음 — 이번 검토에서 수정 | 중간 — 실제 병합 사례 검증 필요 |
+| Root Commit(부모 없음) 처리 | git empty tree 상수와 diff | `<commit>^1`이 존재하지 않는 엣지 케이스 보완 | 낮음 |
+| 커밋 메시지 인코딩 | `git log --encoding=UTF-8` 항상 사용 | 과거 EUC-KR 커밋 인코딩 설정 가능성 대응. 1차 초안의 `LANG`/`LC_ALL` 환경변수 의존은 근본 대책이 아니어서 대체 | 낮음 |
+| Git 인자 전달 방식 | 배열 인자 + `execFile`(셸 미경유) | 커밋 검색어 등 사용자 입력이 git 인자가 되는 경로의 명령 인젝션 방지 | 낮음 |
+| Mapping Rule 표현 방식 | glob/템플릿 엔진 → 정확한 경로 1:1 override 테이블로 단순화 | 실제로 필요했던 디렉터리 단위 리매핑 사례가 없었음(과설계 정정) | 낮음 |
+| Commit 페이지 크기 | 100 | 초기 추정치 | 낮음 |
+| Commit 조회 기본 범위 | 시작일=오늘-7일 / 종료일=오늘 / 최대 100개, 사용자 조정 가능 | Branch 전체 이력을 기본으로 다 훑지 않도록 조회 범위 자체를 좁힘(REQ-003), 2026-08-04 확정 | 해결됨 |
+| `--since`/`--until` 시간 명시 | 항상 `T00:00:00`/`T23:59:59` 명시 | 시간 없이 날짜만 주면 git이 현재 시각을 그 날짜에 붙여 해석해 경계 커밋이 누락됨(실측 확인) | 해결됨 |
+| 기본 Branch 자동 선택 | main 우선, 없으면 master | 매번 수동 선택하지 않도록, 2026-08-04 확정 | 낮음 |
+| `--skip` 페이지네이션 성능 | 기본값(maxCount=100)에서는 사실상 미사용. `maxCount`를 크게 늘릴 때만 유효한 우려로 축소 | Commit 조회 기본 범위 축소로 완화됨 | 낮음 — `maxCount` 대폭 확장 시에만 재검토 |
+| 경로 대소문자 구분 | 항상 대소문자 구분 비교, Package Builder 쓰기 전 충돌 사전 검사 | 내부망 서버가 대소문자 구분 환경. 개발 장비는 Windows 11(NTFS, 비구분)이라 로컬에서 덮어쓰기 위험 있음, 2026-08-04 확정 | 해결됨 |
+| 소스 파일 쓰기 모드 | binary/raw 모드, 텍스트 처리 없음 | Windows+IntelliJ System-Dependent 환경이라 CRLF 가능성 높음. `git show`가 이미 autocrlf 미적용이라 원본 보존되지만, 쓰기 단계에서 텍스트 모드 사용 시 훼손 위험, 2026-08-04 확정 | 해결됨 |
