@@ -200,11 +200,13 @@ function runGit(repoPath: string, args: string[]): Promise<GitCommandResult>
 | 기능 | 명령 | 대응 요구사항 |
 |---|---|---|
 | Repository 유효성 검사 | `git -C <repo> rev-parse --is-inside-work-tree` | REQ-001 |
-| Branch 목록 | `git -C <repo> for-each-ref --format="%(refname:short)" refs/heads/ refs/remotes/` | REQ-002 |
+| Branch 목록 | `git -C <repo> for-each-ref --format="%(refname:short)" refs/heads/` | REQ-002 |
 | Commit 목록 (페이지네이션) | `git -C <repo> log <branch> --since="<startDate>T00:00:00" --until="<endDate>T23:59:59" --encoding=UTF-8 --pretty=format:"%H%x1f%an%x1f%ad%x1f%s%x1e" --date=iso-strict --skip=<offset> -n <min(pageSize, maxCount-offset)>` | REQ-003 |
 | Commit 검색 | `git -C <repo> log <branch> --since="<startDate>T00:00:00" --until="<endDate>T23:59:59" --encoding=UTF-8 --grep=<term> -i --pretty=format:"%H%x1f%an%x1f%ad%x1f%s%x1e" --date=iso-strict` | REQ-003 (Search) |
 | Commit별 변경 파일 | `git -C <repo> diff-tree --no-commit-id --name-status -r <commit>^1 <commit>` (root commit은 3.3 참고, `--find-renames` 미사용 — DR-008) | REQ-005, DR-005, DR-008 |
 | HEAD 파일 내용 | `git -C <repo> show <branch>:<path>` | REQ-007, DR-003 |
+
+**정정 (원격 추적 브랜치 제외, 2026-08-04)**: 이전 초안은 `refs/heads/`와 `refs/remotes/`를 모두 조회해 Branch 선택지에 원격 추적 브랜치(예: `origin/main`)까지 포함시켰다. 하지만 원격 추적 브랜치는 네트워크 호출 없이 로컬에 저장된 포인터일 뿐이라 "마지막 fetch 시점의 원격 스냅샷"이며, fetch가 오래됐으면 stale할 수 있다. 사용자가 이를 "로컬 기준"으로 착각해 오래된 내용을 추출할 위험이 있어, `refs/heads/`만 조회하도록 좁혔다.
 
 필드 구분자로 `%x1f`(Unit Separator), 레코드 구분자로 `%x1e`(Record Separator)를 사용해 커밋 메시지에 포함될 수 있는 임의 문자(줄바꿈 포함)로부터 파싱을 안전하게 만든다. `%s`는 첫 줄(subject)만 포함한다 — REQ-003 목록에는 짧은 Message만 필요하므로 의도된 선택이다. Commit 검색도 현재 조회 기간(`startDate`~`endDate`) 밖의 결과를 보여주면 화면 다른 곳과 불일치하므로 동일하게 `--since`/`--until`을 적용한다.
 
@@ -278,6 +280,7 @@ git -C <repo> diff-tree --no-commit-id --name-status -r 4b825dc642cb6eb9a060e54b
 | Commit 조회 기본 범위 | 시작일=오늘-7일 / 종료일=오늘 / 최대 100개, 사용자 조정 가능 | Branch 전체 이력을 기본으로 다 훑지 않도록 조회 범위 자체를 좁힘(REQ-003), 2026-08-04 확정 | 해결됨 |
 | `--since`/`--until` 시간 명시 | 항상 `T00:00:00`/`T23:59:59` 명시 | 시간 없이 날짜만 주면 git이 현재 시각을 그 날짜에 붙여 해석해 경계 커밋이 누락됨(실측 확인) | 해결됨 |
 | 기본 Branch 자동 선택 | main 우선, 없으면 master | 매번 수동 선택하지 않도록, 2026-08-04 확정 | 낮음 |
+| Branch 목록 대상 | `refs/heads/`만 조회, `refs/remotes/` 제외 | 원격 추적 브랜치는 fetch 시점의 로컬 스냅샷이라 stale할 수 있는데, 사용자가 "로컬 기준"으로 착각해 선택할 위험이 있음. 구현 단계에서 재정정(2026-08-04) | 낮음 |
 | `--skip` 페이지네이션 성능 | 기본값(maxCount=100)에서는 사실상 미사용. `maxCount`를 크게 늘릴 때만 유효한 우려로 축소 | Commit 조회 기본 범위 축소로 완화됨 | 낮음 — `maxCount` 대폭 확장 시에만 재검토 |
 | 경로 대소문자 구분 | 항상 대소문자 구분 비교, Package Builder 쓰기 전 충돌 사전 검사 | 내부망 서버가 대소문자 구분 환경. 개발 장비는 Windows 11(NTFS, 비구분)이라 로컬에서 덮어쓰기 위험 있음, 2026-08-04 확정 | 해결됨 |
 | 소스 파일 쓰기 모드 | binary/raw 모드, 텍스트 처리 없음 | Windows+IntelliJ System-Dependent 환경이라 CRLF 가능성 높음. `git show`가 이미 autocrlf 미적용이라 원본 보존되지만, 쓰기 단계에서 텍스트 모드 사용 시 훼손 위험, 2026-08-04 확정 | 해결됨 |
