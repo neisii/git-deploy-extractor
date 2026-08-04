@@ -60,6 +60,11 @@ body,
   padding-right: 60px;
 }
 
+.repository-panel__actions {
+  display: flex;
+  gap: 6px;
+}
+
 .repository-panel__path {
   flex: 1;
   min-width: 200px;
