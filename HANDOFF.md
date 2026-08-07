@@ -6,14 +6,14 @@
 
 ```
 Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-deploy-extractor)는
-이미 구현 완료 후 v0.2.0으로 릴리스된 상태입니다 — 처음부터 만드는 게 아니라
+이미 구현 완료 후 v0.2.1로 릴리스된 상태입니다 — 처음부터 만드는 게 아니라
 기존 앱을 확장하는 작업입니다.
 
 현재 상태:
 - PHASE_PLAN.md의 Phase 0~5(스캐폴딩 → Repository 접근 → Commit 분석/Mapping
   엔진 → Package Builder → UI 연결 → 개별/전체 파일 선택)가 전부 구현·검증 완료.
 - 이후 다수의 UI 개선/버그 수정, 라이선싱(MIT + 이미지 자산 예외), 버전
-  관리(v0.1.0 → v0.1.1 → v0.2.0)까지 마치고 GitHub Release로 배포됨.
+  관리(v0.1.0 → v0.1.1 → v0.2.0 → v0.2.1)까지 마치고 GitHub Release로 배포됨.
 - Phase 6(리스크 항목 실측 검증)만 의도적으로 후순위로 남아있음 — MVP 출시를
   막는 조건이 아니라서 미룬 것이지, 잊혀진 게 아닙니다. PHASE_PLAN.md §2.6 참고.
 - **실사용 중 나온 개선 아이디어 5건(§7.1 Export 경로, §7.2 의존성 완결성 검사,
@@ -48,6 +48,21 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
   로딩/빈 목록/에러 상태에 패널 전체를 대체하던 구조가 카운터까지 함께
   지워버리는 걸 발견해 헤더는 항상 렌더링하도록 구조도 같이 고쳤습니다 —
   결정 이력 #31 참고.
+- v0.2.0 릴리스 직후, `.github/workflows/release.yml`로 macOS/Windows 빌드를
+  자동화했습니다 — `v*` 태그를 push하면 두 OS를 각각 빌드해 해당 태그의
+  GitHub Release에 dmg/setup.exe를 자동 첨부합니다. Actions 화면에서
+  `workflow_dispatch`로 태그 없이 수동 실행도 가능(수동 실행 시엔 Release
+  첨부 없이 workflow artifact로만 결과 확인 — `github.ref`가 브랜치라 첨부할
+  태그가 없기 때문). 구현 중 실제 CI 실행으로 발견한 문제 둘: (1) `build:mac`이
+  `build:win`과 달리 typecheck를 건너뛰던 기존 불일치를 발견해 통일. (2)
+  electron-builder가 CI 환경변수를 감지하면 `repository` 필드를 보고 빌드 후
+  GitHub Release에 자동 업로드(implicit publish)를 시도하는데 `GH_TOKEN`이
+  없어 두 OS 모두 실패 — 업로드는 워크플로우의 별도 스텝이 담당하므로
+  `build:win`/`build:mac`에 `--publish never`를 추가해 해결(electron-builder.yml에
+  `publish: never`를 넣는 시도는 실패함 — 그 키는 CLI 옵션과 달리 publish
+  provider 설정이라 "never"를 존재하지 않는 provider로 오인함). v0.2.1은 이
+  파이프라인이 실제 태그 push로도 끝까지 동작하는지 검증하려고 만든
+  릴리스이며, 그 자체는 앱 기능 변경이 없습니다.
 
 먼저 이 순서로 읽어주세요 (짐작하지 말고 실제로 읽어야 합니다):
 
