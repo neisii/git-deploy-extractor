@@ -53,53 +53,66 @@ export function CommitListPanel(): React.JSX.Element {
     }
   }, [indeterminate])
 
+  // RISK_ISSUES.md §6.1 케이스 D — 헤더(전체 선택 체크박스 + 선택 개수
+  // 카운터)는 목록이 비어있거나(검색 결과 0건) 로딩/에러 상태여도 항상
+  // 렌더링돼야 한다. 예전에는 이 상태들에서 패널 전체를 다른 텍스트로
+  // 대체했는데, 그러면 검색 결과가 0건일 때 카운터까지 같이 사라져서
+  // "화면에 체크 표시가 하나도 안 보이는" 문제가 오히려 더 심해진다
+  // (본문뿐 아니라 카운터도 안 보임). 그래서 body만 상태별로 갈아끼운다.
+  let body: React.JSX.Element
   if (commitListError) {
-    return (
-      <div className="panel commit-list-panel commit-list-panel--error">
-        커밋 조회 실패: {commitListError}
-      </div>
+    body = <div className="status-text status-text--error">커밋 조회 실패: {commitListError}</div>
+  } else if (commits.length === 0 && pagination.loading) {
+    body = <div className="status-text">불러오는 중...</div>
+  } else if (commits.length === 0) {
+    body = <div className="status-text">커밋이 없습니다</div>
+  } else {
+    body = (
+      <List
+        rowComponent={CommitRow}
+        rowCount={commits.length}
+        rowHeight={32}
+        rowProps={{ commits, selectedHashes, onToggle: toggleCommit }}
+        onRowsRendered={({ stopIndex }) => {
+          if (stopIndex >= commits.length - 5) {
+            void loadNextPage()
+          }
+        }}
+        style={{ height: '100%', width: '100%' }}
+      />
     )
-  }
-
-  if (commits.length === 0 && pagination.loading) {
-    return <div className="panel commit-list-panel">불러오는 중...</div>
-  }
-
-  if (commits.length === 0) {
-    return <div className="panel commit-list-panel">커밋이 없습니다</div>
   }
 
   return (
     <div className="panel commit-list-panel">
       <div className="commit-list-panel__header">
-        <label>
-          <input
-            ref={headerCheckboxRef}
-            type="checkbox"
-            checked={allChecked}
-            onChange={() => toggleAllCommits()}
-          />
-          전체 선택
-        </label>
+        <div className="commit-list-panel__header-left">
+          <label>
+            <input
+              ref={headerCheckboxRef}
+              type="checkbox"
+              checked={allChecked}
+              disabled={commits.length === 0}
+              onChange={() => toggleAllCommits()}
+            />
+            전체 선택
+          </label>
+          {/* RISK_ISSUES.md §6.1 케이스 D — REQ-015로 선택이 검색 조건과
+              무관하게 유지되면서, 지금 화면엔 체크 표시가 하나도 안 보여도
+              실제로는 선택이 남아있을 수 있다(다른 검색에서 체크한 커밋).
+              전체 선택 여부와 무관하게 항상 실제 총 개수를 보여준다. */}
+          <span className="status-text commit-list-panel__selected-count">
+            {selectedHashes.size}개 선택됨
+          </span>
+        </div>
         <button disabled={selectedHashes.size === 0} onClick={() => void runPreview()}>
           Preview
         </button>
       </div>
-      <div className="commit-list-panel__body">
-        <List
-          rowComponent={CommitRow}
-          rowCount={commits.length}
-          rowHeight={32}
-          rowProps={{ commits, selectedHashes, onToggle: toggleCommit }}
-          onRowsRendered={({ stopIndex }) => {
-            if (stopIndex >= commits.length - 5) {
-              void loadNextPage()
-            }
-          }}
-          style={{ height: '100%', width: '100%' }}
-        />
-      </div>
-      {pagination.loading && <div className="status-text">다음 페이지 불러오는 중...</div>}
+      <div className="commit-list-panel__body">{body}</div>
+      {pagination.loading && commits.length > 0 && (
+        <div className="status-text">다음 페이지 불러오는 중...</div>
+      )}
     </div>
   )
 }

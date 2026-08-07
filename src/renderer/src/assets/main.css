@@ -232,11 +232,6 @@ body,
   height: 100%;
 }
 
-.commit-list-panel--error {
-  padding: 8px 10px;
-  color: #e5675f;
-}
-
 .commit-list-panel__header {
   flex: 0 0 auto;
   display: flex;
@@ -246,9 +241,25 @@ body,
   border-bottom: 1px solid var(--ev-c-gray-3);
 }
 
+/* RISK_ISSUES.md §6.1 케이스 D — "전체 선택" 체크박스와 선택 개수 카운터를
+   한 그룹으로 묶어 header의 space-between 배치가 여전히 좌(그룹)/우
+   (Preview 버튼) 2개 축으로만 갈리게 한다. */
+.commit-list-panel__header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .commit-list-panel__body {
   flex: 1;
   min-height: 0;
+}
+
+/* body가 목록 대신 로딩/빈 목록/에러 안내문(status-text)을 보여줄 때는
+   .commit-list-panel(padding:0)에 눌려 텍스트가 패널 가장자리에 바로
+   붙는다 — List 컴포넌트에는 영향 없이 이 직계 자식에만 여백을 준다. */
+.commit-list-panel__body > .status-text {
+  padding: 8px 10px;
 }
 
 .commit-row {

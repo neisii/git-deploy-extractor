@@ -101,7 +101,8 @@ AppShell
 
 | 요소 | 동작 |
 |---|---|
-| 헤더 "전체 선택" 체크박스 (좌측) | 현재 **로드된 commits 기준**으로 전체 체크/해제(아직 스크롤로 안 불러온 다음 페이지는 건드리지 않음). 일부만 체크된 상태면 indeterminate 표시 — DeployFilesPanel의 전체 선택(§2.6)과 동일한 방식(추가, 2026-08-04, 사용자 요청) |
+| 헤더 "전체 선택" 체크박스 (좌측) | 현재 **로드된 commits 기준**으로 전체 체크/해제(아직 스크롤로 안 불러온 다음 페이지는 건드리지 않음). 일부만 체크된 상태면 indeterminate 표시 — DeployFilesPanel의 전체 선택(§2.6)과 동일한 방식(추가, 2026-08-04, 사용자 요청). `commits.length === 0`이면 비활성 |
+| 헤더 "N개 선택됨" 카운터 ("전체 선택" 바로 옆) | `selectedHashes.size`(현재 로드/표시된 commits와 무관하게 **전체 선택 개수**)를 항상 표시. 0개여도 표시(추가, RISK_ISSUES.md §6.1 케이스 D, 2026-08-07, 사용자 요청) |
 | 헤더 `[Preview]` 버튼 (우측) | 헤더 행 최우측, "전체 선택"과 같은 줄에 배치. `selectedHashes.size === 0`일 때 비활성. 클릭 시 Commit 분석 + Mapping 엔진을 실행해 DeploymentPreviewPanel/DeployFilesPanel/DeleteListPanel을 최신 상태로 확정 표시하고 `analyzedSelection`(§2.5)을 갱신한다. **부작용 없음(파일시스템 변경 없음)** — 이 앱에서 계산이 일어나는 유일한 경로다(§2.5 참고) |
 | 각 행 | 체크박스 + `hash`(mono, 7자) + `author` + `date`(mono, ISO-strict 그대로) + `message` 순서로 표시(REQ-003의 Hash/Author/Date/Message 순서 그대로). 클릭 시 `selectedHashes` 토글 |
 | 스크롤 하단 도달 | 다음 페이지 IPC 요청 (DETAILED_DESIGN.md §3.4, `pageSize=100`) |
@@ -111,6 +112,8 @@ AppShell
 **빈/로딩/에러 상태**: §5 참고.
 
 **정정 (SplitPane 셀 높이 꽉 채우기, RISK_ISSUES.md §7.4, 2026-08-07, 사용자 요청)**: MainGrid가 `SplitPane`(§7.4)으로 구현된 이후, `.commit-list-panel`에 `height:100%`가 빠져 있어서 커밋이 몇 줄 없을 때 패널이 콘텐츠 높이로만 줄어들고 `SplitPane`이 배정한 나머지 공간이 빈 배경으로 남아있었다. `.file-list-column`(§2.6)이 이미 쓰던 것과 같은 규칙(`height:100%`)을 추가해 항상 배정된 높이를 꽉 채우도록 고쳤다.
+
+**정정 (빈/로딩/에러 상태에서도 헤더 유지, RISK_ISSUES.md §6.1 케이스 D, 2026-08-07, 사용자 요청)**: "N개 선택됨" 카운터를 추가하면서, 기존에 로딩/빈 목록/에러 상태를 패널 전체를 다른 문구로 대체하던 방식(early return)을 그대로 두면 오히려 문제가 커진다는 게 드러났다 — REQ-015로 선택이 검색 조건과 무관하게 유지되는 상황에서, 검색 결과가 0건이 되면 카운터까지 같이 사라져 "선택은 남아있는데 화면 어디에도 안 보이는" 상태가 본문뿐 아니라 헤더까지 번진다. 그래서 헤더(체크박스+카운터+Preview 버튼)는 항상 렌더링하고, 로딩/빈 목록/에러 문구는 `.commit-list-panel__body` 안쪽만 갈아끼우는 구조로 바꿨다 — DeployFilesPanel의 좌우 `FileListColumn`이 각자 자기 빈/로딩/에러를 자기 `.panel` 안에서 보여주는 것(§2.6)과 같은 방향의 수정이다.
 
 ## 2.5 DeploymentPreviewPanel
 
