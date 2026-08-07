@@ -2,7 +2,7 @@
 
 > Version: 0.1
 > Status: Draft
-> 기준 문서: REQUIREDMENT.md §8, ARCHITECTURE.md §4.5
+> 기준 문서: REQUIREDMENT.md §8, ARCHITECTURE.md §4.6
 
 REQUIREDMENT.md 8번 섹션 와이어프레임을 컴포넌트/상태/인터랙션 단위로 확장한다. 이 앱은 단일 화면 유틸리티이므로(다중 페이지 라우팅 없음), 화면 전체를 하나의 컴포넌트 트리로 정의한다.
 

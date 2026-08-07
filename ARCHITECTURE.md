@@ -40,6 +40,7 @@ REQUIREDMENT.md 섹션 10(비기능요구사항)에서 아키텍처를 직접 �
 | Commit 목록 렌더링 | 가상 스크롤 (예: react-window) | "수천 개 Commit" 요구사항 대응 |
 | Git 연동 | Node `child_process` → `git` CLI 셸아웃 | 섹션 10 요구사항, DR-005 정확성 확보 |
 | Profile 저장 | Electron `userData` 디렉터리에 JSON 파일 | 별도 DB 불필요, 오프라인 요구사항과 부합 |
+| Java 파싱(의존성 검사) | `java-parser`(chevrotain 기반) | REQ-013. 실제 프로덕션 도구(prettier-java)가 쓰는 라이브러리, 재현 테스트로 실사용 Java 문법 파싱 확인(DETAILED_DESIGN.md §6.1). 전이 의존성(lodash) npm audit 경고는 오프라인 로컬 도구라 공격 표면이 없다고 판단해 감수 |
 | 패키징 | electron-builder (mac: dmg/zip, win: nsis/zip) | 서명/배포 파이프라인 구성 용이 |
 
 > Profile 저장 포맷의 구체 스키마는 DOCUMENT_CHECKLIST.md 3번 항목(상세 설계)에서 확정한다.
@@ -99,9 +100,11 @@ Git 프로세스 실행, 파일시스템 쓰기(Deploy Package 생성)는 전부
 └───────────────────────────────────────────────────────────────┘
 ```
 
+**추가 (REQ-013, 2026-08-07)**: 위 4개 모듈은 REQ-001~011(MVP)의 필수 순차 파이프라인이다. 여기에 다섯 번째 모듈로 **의존성 완결성 검사 엔진**(§4.5)이 추가됐다 — Mapping Rule 엔진 출력을 입력받지만 Package Builder와 달리 필수 경로가 아니라 `[Preview]` 이후 자동 체이닝되는 **선택적/best-effort** 경로다(Java/Spring 저장소가 아니면 비활성화). 다이어그램에 넣으면 Package Builder 옆에 나란히 붙는 분기 박스가 되므로, 가독성을 위해 텍스트로만 남긴다 — 자세한 흐름은 DETAILED_DESIGN.md §6 참고.
+
 ## 4.1 Repository 접근 계층
 
-**책임**: Git CLI 프로세스 실행 및 결과 파싱. REQ-001~004 담당.
+**책임**: Git CLI 프로세스 실행 및 결과 파싱. REQ-001~004 담당(REQ-013용 저장소 전체 탐색 기능도 이 계층에 함께 둔다 — 아래 마지막 2행).
 
 | 기능 | 내부 구현 | 대응 요구사항 |
 |---|---|---|
@@ -110,6 +113,8 @@ Git 프로세스 실행, 파일시스템 쓰기(Deploy Package 생성)는 전부
 | Commit 목록 조회 | `git log --pretty=format:...` (lazy load, `--skip`/`-n` 페이지네이션) | REQ-003 |
 | Commit 상세 diff | `git diff-tree` / `git show --name-status` | REQ-005 |
 | HEAD 파일 조회 | `git show <branch>:<path>` | REQ-007, DR-003 |
+| 경로 접두사 하위 파일 목록 | `git ls-tree -r <branch> --name-only -- <prefix>` | REQ-013 |
+| 텍스트 사전 필터 검색 | `git grep -l -F <문자열> <branch> -- <pathspec>` | REQ-013 |
 
 이 계층은 Git CLI의 원시 출력만 파싱해서 상위 계층에 넘긴다. Merge/Rebase 전략 해석(DR-005)은 이 계층이 아니라 Commit 분석 엔진의 책임이다 — `git diff-tree`로 각 commit의 변경 파일만 뽑으면 Merge 전략과 무관하게 동일한 인터페이스로 처리 가능하기 때문이다.
 
@@ -155,16 +160,28 @@ Rename을 별도 상태로 분류하지 않는다(DR-008) — Delete+Add를 각�
 4. `deploy-files.txt` 기록
 5. `deploy-summary.json` 생성 (Files/Added/Modified/Deleted 카운트 등 — 필드 스키마는 상세 설계에서 확정)
 
-## 4.5 UI 계층
+## 4.5 의존성 완결성 검사 엔진 (REQ-013, 2026-08-07 추가)
 
-REQUIREDMENT.md 섹션 8 와이어프레임 기준. 담당 화면 요소:
+**책임**: Java/Spring 단일 모듈에서, 배포 대상 파일들이 참조하는 다른 Java 파일이 목록에 빠졌는지 HEAD 트리 기준으로 확인. Mapping Rule 엔진 출력(`deployFiles`)을 입력받지만, Package Builder와 달리 **선택적** 경로다 — `@SpringBootApplication` 클래스를 못 찾으면(Java/Spring 저장소가 아니면) 비활성화된다.
+
+1. `git grep`으로 `@SpringBootApplication` 후보를 저장소 전체에서 빠르게 좁히고, 파싱으로 확정해 base package 판별(하드코딩 금지)
+2. base package 경로 아래 `.java` 파일 목록(`git ls-tree`)으로 경로↔FQN 인덱스 구성(내용을 읽지 않고 경로에서 유도)
+3. 포함된 `.java` 파일들에서 시작해 BFS로 import/`implements`/`extends`/필드·생성자 파라미터 타입을 전이적으로 추적(깊이 제한 없음)
+4. 필드/파라미터로 참조된 타입이 인터페이스로 확인되면 `git grep`으로 구현체 후보를 좁히고 파싱으로 `implements` + stereotype 애노테이션 확정(모호하면 전부 후보로 제안)
+
+출력: `{ applicable: boolean, missingDependencies: DependencyCandidate[], parseWarnings }` — 자세한 알고리즘은 DETAILED_DESIGN.md §6 참고, 구현은 `src/main/analysis/dependencyAnalysis.ts`, `src/main/analysis/java/parseJavaFile.ts`.
+
+## 4.6 UI 계층
+
+REQUIREDMENT.md 섹션 8 와이어프레임(및 RISK_ISSUES.md §7.5 TO-BE 와이어프레임) 기준. 담당 화면 요소:
 
 - Repository 선택 / Branch 선택 / Commit 검색
 - Commit List (가상 스크롤, 다중 선택 체크박스)
 - Deployment Preview (Files/Added/Modified/Deleted 집계, Rename 미감지 — DR-008)
-- Deploy Files 목록 (Mapping 결과 미리보기, 개별/전체 선택 — REQ-011)
+- Deploy Files 목록 — 포함된 파일(Mapping 결과 미리보기, 개별/전체 선택 — REQ-011) / 누락된 의존성(REQ-013) 좌우 분할
 - Delete List
-- Mapping Profile 선택, Preview/Export 액션 (2버튼 — UI_UX_SPEC.md §0-3)
+- Export 경로 선택 + Export 액션 (2버튼 — UI_UX_SPEC.md §0-3. Mapping Profile 선택 UI는 REQ-012로 숨김)
+- 분할 영역 드래그 리사이즈 (REQ-014)
 
 세부 컴포넌트 분해와 상태(State) 정의는 DOCUMENT_CHECKLIST.md 4번(UI/UX 명세)에서 진행한다.
 
