@@ -72,6 +72,18 @@ body,
   color: var(--ev-c-text-2);
 }
 
+/* RISK_ISSUES.md §7.1 — 현재 선택된 Export 부모 디렉터리 표시.
+   repository-panel__path와 같은 monospace 스타일, 넘치면 ellipsis. */
+.footer-action-bar__export-path {
+  flex: 1;
+  min-width: 120px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--ev-c-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .status-text {
   color: var(--ev-c-text-2);
 }
@@ -224,15 +236,15 @@ body,
 /* 리사이즈는 최소 폭만 지정한다 — 실제 폭은 (최소 폭, 내용 폭) 중 큰
    값으로 정해져서 아무리 좁혀도 텍스트가 잘리거나 옆 칸을 침범하지 않고,
    넘치는 만큼은 .deploy-files-panel__scroll의 가로 스크롤로 해결된다.
-   내용 폭(--*-col-natural)은 CSS의 max-content가 아니라 JS가 실측해서
+   내용 폭(--local-col-natural)은 CSS의 max-content가 아니라 JS가 실측해서
    주입한 값이다 — 헤더와 각 행이 서로 별도의 grid 컨테이너라 max-content를
-   쓰면 행마다 독립적으로 계산되어 헤더/목록 폭이 어긋나는 문제가 있었다. */
+   쓰면 행마다 독립적으로 계산되어 헤더/목록 폭이 어긋나는 문제가 있었다.
+   Server Path 열은 RISK_ISSUES.md §7.1로 삭제되어 컬럼이 하나로 줄었다. */
 .deploy-files-grid-row {
   display: grid;
   grid-template-columns:
     24px
-    minmax(var(--local-col-min, 100px), var(--local-col-natural, 100px))
-    minmax(var(--server-col-min, 100px), var(--server-col-natural, 100px));
+    minmax(var(--local-col-min, 100px), var(--local-col-natural, 100px));
   align-items: center;
   gap: 8px;
   padding: 0 4px;
@@ -269,15 +281,6 @@ body,
   padding-right: 10px;
 }
 
-/* Server Path 열을 Local Path와 시각적으로 구분한다 — 채도를 낮춘
-   중립 회색(기존 팔레트의 테두리 색과 동일 톤)으로 헤더+각 행 배경을
-   채워서 "매핑을 거친 결과"라는 걸 은은하게 구분한다. */
-.deploy-files-panel__col-header[data-col='serverPath'] {
-  background: var(--ev-c-gray-3);
-  border-radius: 3px 3px 0 0;
-  padding: 2px 6px 2px 8px;
-}
-
 .deploy-files-resize-handle {
   position: absolute;
   right: -4px;
@@ -297,8 +300,7 @@ body,
   border-bottom: 1px solid var(--ev-c-gray-3);
 }
 
-.deploy-files-row__local,
-.deploy-files-row__server {
+.deploy-files-row__local {
   font-family: ui-monospace, Menlo, Consolas, monospace;
   white-space: nowrap;
 }
@@ -309,15 +311,6 @@ body,
 
 .deploy-files-row__local--clickable:hover {
   text-decoration: underline;
-}
-
-.deploy-files-row__server {
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  background: var(--ev-c-gray-3);
-  border-radius: 3px;
-  padding: 0 6px 0 8px;
 }
 
 .warning-banner {
@@ -360,6 +353,20 @@ button:hover:not(:disabled) {
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* RISK_ISSUES.md §7.1 — Export는 실제로 파일을 쓰는 유일한 버튼이라
+   다른 버튼과 시각적으로 구분되도록 더 진한 배경색을 준다. 이 팔레트에
+   기존 강조색(accent)이 없어 status-text--success/error와 같은 방식으로
+   직접 hex 값을 지정한다. */
+.button--primary {
+  background: #3a6ea5;
+  border-color: #3a6ea5;
+  color: #fff;
+}
+
+.button--primary:hover:not(:disabled) {
+  background: #4c85c2;
 }
 
 input,

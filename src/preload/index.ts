@@ -31,7 +31,8 @@ const api = {
       ipcRenderer.invoke('analysis:preview', req)
   },
   package: {
-    export: (params: BuildPackageParams): Promise<BuildPackageResult> =>
+    browseExportDir: (): Promise<string | null> => ipcRenderer.invoke('package:browseExportDir'),
+    export: (params: BuildPackageParams): Promise<BuildPackageResult | null> =>
       ipcRenderer.invoke('package:export', params)
   }
 }

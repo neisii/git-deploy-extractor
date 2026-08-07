@@ -263,6 +263,28 @@ git -C <repo> diff-tree --no-commit-id --name-status -r 4b825dc642cb6eb9a060e54b
 
 **확정**: Package Builder가 이 내용을 `git-deploy-extracted/` 하위에 쓸 때는 반드시 **binary/raw 모드**로 쓴다(Node.js에서 텍스트 모드로 쓰면 줄바꿈이 조용히 변환될 수 있음). 즉 git이 반환한 바이트를 그대로, 어떤 형태의 텍스트 처리(인코딩 재해석, 줄바꿈 정규화)도 거치지 않고 디스크에 옮긴다. 이 규칙은 §2.3의 UTF-8/LF 고정 규칙과는 별개다 — 그건 Export 산출물 3종(deploy-files.txt 등 메타데이터)에만 적용되고, 이 규칙은 복사되는 소스 파일 자체에 적용된다.
 
+## 4.3 Export 경로 계산 및 덮어쓰기 확인 (REQ-012, DR-013, RISK_ISSUES.md §7.1)
+
+**배경**: 지금까지 Export 결과물은 항상 저장소 루트 바로 아래 `git-deploy-extracted/`로 고정이었다(결정 이력 #20으로 이름은 고정 확정). 사용자가 원하는 위치로 결과물을 보내고 싶다는 요구에 따라, **이름이 아니라 부모 디렉터리 위치**만 사용자가 선택하도록 확장한다.
+
+**deployDir 계산** (`src/main/package/buildPackage.ts`의 `getDeployDir`):
+
+```
+deployDir = join(exportParentDir ?? repoPath, 'git-deploy-extracted')
+```
+
+`exportParentDir`는 사용자가 OS 네이티브 폴더 다이얼로그(`package:browseExportDir` IPC, `repository:browse`와 동일한 `dialog.showOpenDialog({ properties: ['openDirectory'] })` 패턴)로 선택한 절대 경로다. 미선택 시 `undefined`이며 이 경우 저장소 루트가 기본값이다.
+
+**저장**: 선택한 `exportParentDir`는 Renderer의 `localStorage`(`gde:exportParentDir` 키, `src/renderer/src/lib/exportPath.ts`)에 저장되는 전역 설정이다 — 저장소별로 구분하지 않는다(DeployFilesPanel 컬럼 폭 저장, `columnWidths.ts`와 동일 패턴). 값을 한 번도 선택하지 않으면 아무것도 저장하지 않고, 매번 현재 `repository.path`를 기본값으로 계산한다.
+
+**덮어쓰기 확인(DR-013)**: `package:export` IPC 핸들러가 `buildPackage()`를 호출하기 **전에** `deployDir`가 이미 존재하고 내용이 있는지(`fs.readdir`가 빈 배열이 아닌지 — 없으면 `ENOENT`를 잡아 false로 취급) 확인한다(`deployDirHasContent`). 있으면 `dialog.showMessageBox`(Main Process, 네이티브 모달 — Renderer에 별도 커스텀 모달 컴포넌트를 두지 않는다, `repository:browse`의 네이티브 다이얼로그와 같은 이유로 일관성 유지)로 "이미 있는 git-deploy-extracted를 덮어씁니다, 계속할까요?"를 확인한다(버튼: `['취소', '계속']`, `defaultId`/`cancelId` 모두 0 — 안전한 선택지가 기본값). 사용자가 "취소"를 선택하면 `buildPackage()`를 호출하지 않고 IPC가 `null`을 반환한다.
+
+**`null` 반환의 의미**: `repository:browse`가 취소 시 `null`을 반환하는 기존 패턴을 그대로 재사용한다(`package:export`의 반환 타입이 `BuildPackageResult | null`로 바뀜). Renderer(`appStore.ts`의 `runExport`)는 `null`을 에러가 아니라 "사용자가 명시적으로 중단함"으로 처리한다 — `exportStatus`를 `'error'`가 아니라 `'idle'`로 되돌리고 에러 배너를 띄우지 않는다.
+
+**모듈 분리**: `getDeployDir(repoPath, exportParentDir)`와 `deployDirHasContent(deployDir)`를 `buildPackage()`와 별도로 export한다 — 덮어쓰기 확인은 실제 파일 삭제/쓰기가 시작되기 전에 IPC 핸들러 레벨에서 먼저 판단해야 하므로, `buildPackage()` 내부에 숨기지 않고 호출자가 먼저 조회할 수 있게 분리했다. `buildPackage.ts`는 여전히 Electron API(`dialog`)에 의존하지 않는 순수 fs 로직으로 유지한다 — Main Process 모듈 중 `ipc/handlers.ts`만 Electron API 경계를 직접 다루는 기존 설계(ARCHITECTURE.md §3)와 일관된다.
+
+**UI 파생 결정**: Mapping Profile 드롭다운은 FooterActionBar에서 숨긴다 — 현재 프로필이 `default` 하나뿐이고 사용자가 커스텀 프로필을 만들거나 편집할 UI가 없어 사실상 무의미하기 때문이다(내부 로직은 `selectedProfile: 'default'`를 그대로 계산에 넘기며 동작 변경 없음). 이 과정에서 `default` 프로필의 `overrides`가 항상 빈 배열이라는 게 재확인되었고(`profileStore.ts`), 즉 Server Path가 사실상 항상 Local Path와 같다는 뜻이므로 `DeployFilesPanel`의 **Server Path 열도 함께 삭제**했다(UI_UX_SPEC.md §2.6).
+
 ---
 
 # 5. 결정 사항 요약
@@ -285,3 +307,5 @@ git -C <repo> diff-tree --no-commit-id --name-status -r 4b825dc642cb6eb9a060e54b
 | `--skip` 페이지네이션 성능 | 기본값(maxCount=100)에서는 사실상 미사용. `maxCount`를 크게 늘릴 때만 유효한 우려로 축소 | Commit 조회 기본 범위 축소로 완화됨 | 낮음 — `maxCount` 대폭 확장 시에만 재검토 |
 | 경로 대소문자 구분 | 항상 대소문자 구분 비교, Package Builder 쓰기 전 충돌 사전 검사 | 내부망 서버가 대소문자 구분 환경. 개발 장비는 Windows 11(NTFS, 비구분)이라 로컬에서 덮어쓰기 위험 있음, 2026-08-04 확정 | 해결됨 |
 | 소스 파일 쓰기 모드 | binary/raw 모드, 텍스트 처리 없음 | Windows+IntelliJ System-Dependent 환경이라 CRLF 가능성 높음. `git show`가 이미 autocrlf 미적용이라 원본 보존되지만, 쓰기 단계에서 텍스트 모드 사용 시 훼손 위험, 2026-08-04 확정 | 해결됨 |
+| Export 결과물 위치(REQ-012) | 사용자가 부모 디렉터리만 선택 가능(네이티브 다이얼로그), 하위 폴더명(`git-deploy-extracted`)은 고정 | 결정 이력 #20(이름 고정)과 일관성 유지 — 이름이 아니라 위치만 커스터마이징. `localStorage` 전역 저장, 2026-08-07 확정 | 해결됨 |
+| Export 대상 폴더 덮어쓰기(DR-013) | 기존 내용 있으면 `dialog.showMessageBox`로 확인, 취소 시 중단·기존 내용 보존 | 조용한 데이터 손실 방지("정확하게 추출" 원칙). `package:export`가 취소 시 `null` 반환(`repository:browse` 취소 패턴 재사용), 2026-08-07 확정 | 해결됨 |

@@ -25,7 +25,8 @@ export interface Api {
     preview: (req: PreviewRequest) => Promise<DeployPlan>
   }
   package: {
-    export: (params: BuildPackageParams) => Promise<BuildPackageResult>
+    browseExportDir: () => Promise<string | null>
+    export: (params: BuildPackageParams) => Promise<BuildPackageResult | null>
   }
 }
 

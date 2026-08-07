@@ -34,7 +34,7 @@ AppShell
 │   └── DeploymentPreviewPanel    (우: 집계 미리보기, 읽기 전용)
 ├── DeployFilesPanel              (배포 대상 파일 목록 + 개별/전체 선택)
 ├── DeleteListPanel               (삭제 대상 목록, 읽기 전용)
-├── FooterActionBar               (Mapping Profile 선택 + Export)
+├── FooterActionBar               (Export 경로 선택 + Export)
 └── Credit                        (화면 우측 하단 고정, 제작자 GitHub 링크)
 ```
 
@@ -117,20 +117,22 @@ AppShell
 |---|---|
 | 헤더 "전체 선택" 체크박스 | 현재 **필터에 표시된 행 기준**으로 전체 체크/해제. 필터로 숨겨진 행은 건드리지 않는다. 표시된 행 일부만 체크된 상태면 indeterminate(가로줄) 표시 |
 | Filter dropdown | `all \| added \| modified` (클라이언트 사이드 필터, 재계산 없음. `deleted`는 이 목록 대상이 아니므로 필터 옵션에서 제외. Rename을 별도 감지하지 않으므로 `renamed` 옵션도 없음 — DR-008) |
-| 각 행 체크박스 | `included` 토글. 해제된 파일은 Export 시 deploy-files.txt와 실제 복사 대상에서 빠진다(REQ-011). Local Path 열의 파일명 텍스트를 클릭해도 동일하게 토글된다(추가, 2026-08-04) — Server Path 열은 클릭 대상이 아니다 |
-| Local Path / Server Path 열 | `localPath`, `serverPath`(Mapping Rule 적용 후) 나란히 표시. 각 열 헤더 오른쪽 경계를 드래그하면 최소 폭을 조절할 수 있다 |
+| 각 행 체크박스 | `included` 토글. 해제된 파일은 Export 시 deploy-files.txt와 실제 복사 대상에서 빠진다(REQ-011). Local Path 열의 파일명 텍스트를 클릭해도 동일하게 토글된다(추가, 2026-08-04) |
+| Local Path 열 | `localPath` 표시. 열 헤더 오른쪽 경계를 드래그하면 최소 폭을 조절할 수 있다 |
 
-**상태**: `deployFiles: { localPath: string; serverPath: string; status: 'added'|'modified'; included: boolean }[]`, `filter: 'all'|'added'|'modified'`
+**상태**: `deployFiles: { localPath: string; serverPath: string; status: 'added'|'modified'; included: boolean }[]`, `filter: 'all'|'added'|'modified'` — `serverPath`는 화면에는 더 이상 표시되지 않지만 Export 시 IPC 페이로드(`BuildPackageParams.files[].serverPath`)에는 그대로 쓰인다(§7.1 정정 참고).
 
-**가상 스크롤 임계값**: 필터링된 표시 대상이 **300개를 넘으면** CommitListPanel과 동일하게 react-window 가상 스크롤을 적용한다. 이 목록은 Commit List와 달리 페이지네이션 대상이 아니다 — 계산이 이미 한 번에 끝나 전체가 메모리에 있으므로 렌더링만 가상화하면 된다. 300개는 행 하나(체크박스+경로 2열, DOM 노드 약 4개) 기준 대략치이며, 실사용 데이터로 재조정 가능하다.
+**가상 스크롤 임계값**: 필터링된 표시 대상이 **300개를 넘으면** CommitListPanel과 동일하게 react-window 가상 스크롤을 적용한다. 이 목록은 Commit List와 달리 페이지네이션 대상이 아니다 — 계산이 이미 한 번에 끝나 전체가 메모리에 있으므로 렌더링만 가상화하면 된다. 300개는 행 하나(체크박스+경로 1열, DOM 노드 약 3개) 기준 대략치이며, 실사용 데이터로 재조정 가능하다.
 
 `전체 선택` 체크 상태는 별도 필드로 저장하지 않고 `deployFiles`에서 파생 계산한다(`filtered.every(f => f.included)` → checked, `filtered.some(f => f.included)` → indeterminate, 그 외 unchecked) — 상태 중복 저장으로 인한 불일치를 피하기 위함.
 
-**추가 (Local/Server Path 컬럼 가로 스크롤·리사이즈, 2026-08-04, 사용자 피드백)**: 긴 경로가 잘려 보이는 문제를 해결하기 위해 두 열 모두 텍스트를 자르지 않는다(ellipsis 없음) — 컬럼 폭보다 내용이 길면 패널 전체가 가로로 스크롤되어 전체 경로를 볼 수 있다. 각 열 헤더의 리사이즈 핸들을 드래그하면 "최소 폭"을 지정할 수 있는데, 실제 렌더링 폭은 항상 (지정한 최소 폭, 내용 길이) 중 큰 값이므로 아무리 좁게 줄여도 텍스트가 잘리거나 옆 열을 침범하지 않는다. 조절한 폭은 `localStorage`에 전역 설정 하나로 저장되어(저장소별 구분 없음) 앱 재실행 후에도 유지된다.
+**추가 (Local Path 컬럼 가로 스크롤·리사이즈, 2026-08-04, 사용자 피드백)**: 긴 경로가 잘려 보이는 문제를 해결하기 위해 텍스트를 자르지 않는다(ellipsis 없음) — 컬럼 폭보다 내용이 길면 패널 전체가 가로로 스크롤되어 전체 경로를 볼 수 있다. 열 헤더의 리사이즈 핸들을 드래그하면 "최소 폭"을 지정할 수 있는데, 실제 렌더링 폭은 항상 (지정한 최소 폭, 내용 길이) 중 큰 값이므로 아무리 좁게 줄여도 텍스트가 잘리지 않는다. 조절한 폭은 `localStorage`에 전역 설정 하나로 저장되어(저장소별 구분 없음) 앱 재실행 후에도 유지된다.
 
 **정정 (헤더-목록 컬럼 폭 불일치 버그 수정, 2026-08-04, 사용자 발견)**: 위 "내용 길이 중 큰 값" 계산을 헤더 행과 각 데이터 행이 서로 별도의 CSS Grid 컨테이너로 구현하다 보니, 각 컨테이너가 `max-content`를 자기 내용(헤더는 "Local Path"라는 라벨 텍스트, 각 행은 그 행 자신의 파일 경로)만 기준으로 독립 계산해 헤더와 목록의 폭이 어긋나는 버그가 있었다. CSS의 `max-content`에 맡기는 대신 JS(`canvas.measureText` + `getComputedStyle`)로 현재 필터링된 전체 행과 헤더 라벨 중 가장 넓은 폭을 실측해 모든 행(가상 스크롤 포함)에 동일한 값을 주입하는 방식으로 바꿔 해소했다.
 
-**알려진 제약**: 위 수정으로 컬럼 **폭 자체**는 필터링된 표시 대상 개수와 무관하게 항상 헤더와 목록이 일치한다. 다만 필터링된 표시 대상이 300개를 넘어 가상 스크롤이 적용되는 경우, react-window가 세로 가상 스크롤을 위해 자기 루트에 `overflow-y:auto`를 설정하는데 CSS 스펙상 이것이 가로축에도 전이되어(visible과 non-visible을 함께 쓸 수 없음) 리스트 자신이 별도의 가로 **스크롤 위치** 컨텍스트가 된다. 그 결과 리스트 내부 스크롤로 긴 경로를 전부 볼 수는 있지만, 사용자가 리스트를 가로로 스크롤하면 헤더 라벨("Local Path"/"Server Path")의 스크롤 위치가 그걸 따라가지 않는다(폭 불일치가 아니라 스크롤 위치 동기화 문제). 300개 이하(일반적인 경우)에서는 폭·스크롤 위치 모두 헤더와 완전히 동기화된다.
+**알려진 제약**: 위 수정으로 컬럼 **폭 자체**는 필터링된 표시 대상 개수와 무관하게 항상 헤더와 목록이 일치한다. 다만 필터링된 표시 대상이 300개를 넘어 가상 스크롤이 적용되는 경우, react-window가 세로 가상 스크롤을 위해 자기 루트에 `overflow-y:auto`를 설정하는데 CSS 스펙상 이것이 가로축에도 전이되어(visible과 non-visible을 함께 쓸 수 없음) 리스트 자신이 별도의 가로 **스크롤 위치** 컨텍스트가 된다. 그 결과 리스트 내부 스크롤로 긴 경로를 전부 볼 수는 있지만, 사용자가 리스트를 가로로 스크롤하면 헤더 라벨("Local Path")의 스크롤 위치가 그걸 따라가지 않는다(폭 불일치가 아니라 스크롤 위치 동기화 문제). 300개 이하(일반적인 경우)에서는 폭·스크롤 위치 모두 헤더와 완전히 동기화된다.
+
+**정정 (Server Path 열 삭제, RISK_ISSUES.md §7.1, 2026-08-07)**: FooterActionBar(§2.8)에서 Mapping Profile 드롭다운을 숨기면서, 유일한 프로필인 `default`의 `overrides`가 항상 빈 배열이라는 게 재확인되었다 — 즉 Server Path가 사실상 항상 Local Path와 같은 값이었다. 화면에 항상 동일한 두 열을 나란히 보여줄 이유가 없어 Server Path 열을 삭제하고 Local Path 단일 컬럼으로 바꿨다. 위 세 문단(컬럼 리사이즈/폭 불일치 수정/알려진 제약)에 있던 Server Path 관련 서술은 이번 정정으로 모두 제거됐다.
 
 ## 2.7 DeleteListPanel
 
@@ -142,16 +144,23 @@ AppShell
 
 ## 2.8 FooterActionBar
 
-**책임**: REQ-009, REQ-010. Mapping Profile 선택 + Export 실행. (§0-3 결정으로 Preview/Export 2단계 구조 확정 — `[Build]` 없음)
+**책임**: REQ-009, REQ-010, REQ-012. Export 경로 변경 + Export 실행. (§0-3 결정으로 Preview/Export 2단계 구조 확정 — `[Build]` 없음)
 
-**정정 (Preview 위치 이동, 2026-08-04, 사용자 요청)**: `[Preview]`는 원래 이 컴포넌트에 있었으나, "커밋을 고르고 → 바로 그 자리에서 계산한다"는 흐름이 더 직관적이라는 피드백으로 CommitListPanel 헤더(§2.4)로 옮겼다. FooterActionBar는 이제 Mapping Profile + `[Export]`만 담당한다.
+**정정 (Preview 위치 이동, 2026-08-04, 사용자 요청)**: `[Preview]`는 원래 이 컴포넌트에 있었으나, "커밋을 고르고 → 바로 그 자리에서 계산한다"는 흐름이 더 직관적이라는 피드백으로 CommitListPanel 헤더(§2.4)로 옮겼다.
+
+**정정 (Mapping Profile 숨김 + Export 경로 변경 UI로 교체, RISK_ISSUES.md §7.1, 2026-08-07)**: Mapping Profile 드롭다운을 화면에서 숨겼다 — 현재 "default" 하나뿐이고 사용자가 프로필을 만들거나 편집할 UI가 없어 사실상 무의미했기 때문이다(내부 로직은 `selectedProfile: 'default'`를 그대로 계산에 넘기며 동작 변경 없음). 대신 REQ-012(Export 경로 선택) UI가 이 자리에 들어왔다.
 
 | 요소 | 동작 |
 |---|---|
-| Mapping Profile dropdown | `profiles: string[]`(userData/profiles/ 디렉터리 목록). 변경 자체는 계산을 트리거하지 않는다 — `isStale`이 즉시 true가 되어 `[Preview]`(§2.4)를 다시 눌러야 새 Profile 기준 `serverPath`가 반영된다 |
-| `[Export]` | Preview에 표시된 내용을 그대로 실행: `git-deploy-extracted/` 생성 + 파일 복사 + delete-list.txt/deploy-files.txt/deploy-summary.json 생성까지 전부 수행 (DETAILED_DESIGN.md §2, Package Builder 전체) |
+| `[변경]` 버튼 | `package:browseExportDir` IPC로 OS 네이티브 폴더 다이얼로그를 연다(자유 텍스트 입력 없음). 선택하면 `exportParentDir`를 갱신하고 `localStorage`(`gde:exportParentDir`)에 저장해 재실행 후에도 유지한다(REQ-012) |
+| 경로 표시 텍스트 | `exportParentDir ?? repository.path`를 표시(`[변경]` 버튼 바로 오른쪽). 커스텀 경로를 한 번도 선택하지 않았으면 저장소 루트가 기본값이다. 넘치면 ellipsis, `title` 툴팁으로 전체 경로 확인 |
+| `[Export]` | Preview에 표시된 내용을 그대로 실행: `<exportParentDir ?? repoPath>/git-deploy-extracted/` 생성 + 파일 복사 + delete-list.txt/deploy-files.txt/deploy-summary.json 생성까지 전부 수행(DETAILED_DESIGN.md §2, §4.3, Package Builder 전체). 다른 버튼과 달리 더 진한 배경색(`.button--primary`)으로 시각적으로 구분한다 — 실제로 파일을 쓰는 유일한 버튼이기 때문 |
+
+레이아웃 순서: `[변경] [경로 표시] ... [Export]` — 변경 버튼이 경로 값의 왼쪽에 온다(RISK_ISSUES.md §7.5 와이어프레임).
 
 버튼 비활성 조건: `[Export]`는 `selectedHashes.size === 0`이거나 `isStale`(§2.5)일 때 비활성 — 마지막 Preview 결과가 지금 선택과 정확히 일치할 때만 눌러진다. `isStale`인데 선택이 비어있지 않으면 "Preview를 먼저 실행하세요" 안내를 버튼 옆에 표시한다.
+
+**추가 (덮어쓰기 확인, DR-013, 2026-08-07)**: `[Export]` 클릭 시 대상 폴더(`<exportParentDir ?? repoPath>/git-deploy-extracted`)에 이미 내용이 있으면, Main Process가 `dialog.showMessageBox`(네이티브 모달)로 "이미 있는 git-deploy-extracted를 덮어씁니다, 계속할까요?"를 확인한다. 사용자가 "취소"를 선택하면 `exportStatus`가 `'idle'`로 되돌아가고 에러 배너 없이 조용히 중단된다(에러가 아니라 사용자의 명시적 취소이기 때문 — DETAILED_DESIGN.md §4.3).
 
 **정정 (Export 직전 레이스 컨디션 방지, 2026-08-04)**: 이전 초안(자동 재계산)에서는 디바운스 대기 중에 `[Export]`를 누르면, 방금 바뀐 선택이 `selectedCommits`(즉석 계산이라 정확)엔 반영되지만 `deployFiles`/`deleteList`(디바운스 후에야 갱신되는 옛 계산 결과)엔 반영 안 된 채로 나가는 문제가 있었다 — `deploy-summary.json`은 선택한 커밋을 전부 기록하는데 실제 복사된 파일은 일부 커밋 분만 빠지는, 에러 없이 조용히 틀린 결과였다. `[Export]`를 `isStale`일 때 비활성화하는 것만으로 이 구간 자체가 없어진다(추가로 `runExport()` 내부에서도 한 번 더 확인한다).
 
@@ -202,6 +211,8 @@ interface AppState {
   profiles: string[];
   selectedProfile: string;
 
+  exportParentDir: string | null;   // §2.8, REQ-012. null이면 저장소 루트가 기본값
+
   exportStatus: 'idle' | 'exporting' | 'done' | 'error';
   exportError: string | null;       // §5 에러 상태("실패 사유를 인라인 배너로 표시")에 대응
   lastExportDir: string | null;     // Export 완료 후 결과 경로 표시용
@@ -227,7 +238,8 @@ interface AppState {
 | DeployFilesPanel 체크박스 토글 | 해당 항목 `included` 반전 | 없음 (로컬) | REQ-011 |
 | DeployFilesPanel 전체 선택 토글 | 필터에 표시된 행 전체 `included` 일괄 반전 | 없음 (로컬) | REQ-011 |
 | `[Preview]` 클릭 | `analyzing = true` → 완료 시 `summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection` 동시 갱신 | Commit 분석 + Mapping 엔진 | REQ-005~008 |
-| `[Export]` 클릭 | `exportStatus = 'exporting'` → `'done'`\|`'error'` | Package Builder(전체: 파일 복사 + 3종 Export) | REQ-009, REQ-010 |
+| `[변경]` 클릭 (FooterActionBar) | 취소 시 상태 변화 없음. 선택 시 `exportParentDir` 갱신 + `localStorage` 저장 | `dialog.showOpenDialog`(`package:browseExportDir`) | REQ-012 |
+| `[Export]` 클릭 | `exportStatus = 'exporting'` → `'done'`\|`'error'`\|(취소 시)`'idle'` | Package Builder(전체: 파일 복사 + 3종 Export). 대상 폴더에 기존 내용 있으면 먼저 `dialog.showMessageBox` 확인 | REQ-009, REQ-010, DR-013 |
 
 **정정 (자동 재계산 완전 제거, `[Preview]`가 유일한 트리거, 2026-08-04)**: 이전 초안(및 그 초안을 최적화하려던 캐싱 계획)은 커밋 체크박스나 Mapping Profile이 바뀔 때마다 디바운스 후 자동으로 재계산하는 것을 전제로 했다. 하지만 이 방식은 "선택은 바뀌었는데 화면·Export 대상은 옛 결과"인 구간(디바운스 대기 중)이 항상 존재해, 그 구간에 `[Export]`를 누르면 방금 바뀐 선택 일부가 반영 안 된 채로 조용히 나갈 수 있는 위험이 있었다(§2.8 "Export 직전 레이스 컨디션 방지" 참고). 자동 재계산 자체를 없애고 `[Preview]`를 유일한 계산 트리거로 확정하면서, 애초에 "자동 재계산을 최적화(캐싱)할지" 논의 자체가 무의미해졌다 — 자동 재계산이 없으니 최적화할 대상도 없다.
 

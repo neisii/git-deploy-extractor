@@ -7,27 +7,14 @@ import type { DeployFileEntry, DeployFilesFilter } from '../store/appStore'
 import { loadColumnWidths, saveColumnWidths } from '../lib/columnWidths'
 import type { ColumnWidths } from '../lib/columnWidths'
 
-// 300개 기준은 UI_UX_SPEC.md §2.6의 대략치 — 행 하나(체크박스+경로 2열)
+// 300개 기준은 UI_UX_SPEC.md §2.6의 대략치 — 행 하나(체크박스+경로 1열)
 // 기준이며 실사용 데이터로 재조정 가능하다.
 const VIRTUALIZE_THRESHOLD = 300
 const ROW_HEIGHT = 28
 const MIN_COLUMN_WIDTH = 100
 
-type ColumnKey = 'localPath' | 'serverPath'
-
-const CSS_VAR: Record<ColumnKey, string> = {
-  localPath: '--local-col-min',
-  serverPath: '--server-col-min'
-}
-
-const CSS_VAR_NATURAL: Record<ColumnKey, string> = {
-  localPath: '--local-col-natural',
-  serverPath: '--server-col-natural'
-}
-
-function serverLabel(file: DeployFileEntry): string {
-  return file.localPath === file.serverPath ? '(경로 그대로 유지)' : file.serverPath
-}
+const CSS_VAR_MIN = '--local-col-min'
+const CSS_VAR_NATURAL = '--local-col-natural'
 
 function DeployFileRow({
   file,
@@ -50,7 +37,6 @@ function DeployFileRow({
       >
         {file.localPath}
       </span>
-      <span className="deploy-files-row__server">{serverLabel(file)}</span>
     </div>
   )
 }
@@ -103,24 +89,17 @@ export function DeployFilesPanel(): React.JSX.Element {
   // 모든 행(가상 스크롤 포함)에 동일하게 주입한다.
   const [columnWidths, setColumnWidths] = useState<ColumnWidths>(() => loadColumnWidths())
   const scrollRef = useRef<HTMLDivElement>(null)
-  const dragState = useRef<{ column: ColumnKey; startX: number; startWidth: number } | null>(null)
+  const dragState = useRef<{ startX: number; startWidth: number } | null>(null)
 
-  const [naturalWidths, setNaturalWidths] = useState<Record<ColumnKey, number>>({
-    localPath: MIN_COLUMN_WIDTH,
-    serverPath: MIN_COLUMN_WIDTH
-  })
-  const probeLocalHeaderRef = useRef<HTMLSpanElement>(null)
-  const probeServerHeaderRef = useRef<HTMLSpanElement>(null)
-  const probeLocalRowRef = useRef<HTMLSpanElement>(null)
-  const probeServerRowRef = useRef<HTMLSpanElement>(null)
+  const [naturalWidth, setNaturalWidth] = useState<number>(MIN_COLUMN_WIDTH)
+  const probeHeaderRef = useRef<HTMLSpanElement>(null)
+  const probeRowRef = useRef<HTMLSpanElement>(null)
   const measureCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
   useLayoutEffect(() => {
-    const localHeaderEl = probeLocalHeaderRef.current
-    const serverHeaderEl = probeServerHeaderRef.current
-    const localRowEl = probeLocalRowRef.current
-    const serverRowEl = probeServerRowRef.current
-    if (!localHeaderEl || !serverHeaderEl || !localRowEl || !serverRowEl) return
+    const headerEl = probeHeaderRef.current
+    const rowEl = probeRowRef.current
+    if (!headerEl || !rowEl) return
 
     if (!measureCanvasRef.current) measureCanvasRef.current = document.createElement('canvas')
     const ctx = measureCanvasRef.current.getContext('2d')
@@ -133,68 +112,53 @@ export function DeployFilesPanel(): React.JSX.Element {
       return Math.ceil(ctx.measureText(text).width + padding)
     }
 
-    let localMax = measure(localHeaderEl, 'Local Path')
-    let serverMax = measure(serverHeaderEl, 'Server Path')
+    let max = measure(headerEl, 'Local Path')
     for (const file of filtered) {
-      localMax = Math.max(localMax, measure(localRowEl, file.localPath))
-      serverMax = Math.max(serverMax, measure(serverRowEl, serverLabel(file)))
+      max = Math.max(max, measure(rowEl, file.localPath))
     }
-    setNaturalWidths({
-      localPath: Math.max(localMax, MIN_COLUMN_WIDTH),
-      serverPath: Math.max(serverMax, MIN_COLUMN_WIDTH)
-    })
+    setNaturalWidth(Math.max(max, MIN_COLUMN_WIDTH))
   }, [filtered])
 
   const scrollStyle = useMemo(() => {
     const style: Record<string, string> = {}
-    const localMin = columnWidths.localPath ?? MIN_COLUMN_WIDTH
-    const serverMin = columnWidths.serverPath ?? MIN_COLUMN_WIDTH
-    if (columnWidths.localPath) style[CSS_VAR.localPath] = `${columnWidths.localPath}px`
-    if (columnWidths.serverPath) style[CSS_VAR.serverPath] = `${columnWidths.serverPath}px`
-    style[CSS_VAR_NATURAL.localPath] = `${Math.max(naturalWidths.localPath, localMin)}px`
-    style[CSS_VAR_NATURAL.serverPath] = `${Math.max(naturalWidths.serverPath, serverMin)}px`
+    const min = columnWidths.localPath ?? MIN_COLUMN_WIDTH
+    if (columnWidths.localPath) style[CSS_VAR_MIN] = `${columnWidths.localPath}px`
+    style[CSS_VAR_NATURAL] = `${Math.max(naturalWidth, min)}px`
     return style as CSSProperties
-  }, [columnWidths, naturalWidths])
+  }, [columnWidths, naturalWidth])
 
-  const handleResizeStart = useCallback(
-    (column: ColumnKey) => (event: ReactMouseEvent<HTMLSpanElement>) => {
-      event.preventDefault()
-      const headerCell = (event.currentTarget as HTMLElement).closest<HTMLElement>('[data-col]')
-      const startWidth = headerCell?.getBoundingClientRect().width ?? 200
-      dragState.current = { column, startX: event.clientX, startWidth }
+  const handleResizeStart = useCallback((event: ReactMouseEvent<HTMLSpanElement>) => {
+    event.preventDefault()
+    const headerCell = (event.currentTarget as HTMLElement).closest<HTMLElement>('[data-col]')
+    const startWidth = headerCell?.getBoundingClientRect().width ?? 200
+    dragState.current = { startX: event.clientX, startWidth }
 
-      const computeWidth = (clientX: number): number => {
-        const drag = dragState.current
-        if (!drag) return MIN_COLUMN_WIDTH
-        return Math.max(MIN_COLUMN_WIDTH, Math.round(drag.startWidth + (clientX - drag.startX)))
-      }
+    const computeWidth = (clientX: number): number => {
+      const drag = dragState.current
+      if (!drag) return MIN_COLUMN_WIDTH
+      return Math.max(MIN_COLUMN_WIDTH, Math.round(drag.startWidth + (clientX - drag.startX)))
+    }
 
-      const onMouseMove = (moveEvent: MouseEvent): void => {
-        if (!dragState.current || !scrollRef.current) return
-        scrollRef.current.style.setProperty(
-          CSS_VAR[dragState.current.column],
-          `${computeWidth(moveEvent.clientX)}px`
-        )
+    const onMouseMove = (moveEvent: MouseEvent): void => {
+      if (!dragState.current || !scrollRef.current) return
+      scrollRef.current.style.setProperty(CSS_VAR_MIN, `${computeWidth(moveEvent.clientX)}px`)
+    }
+    const onMouseUp = (upEvent: MouseEvent): void => {
+      if (dragState.current) {
+        const finalWidth = computeWidth(upEvent.clientX)
+        setColumnWidths((prev) => {
+          const next = { ...prev, localPath: finalWidth }
+          saveColumnWidths(next)
+          return next
+        })
       }
-      const onMouseUp = (upEvent: MouseEvent): void => {
-        if (dragState.current) {
-          const finalWidth = computeWidth(upEvent.clientX)
-          const column = dragState.current.column
-          setColumnWidths((prev) => {
-            const next = { ...prev, [column]: finalWidth }
-            saveColumnWidths(next)
-            return next
-          })
-        }
-        dragState.current = null
-        window.removeEventListener('mousemove', onMouseMove)
-        window.removeEventListener('mouseup', onMouseUp)
-      }
-      window.addEventListener('mousemove', onMouseMove)
-      window.addEventListener('mouseup', onMouseUp)
-    },
-    []
-  )
+      dragState.current = null
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }, [])
 
   if (isStale) {
     return (
@@ -236,40 +200,21 @@ export function DeployFilesPanel(): React.JSX.Element {
             Local Path
             <span
               className="deploy-files-resize-handle"
-              onMouseDown={handleResizeStart('localPath')}
-              title="드래그해서 최소 폭 조절"
-            />
-          </span>
-          <span data-col="serverPath" className="deploy-files-panel__col-header">
-            Server Path
-            <span
-              className="deploy-files-resize-handle"
-              onMouseDown={handleResizeStart('serverPath')}
+              onMouseDown={handleResizeStart}
               title="드래그해서 최소 폭 조절"
             />
           </span>
           {/* 컬럼 실측 폭 계산용 — 화면에 보이지 않고 레이아웃에도 관여하지 않는다 */}
           <span
-            ref={probeLocalHeaderRef}
+            ref={probeHeaderRef}
             data-col="localPath"
-            className="deploy-files-panel__col-header deploy-files-measure-probe"
-            aria-hidden
-          />
-          <span
-            ref={probeServerHeaderRef}
-            data-col="serverPath"
             className="deploy-files-panel__col-header deploy-files-measure-probe"
             aria-hidden
           />
         </div>
         <span
-          ref={probeLocalRowRef}
+          ref={probeRowRef}
           className="deploy-files-row__local deploy-files-measure-probe"
-          aria-hidden
-        />
-        <span
-          ref={probeServerRowRef}
-          className="deploy-files-row__server deploy-files-measure-probe"
           aria-hidden
         />
         <div className="deploy-files-panel__body">

@@ -33,6 +33,25 @@ function toLfText(lines: string[]): string {
   return lines.length > 0 ? lines.join('\n') + '\n' : ''
 }
 
+// Export 결과물이 생성될 위치. 사용자가 부모 디렉터리를 지정하지 않으면
+// 저장소 루트가 기본값이다 — 하위 폴더명(git-deploy-extracted)은 항상
+// 고정(결정 이력 #20과 일관성 유지, RISK_ISSUES.md §7.1).
+export function getDeployDir(repoPath: string, exportParentDir?: string): string {
+  return join(exportParentDir ?? repoPath, 'git-deploy-extracted')
+}
+
+// 덮어쓰기 확인 팝업을 띄울지 판단하기 위해 IPC 핸들러가 먼저 호출한다.
+// 디렉터리가 없으면(첫 Export) false — 확인 없이 바로 진행.
+export async function deployDirHasContent(deployDir: string): Promise<boolean> {
+  try {
+    const entries = await fs.readdir(deployDir)
+    return entries.length > 0
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
+}
+
 export async function buildPackage(params: BuildPackageParams): Promise<BuildPackageResult> {
   const {
     repoPath,
@@ -41,7 +60,8 @@ export async function buildPackage(params: BuildPackageParams): Promise<BuildPac
     selectedCommits,
     files,
     deletedServerPaths,
-    warnings
+    warnings,
+    exportParentDir
   } = params
 
   // §4.1: 파일을 쓰기 전에 대소문자만 다른 경로 충돌부터 검사한다.
@@ -52,9 +72,10 @@ export async function buildPackage(params: BuildPackageParams): Promise<BuildPac
     throw new Error(`대소문자만 다른 경로 충돌이 발견되어 중단합니다: ${detail}`)
   }
 
-  const deployDir = join(repoPath, 'git-deploy-extracted')
+  const deployDir = getDeployDir(repoPath, exportParentDir)
   // 재실행 시 이전 Export의 잔여 파일이 이번 선택 범위와 섞이지 않도록
-  // 매번 완전히 비우고 새로 만든다.
+  // 매번 완전히 비우고 새로 만든다. 기존 내용이 있는 경우의 사용자 확인은
+  // IPC 핸들러(package:export)가 buildPackage 호출 전에 이미 처리했다.
   await fs.rm(deployDir, { recursive: true, force: true })
   await fs.mkdir(deployDir, { recursive: true })
 

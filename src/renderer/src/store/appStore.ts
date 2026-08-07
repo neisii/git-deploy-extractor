@@ -7,6 +7,7 @@ import type {
 } from '../../../shared/types'
 import { getDefaultDateRange } from '../../../shared/dateRange'
 import { pickDefaultBranch } from '../../../shared/branch'
+import { loadExportParentDir, saveExportParentDir } from '../lib/exportPath'
 
 const PAGE_SIZE = 100
 const SEARCH_DEBOUNCE_MS = 300
@@ -73,11 +74,17 @@ interface AppState {
   profiles: string[]
   selectedProfile: string
 
+  // RISK_ISSUES.md §7.1: Export 결과물이 생성될 부모 디렉터리. null이면
+  // 저장소 루트가 기본값(Package Builder가 repoPath로 대체). 지정하면
+  // localStorage에 전역 저장되어 다른 저장소를 열어도 유지된다.
+  exportParentDir: string | null
+
   exportStatus: 'idle' | 'exporting' | 'done' | 'error'
   exportError: string | null
   lastExportDir: string | null
 
   initProfiles: () => Promise<void>
+  browseExportParentDir: () => Promise<void>
   browseRepository: () => Promise<void>
   reloadRepository: () => Promise<void>
   setBranch: (branch: string) => Promise<void>
@@ -226,6 +233,8 @@ export const useAppStore = create<AppState>((set, get) => {
     profiles: [],
     selectedProfile: 'default',
 
+    exportParentDir: loadExportParentDir(),
+
     exportStatus: 'idle',
     exportError: null,
     lastExportDir: null,
@@ -238,6 +247,13 @@ export const useAppStore = create<AppState>((set, get) => {
           ? state.selectedProfile
           : (profiles[0] ?? 'default')
       }))
+    },
+
+    browseExportParentDir: async () => {
+      const path = await window.api.package.browseExportDir()
+      if (!path) return
+      saveExportParentDir(path)
+      set({ exportParentDir: path })
     },
 
     browseRepository: async () => {
@@ -450,7 +466,8 @@ export const useAppStore = create<AppState>((set, get) => {
         selectedHashes,
         deployFiles,
         deleteList,
-        warnings
+        warnings,
+        exportParentDir
       } = get()
       if (!repository.path || !selectedBranch || selectedHashes.size === 0) return
       // UI에서 이미 stale일 때 버튼을 비활성화하지만, 이중 방어로 한 번 더 막는다.
@@ -467,8 +484,16 @@ export const useAppStore = create<AppState>((set, get) => {
             .filter((f) => f.included)
             .map((f) => ({ localPath: f.localPath, serverPath: f.serverPath, status: f.status })),
           deletedServerPaths: deleteList.map((d) => d.path),
-          warnings
+          warnings,
+          exportParentDir: exportParentDir ?? undefined
         })
+        // null = 덮어쓰기 확인 팝업에서 사용자가 취소함(§7.1). 에러가
+        // 아니라 사용자의 명시적 중단이므로 idle로 되돌리고 배너를
+        // 띄우지 않는다.
+        if (result === null) {
+          set({ exportStatus: 'idle' })
+          return
+        }
         set({ exportStatus: 'done', lastExportDir: result.deployDir })
       } catch (error) {
         set({

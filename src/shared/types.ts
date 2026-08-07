@@ -78,6 +78,7 @@ export interface BuildPackageParams {
   files: DeployPlanFile[] // Mapping Rule이 이미 적용된 상태 (computeDeployPlan 출력)
   deletedServerPaths: string[]
   warnings: AnalysisWarning[]
+  exportParentDir?: string // 사용자가 지정한 부모 디렉터리. 미지정 시 repoPath가 기본값 (RISK_ISSUES.md §7.1)
 }
 
 export interface DeploySummary {

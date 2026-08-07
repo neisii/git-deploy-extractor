@@ -282,6 +282,22 @@ git-deploy-extracted/src/main/resources/static/js/guarantee/list.js
 
 ---
 
+## REQ-012 Export 경로 선택
+
+사용자는 Export 결과물(`git-deploy-extracted/`)이 생성될 **부모 디렉터리**를 선택할 수 있어야 한다.
+
+디렉터리 선택은 OS 네이티브 폴더 선택 다이얼로그로만 이루어진다(자유 텍스트 경로 입력 없음).
+
+선택하지 않으면 저장소 루트가 기본값이다.
+
+하위 폴더 이름(`git-deploy-extracted`)은 사용자가 바꿀 수 없다 — RISK_ISSUES.md 결정 이력 #20("이름은 고정이어야 예측 가능한 표준 산출물")과 일관성을 유지한다. 이번 요구사항은 이름이 아니라 **위치**만 다룬다.
+
+선택한 경로는 앱을 재실행해도 유지된다.
+
+추가 (실사용 중 나온 요구, RISK_ISSUES.md §7.1, 2026-08-07)
+
+---
+
 # 7. Deployment Rules
 
 ## DR-001 기준 Branch
@@ -433,6 +449,18 @@ src/main/resources/templates/guarantee/list.html
 ↓
 
 git-deploy-extracted/src/main/resources/templates/guarantee/list.html
+
+---
+
+## DR-013 Export 대상 경로 덮어쓰기 확인
+
+Export 대상 폴더(`<선택한 부모 디렉터리>/git-deploy-extracted`, REQ-012)에 이미 파일이 있으면
+
+기존 내용을 지우기 전에 확인 팝업을 띄운다.
+
+사용자가 취소하면 Export를 중단하고 기존 내용을 그대로 보존한다.
+
+추가 (실사용 중 나온 요구, RISK_ISSUES.md §7.1, 2026-08-07)
 
 ---
 
