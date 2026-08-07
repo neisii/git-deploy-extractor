@@ -190,7 +190,7 @@ export function FileListColumn({
   )
 
   return (
-    <div className="file-list-column">
+    <div className="panel file-list-column">
       <div className="deploy-files-panel__header">
         <span className="file-list-column__title">{headerTitle}</span>
         {bulkAction.kind === 'checkbox' ? (

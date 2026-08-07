@@ -46,8 +46,25 @@ body,
 }
 
 .repository-panel,
-.branch-search-bar,
 .footer-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+/* REQUIREDMENT.md §8 와이어프레임처럼 항상 2줄로 고정한다 — Branch/Search는
+   위 줄, 조회 기간/최대 개수는 아래 줄. 이전엔 한 줄짜리 flex-wrap이라
+   창이 넓으면 네 그룹이 전부 한 줄에 붙어버렸다(의도한 2줄 배치가 창
+   폭에 따라 우연히만 재현됨) — 항상 2줄로 나오도록 바깥은 세로로
+   쌓고, 각 줄 내부에서만 flex-wrap을 적용한다. */
+.branch-search-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.branch-search-bar__row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -112,52 +129,99 @@ body,
   text-decoration: underline;
 }
 
-/* .main-grid는 세로 방향 크기(app-shell flex 안에서 얼마나 자랄지)만
-   맡는다. 가로 분할(grid-template-columns)은 .split-pane이 SplitPane의
-   드래그 비율에 따라 인라인 스타일로 직접 계산해 넣는다(RISK_ISSUES.md
-   §7.4) — 원래 이 자리에 있던 80:20 minmax는 SplitPane의 defaultRatio(0.8)
-   + minLeftPx(320)/minRightPx(180)로 그대로 이어졌다. */
-.main-grid {
-  flex: 1 1 240px;
-  min-height: 200px;
+/* MainGrid(커밋 목록↔분석 요약)와 DeployFilesPanel(포함된 파일↔누락된
+   의존성) 둘 다, 이제 그 위를 감싸는 세로 SplitPane(.vertical-main-split)의
+   grid row 안에 놓인다 — 그래서 자기 자신의 flex-basis/min-height를
+   따로 가질 필요가 없고, 부모 grid cell을 꽉 채우기만 하면 된다
+   (.split-pane 기본 규칙의 height:100%가 이 역할을 한다). */
+.vertical-main-split {
+  flex: 1;
+  min-height: 0;
 }
 
-/* RISK_ISSUES.md §7.4 — 좌우 드래그 리사이즈 스플릿의 공용 스타일.
-   MainGrid(.main-grid와 함께 사용)와 DeployFilesPanel 내부 분할 두 곳에서
-   재사용한다. grid-template-columns 값 자체는 SplitPane이 비율에 따라
-   인라인으로 계산해 넣는다 — 여기서는 grid 컨테이너로서의 공통 성질만
-   정의한다. 창이 두 min 폭의 합보다 좁아지면 overflow-x로 가로 스크롤이
-   떠서 우측이 잘려 보이지 않게 한다(#22와 같은 안전망). */
+/* RISK_ISSUES.md §7.4 — 좌우/상하 드래그 리사이즈 스플릿의 공용 스타일.
+   MainGrid·DeployFilesPanel 내부 분할(가로)과 그 둘을 나누는 상하 분할
+   (세로) 세 곳에서 재사용한다. grid-template-columns/rows 값 자체는
+   SplitPane이 비율에 따라 인라인으로 계산해 넣는다 — 여기서는 grid
+   컨테이너로서의 공통 성질만 정의한다. */
 .split-pane {
   display: grid;
   align-items: stretch;
-  overflow-x: auto;
-  gap: 8px;
   height: 100%;
 }
 
-.split-pane__left,
-.split-pane__right {
+/* 창이 두 최소 크기의 합보다 좁아지면(가로) 또는 짧아지면(세로) 반대편이
+   잘려 보이지 않도록 스크롤이 뜨는 안전망(#22와 같은 안전망을 세로에도
+   동일하게 적용). 두 오버플로 축을 동시에 auto로 주지 않는 이유는
+   DeployFilesPanel §2.6의 실측 이력과 같다 — 필요한 축만 연다. */
+.split-pane--horizontal {
+  overflow-x: auto;
+}
+
+.split-pane--vertical {
+  overflow-y: auto;
+}
+
+.split-pane__start,
+.split-pane__end {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
+/* 핸들의 실제 그리드 트랙(SplitPane.tsx의 HANDLE_HIT_PX=8px)은 잡기
+   편하도록 넉넉하지만, 눈에 보이는 막대는 이 안에서 2px로 얇게 중앙
+   정렬해 그린다 — 두껍게 보이지 않으면서 클릭 판정 영역은 좁지 않다.
+   가로 SplitPane이 세로 SplitPane 안에 중첩되는 경우(App.tsx —
+   MainGrid가 vertical-main-split 안에 있음)가 있어, 후손 선택자
+   (`.split-pane--vertical .split-pane__handle-bar`)를 쓰면 중첩된
+   가로 인스턴스의 핸들까지 같이 걸려서 나중에 선언된 규칙이 방향과
+   무관하게 이겨버리는 문제가 실제로 있었다 — `>` 자식 결합자로 "가장
+   가까운 SplitPane"만 정확히 스코프해서 고쳤다. */
 .split-pane__handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.split-pane--horizontal > .split-pane__handle {
   cursor: col-resize;
-  border-radius: 3px;
+}
+
+.split-pane--vertical > .split-pane__handle {
+  cursor: row-resize;
+}
+
+.split-pane__handle-bar {
+  border-radius: 1px;
   background: var(--ev-c-gray-3);
 }
 
-.split-pane__handle:hover,
-.split-pane__handle:active {
+.split-pane--horizontal > .split-pane__handle > .split-pane__handle-bar {
+  width: 2px;
+  height: 100%;
+}
+
+.split-pane--vertical > .split-pane__handle > .split-pane__handle-bar {
+  width: 100%;
+  height: 2px;
+}
+
+.split-pane__handle:hover .split-pane__handle-bar,
+.split-pane__handle:active .split-pane__handle-bar {
   background: var(--ev-c-gray-1);
 }
 
+/* height:100%이 없으면 이 패널이 자기 콘텐츠(커밋 몇 줄) 높이로만
+   줄어들어, SplitPane의 .split-pane__start가 실제로 배정한 높이와의
+   차이만큼 빈 공간이 남는다 — .file-list-column이 이미 쓰고 있는 것과
+   같은 규칙(RISK_ISSUES.md §7.2)을 여기도 적용한다. */
 .commit-list-panel {
   padding: 0;
   display: flex;
   flex-direction: column;
+  height: 100%;
 }
 
 .commit-list-panel--error {
@@ -222,19 +286,24 @@ body,
   white-space: nowrap;
 }
 
+/* .commit-list-panel과 같은 이유로 height:100% — SplitPane이 배정한
+   높이를 실제로 채운다(RISK_ISSUES.md §7.2). */
 .deployment-preview-panel {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  height: 100%;
 }
 
-/* main-grid(위쪽 CommitListPanel/Summary 행)와 동일한 flex-basis·min-height를
-   줘서 최소 높이가 CommitListPanel 쪽과 같게 자란다. */
+/* 이제 이 패널은 세로 SplitPane(.vertical-main-split)의 grid cell(.split-pane__end)
+   안에 놓인다 — flex-basis/min-height는 그 SplitPane의 minEndPx가 담당하고,
+   여기서는 그 cell을 꽉 채우면서(height:100%) 제목/경고배너/내부 분할을
+   세로로 쌓는 역할만 한다. */
 .deploy-files-panel {
-  flex: 1 1 240px;
-  min-height: 200px;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 
 .deploy-files-panel__title {

@@ -360,19 +360,27 @@ deployDir = join(exportParentDir ?? repoPath, 'git-deploy-extracted')
 
 ---
 
-# 7. 좌우 분할 드래그 리사이즈 설계 (REQ-014, RISK_ISSUES.md §7.4)
+# 7. 분할 드래그 리사이즈 설계 (REQ-014, RISK_ISSUES.md §7.4)
 
-**적용 대상 2곳**: (a) MainGrid의 CommitListPanel↔DeploymentPreviewPanel, (b) DeployFilesPanel의 포함된 파일↔누락된 의존성. 공통 컴포넌트 `SplitPane`(`src/renderer/src/components/SplitPane.tsx`)으로 구현해 두 곳에서 재사용한다.
+**적용 대상 3곳**: (a) MainGrid의 CommitListPanel↔DeploymentPreviewPanel(가로), (b) DeployFilesPanel의 포함된 파일↔누락된 의존성(가로), (c) MainGrid 전체↔DeployFilesPanel 전체(세로, 결정 이력 #27로 추가). 공통 컴포넌트 `SplitPane`(`src/renderer/src/components/SplitPane.tsx`)으로 구현해 세 곳에서 재사용한다. `direction?: 'horizontal'|'vertical'`(기본 `horizontal`) prop으로 두 방향을 모두 지원하며, 세 번째 적용처(c)는 (a)를 그대로 자신의 `start`로 감싸 중첩시킨 형태다(App.tsx — `SplitPane(vertical)`의 `start`가 `SplitPane(horizontal, main-grid)`).
 
-**비율 계산**: 왼쪽 영역이 차지하는 비율(0~1)을 상태로 갖고, `grid-template-columns: minmax(<minLeftPx>px, <ratio*100>%) <handle폭>px minmax(<minRightPx>px, 1fr)`로 렌더링한다. `minmax()`가 각 영역의 최소 폭을 보장하고, 컨테이너 자체의 `overflow-x: auto`가 두 최소 폭의 합보다 창이 좁아졌을 때의 안전망 역할을 한다(#22와 같은 패턴).
+**Prop 이름**: `left`/`right`/`minLeftPx`/`minRightPx`(가로 전용 이름)를 방향 중립적인 `start`/`end`/`minStartPx`/`minEndPx`로 정정했다(결정 이력 #27) — 세로 방향을 지원하면서 "왼쪽/오른쪽"이라는 이름이 "위/아래"에는 맞지 않게 됐기 때문이다.
 
-**드래그 처리**: RISK #21의 컬럼 리사이즈(`handleResizeStart`)와 같은 mousedown/mousemove/mouseup 패턴을 재사용하되, mouseup에서도 mousemove와 **같은 계산 함수**로 마지막 좌표를 한 번 더 계산해 확정값을 저장한다 — 드래그 시작 시점에 캡처된 클로저가 최신 상태를 못 따라가는 stale closure 문제를 피하기 위함이다(React state 대신 매번 좌표에서 직접 재계산).
+**비율 계산**: 시작 영역(가로: 왼쪽, 세로: 위)이 차지하는 비율(0~1)을 상태로 갖고, 가로는 `grid-template-columns`, 세로는 `grid-template-rows`에 `minmax(<minStartPx>px, <ratio*100>%) <handle두께>px minmax(<minEndPx>px, 1fr)`를 렌더링한다. `minmax()`가 각 영역의 최소 크기를 보장하고, 컨테이너의 `overflow-x`(가로)/`overflow-y`(세로) auto가 두 최소 크기의 합보다 컨테이너가 작아졌을 때의 안전망 역할을 한다(#22와 같은 패턴). 두 오버플로 축을 동시에 열지 않는다 — DeployFilesPanel §2.6에서 이미 실측으로 확인한 문제(하나만 열어야 헤더/스크롤이 어긋나지 않음)와 같은 이유다.
 
-**영속화**: `localStorage`에 두 경계선을 별도 키(`gde:splitRatio:mainGrid`, `gde:splitRatio:deployFiles`)로 저장한다 — 컬럼 폭 저장과 같은 전역 패턴(저장소별 구분 없음).
+**드래그 처리**: RISK #21의 컬럼 리사이즈(`handleResizeStart`)와 같은 mousedown/mousemove/mouseup 패턴을 재사용하되, mouseup에서도 mousemove와 **같은 계산 함수**로 마지막 좌표를 한 번 더 계산해 확정값을 저장한다 — 드래그 시작 시점에 캡처된 클로저가 최신 상태를 못 따라가는 stale closure 문제를 피하기 위함이다(React state 대신 매번 좌표에서 직접 재계산). 세로 방향은 `clientX`/`rect.left`/`rect.width` 대신 `clientY`/`rect.top`/`rect.height`를 쓰는 것만 다르다.
 
-**MainGrid 기본값**: 결정 이력 #22의 80:20 고정값을 `defaultRatio={0.8}`(및 기존 `minLeftPx=320`/`minRightPx=180`)로 그대로 이어받았다 — 이제 이 값은 "초기 기본값"일 뿐이고 사용자가 드래그로 바꿀 수 있다(#22를 대체).
+**영속화**: `localStorage`에 세 경계선을 별도 키(`gde:splitRatio:mainGrid`, `gde:splitRatio:deployFiles`, `gde:splitRatio:commitsVsFiles`)로 저장한다 — 컬럼 폭 저장과 같은 전역 패턴(저장소별 구분 없음).
+
+**MainGrid 기본값**: 결정 이력 #22의 80:20 고정값을 `defaultRatio={0.8}`(및 기존 `minStartPx=320`/`minEndPx=180`)로 그대로 이어받았다 — 이제 이 값은 "초기 기본값"일 뿐이고 사용자가 드래그로 바꿀 수 있다(#22를 대체).
 
 **DeployFilesPanel 분할 기본값**: 50:50(§7.2 point 8), 최소 폭은 양쪽 다 260px로 정했다 — 이 구현 세션에서 새로 결정한 값이다(RISK_ISSUES.md §7.4가 "§7.2 분할은 구현 시 결정"으로 위임한 부분). 두 컬럼 다 비슷한 성격(파일 경로 목록)이라 MainGrid처럼 비대칭 근거가 없어 대칭으로 뒀고, 어차피 컬럼 자체도 가로 스크롤이 기본값이라(§7.2 point 8) 260px는 "읽기 불가능하게 좁아지지 않을 정도"의 여유치일 뿐이다.
+
+**MainGrid↔DeployFilesPanel 세로 분할 기본값(결정 이력 #27)**: 50:50, 최소 높이는 위/아래 각각 140px. 처음에는 200px로 잡았으나, 앱 기본 창 크기(900×760, `src/main/index.ts`)로 재현 테스트한 결과 이 두 영역이 실제로 쓸 수 있는 높이가 391px뿐이었다 — `minmax(200px, …) + 8px + minmax(200px, …) = 408px > 391px`가 되어 드래그 가능 범위가 완전히 0으로 붕괴하는(항상 정확히 50:50에 고정되어 버리는) 문제를 실측으로 발견했다(§0.1). 140px로 낮춰 기본 창 크기에서도 실제로 드래그할 수 있는 여유(391 − 288 = 103px)가 생기는 것을 재현 테스트로 확인했다.
+
+**핸들 두께(결정 이력 #27)**: 처음엔 그리드 트랙 자체가 6px(가로 전용, 굵어 보임)였고 거기에 `.split-pane`의 `gap: 8px`까지 겹쳐 영역 사이에 실질적으로 22px가 낭비되고 있었다. 사용자 피드백으로 실제 목록에 쓸 수 있는 공간을 늘리기 위해 재설계했다 — 그리드 트랙(`HANDLE_HIT_PX`)은 마우스로 잡기 편하도록 8px를 유지하되, `gap`은 0으로 없애고, 트랙 안에는 시각적으로 2px 두께의 막대(`.split-pane__handle-bar`)만 중앙에 그린다. 결과적으로 영역 사이 낭비 폭이 22px → 8px로 줄었고, 시각적으로는 2px로 얇아 보인다.
+
+**중첩 시 CSS 선택자 함정(재현으로 발견, §0.1)**: 세로 SplitPane(c) 안에 가로 SplitPane(a)이 중첩되면서, `.split-pane--horizontal .split-pane__handle-bar`/`.split-pane--vertical .split-pane__handle-bar`처럼 방향별로 다른 폭/높이를 주는 규칙을 **후손 선택자**로 작성했더니 중첩된 가로 인스턴스의 막대가 (자신을 감싸는) 세로 인스턴스의 규칙까지 같이 매치되어, CSS 소스 순서상 나중에 나온 세로 규칙이 방향과 무관하게 모든 막대를 덮어써버리는 버그가 실제로 재현됐다(가로 막대가 얇은 세로줄이 아니라 굵은 가로줄로 렌더링됨). `>` 자식 결합자(`.split-pane--horizontal > .split-pane__handle > .split-pane__handle-bar`)로 "가장 가까운 SplitPane"만 정확히 스코프해서 해결했다 — 후손 선택자는 임의 깊이의 조상까지 다 매치한다는 걸 실측으로 재확인한 사례.
 
 ---
 

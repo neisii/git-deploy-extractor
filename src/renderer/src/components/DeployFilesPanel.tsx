@@ -64,23 +64,61 @@ export function DeployFilesPanel(): React.JSX.Element {
   const allMissingAdded =
     missingDependencies.length > 0 && missingDependencies.every((d) => includedSet.has(d.localPath))
 
-  if (isStale) {
-    return (
-      <div className="panel deploy-files-panel">
-        선택이 변경되었습니다 — Preview를 눌러 계산하세요
+  // 각 박스(좌/우)가 자기 상태(빈/로딩/비적용/stale)를 독립적으로 보여준다
+  // — MainGrid의 CommitListPanel/DeploymentPreviewPanel과 같은 패턴(둘 다
+  // 각자 `.panel`이고, 부모인 SplitPane 자체는 제목·상태를 갖지 않는다).
+  const leftContent = isStale ? (
+    <div className="panel file-list-column">
+      <div className="deploy-files-panel__header">
+        <span className="file-list-column__title">포함된 파일</span>
       </div>
-    )
-  }
+      <div className="status-text">선택이 변경되었습니다 — Preview를 눌러 계산하세요</div>
+    </div>
+  ) : (
+    <FileListColumn
+      headerTitle="포함된 파일"
+      items={includedItems}
+      onToggleItem={toggleIncluded}
+      searchTerm={deployFilesSearchTerm}
+      onSearchTermChange={setDeployFilesSearchTerm}
+      bulkAction={{
+        kind: 'checkbox',
+        label: '전체 선택',
+        checked: allChecked,
+        indeterminate: someChecked && !allChecked,
+        onClick: toggleAll
+      }}
+      extraHeaderControl={
+        <label>
+          Filter:
+          <select value={filter} onChange={(e) => setFilter(e.target.value as DeployFilesFilter)}>
+            <option value="all">All</option>
+            <option value="added">Added</option>
+            <option value="modified">Modified</option>
+          </select>
+        </label>
+      }
+      columnWidthKey="includedPath"
+      emptyMessage="파일이 없습니다"
+    />
+  )
 
-  const rightContent = dependencyAnalyzing ? (
-    <div className="file-list-column">
+  const rightContent = isStale ? (
+    <div className="panel file-list-column">
+      <div className="deploy-files-panel__header">
+        <span className="file-list-column__title">누락된 의존성</span>
+      </div>
+      <div className="status-text">선택이 변경되었습니다 — Preview를 눌러 계산하세요</div>
+    </div>
+  ) : dependencyAnalyzing ? (
+    <div className="panel file-list-column">
       <div className="deploy-files-panel__header">
         <span className="file-list-column__title">누락된 의존성</span>
       </div>
       <div className="status-text">의존성 확인 중...</div>
     </div>
   ) : !dependencyApplicable ? (
-    <div className="file-list-column">
+    <div className="panel file-list-column">
       <div className="deploy-files-panel__header">
         <span className="file-list-column__title">누락된 의존성</span>
       </div>
@@ -105,7 +143,7 @@ export function DeployFilesPanel(): React.JSX.Element {
   )
 
   return (
-    <div className="panel deploy-files-panel">
+    <div className="deploy-files-panel">
       <div className="deploy-files-panel__title">Deploy Files (HEAD Latest Version)</div>
       {warnings.length > 0 && (
         <div className="warning-banner">{warnings.length}개 파일이 HEAD에 없어 제외되었습니다</div>
@@ -119,40 +157,10 @@ export function DeployFilesPanel(): React.JSX.Element {
         className="deploy-files-panel__split"
         storageKey="gde:splitRatio:deployFiles"
         defaultRatio={0.5}
-        minLeftPx={SPLIT_MIN_PX}
-        minRightPx={SPLIT_MIN_PX}
-        left={
-          <FileListColumn
-            headerTitle="포함된 파일"
-            items={includedItems}
-            onToggleItem={toggleIncluded}
-            searchTerm={deployFilesSearchTerm}
-            onSearchTermChange={setDeployFilesSearchTerm}
-            bulkAction={{
-              kind: 'checkbox',
-              label: '전체 선택',
-              checked: allChecked,
-              indeterminate: someChecked && !allChecked,
-              onClick: toggleAll
-            }}
-            extraHeaderControl={
-              <label>
-                Filter:
-                <select
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value as DeployFilesFilter)}
-                >
-                  <option value="all">All</option>
-                  <option value="added">Added</option>
-                  <option value="modified">Modified</option>
-                </select>
-              </label>
-            }
-            columnWidthKey="includedPath"
-            emptyMessage="파일이 없습니다"
-          />
-        }
-        right={rightContent}
+        minStartPx={SPLIT_MIN_PX}
+        minEndPx={SPLIT_MIN_PX}
+        start={leftContent}
+        end={rightContent}
       />
     </div>
   )

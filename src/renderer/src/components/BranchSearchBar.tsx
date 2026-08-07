@@ -15,53 +15,57 @@ export function BranchSearchBar(): React.JSX.Element {
 
   return (
     <section className="panel branch-search-bar">
-      <label>
-        Branch :
-        <select
-          value={selectedBranch ?? ''}
-          onChange={(e) => void setBranch(e.target.value)}
-          disabled={branches.length === 0}
-        >
-          {branches.length === 0 && <option value="">—</option>}
-          {branches.map((branch) => (
-            <option key={branch} value={branch}>
-              {branch}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="branch-search-bar__row">
+        <label>
+          Branch :
+          <select
+            value={selectedBranch ?? ''}
+            onChange={(e) => void setBranch(e.target.value)}
+            disabled={branches.length === 0}
+          >
+            {branches.length === 0 && <option value="">—</option>}
+            {branches.map((branch) => (
+              <option key={branch} value={branch}>
+                {branch}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      <label>
-        Search :
-        <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-      </label>
-      <button onClick={() => void triggerSearch()}>Search</button>
+        <label>
+          Search :
+          <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        </label>
+        <button onClick={() => void triggerSearch()}>Search</button>
+      </div>
 
-      <label>
-        조회 기간 :
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => void setDateRange(e.target.value, endDate)}
-        />
-        <span> ~ </span>
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => void setDateRange(startDate, e.target.value)}
-        />
-      </label>
+      <div className="branch-search-bar__row">
+        <label>
+          조회 기간 :
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => void setDateRange(e.target.value, endDate)}
+          />
+          <span> ~ </span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => void setDateRange(startDate, e.target.value)}
+          />
+        </label>
 
-      <label>
-        최대
-        <input
-          type="number"
-          min={1}
-          value={maxCount}
-          onChange={(e) => void setMaxCount(Number(e.target.value) || 1)}
-        />
-        개
-      </label>
+        <label>
+          최대
+          <input
+            type="number"
+            min={1}
+            value={maxCount}
+            onChange={(e) => void setMaxCount(Number(e.target.value) || 1)}
+          />
+          개
+        </label>
+      </div>
     </section>
   )
 }

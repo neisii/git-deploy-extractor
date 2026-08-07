@@ -29,21 +29,26 @@ AppShell
 ├── TitleBar                     (읽기 전용 상태 표시)
 ├── RepositoryPanel               (저장소 선택/새로고침)
 ├── BranchSearchBar               (브랜치 선택 + 커밋 검색)
-├── SplitPane (MainGrid)
-│   ├── CommitListPanel           (좌: 커밋 목록, 다중 선택 + 전체 선택 + Preview 트리거)
-│   └── DeploymentPreviewPanel    (우: 집계 미리보기, 읽기 전용)
-├── DeployFilesPanel
-│   └── SplitPane
-│       ├── FileListColumn        (좌: 포함된 파일, 개별/전체 선택 + 상태 Filter + 파일명 검색)
-│       └── FileListColumn        (우: 누락된 의존성, 개별 선택 + 전체 추가 + 파일명 검색)
+├── SplitPane (direction="vertical", className="vertical-main-split")
+│   ├── start: SplitPane (MainGrid, direction="horizontal" 기본값)
+│   │   ├── CommitListPanel        (좌: 커밋 목록, 다중 선택 + 전체 선택 + Preview 트리거)
+│   │   └── DeploymentPreviewPanel (우: 집계 미리보기, 읽기 전용)
+│   └── end: DeployFilesPanel
+│       └── SplitPane
+│           ├── FileListColumn     (좌: 포함된 파일, 개별/전체 선택 + 상태 Filter + 파일명 검색)
+│           └── FileListColumn     (우: 누락된 의존성, 개별 선택 + 전체 추가 + 파일명 검색)
 ├── DeleteListPanel               (삭제 대상 목록, 읽기 전용)
 ├── FooterActionBar               (Export 경로 선택 + Export)
 └── Credit                        (화면 우측 하단 고정, 제작자 GitHub 링크)
 ```
 
+**정정 (MainGrid↔DeployFilesPanel 상하 분할 추가, RISK_ISSUES.md §7.4, 2026-08-07, 결정 이력 #27)**: `SplitPane`이 처음엔 가로(좌우) 방향만 지원했으나, "커밋 목록/분석 요약 영역 전체와 포함된 파일/누락된 의존성 영역 전체 사이의 높이 비율도 드래그로 조절하고 싶다"는 사용자 요청으로 `direction: 'horizontal'|'vertical'` prop을 추가해 세로(상하) 방향도 지원하도록 확장했다. 이 확장에 맞춰 `left`/`right`/`minLeftPx`/`minRightPx`이던 prop 이름이 방향 중립적인 `start`/`end`/`minStartPx`/`minEndPx`로 정정됐다. 세로 SplitPane의 `start` 자리에 기존 MainGrid(가로 SplitPane)가 그대로 중첩된다.
+
 **정정 (Preview 위치 이동, 2026-08-04, 사용자 요청)**: `[Preview]`는 원래 FooterActionBar에 있었으나, "커밋을 고르고 → 바로 그 자리에서 계산한다"는 흐름이 더 직관적이라는 사용자 피드백으로 CommitListPanel 헤더로 옮겼다 — "전체 선택" 체크박스와 같은 행, 패널 우측 끝에 배치한다(§2.4).
 
-**정정 (MainGrid 비율 80:20 → 드래그 조절 가능, RISK_ISSUES.md §7.4, 2026-08-07)**: CommitListPanel과 DeploymentPreviewPanel은 원래 폭을 50:50으로 균등 분할했으나, CommitListPanel은 hash/author/date/message 네 개 컬럼을 담아야 하는 반면 DeploymentPreviewPanel은 짧은 집계 숫자 4줄뿐이라 균등 분할이 불필요하게 넓다는 사용자 피드백으로 대략 80:20 비율(`minmax(320px, 4fr) minmax(180px, 1fr)`)로 바꿨다(2026-08-04, 결정 이력 #22). 이후 §7.4로 이 고정 비율이 **사용자가 마우스로 드래그해 조절 가능한 값**으로 대체됐다 — 80:20은 이제 `SplitPane`(`src/renderer/src/components/SplitPane.tsx`)의 `defaultRatio={0.8}` 초기값일 뿐이다. 각 영역은 지정된 최소 폭(`minLeftPx=320`/`minRightPx=180`) 아래로는 줄어들지 않으며, 창을 그 합보다 더 좁히면 우측이 잘려 보이지 않도록 `overflow-x: auto`를 안전망으로 뒀다(`SplitPane` 공용 스타일). 조절한 비율은 `localStorage`(`gde:splitRatio:mainGrid`)에 저장되어 재실행 후에도 유지된다.
+**정정 (MainGrid 비율 80:20 → 드래그 조절 가능, RISK_ISSUES.md §7.4, 2026-08-07)**: CommitListPanel과 DeploymentPreviewPanel은 원래 폭을 50:50으로 균등 분할했으나, CommitListPanel은 hash/author/date/message 네 개 컬럼을 담아야 하는 반면 DeploymentPreviewPanel은 짧은 집계 숫자 4줄뿐이라 균등 분할이 불필요하게 넓다는 사용자 피드백으로 대략 80:20 비율(`minmax(320px, 4fr) minmax(180px, 1fr)`)로 바꿨다(2026-08-04, 결정 이력 #22). 이후 §7.4로 이 고정 비율이 **사용자가 마우스로 드래그해 조절 가능한 값**으로 대체됐다 — 80:20은 이제 `SplitPane`(`src/renderer/src/components/SplitPane.tsx`)의 `defaultRatio={0.8}` 초기값일 뿐이다. 각 영역은 지정된 최소 폭(`minStartPx=320`/`minEndPx=180`) 아래로는 줄어들지 않으며, 창을 그 합보다 더 좁히면 우측이 잘려 보이지 않도록 `overflow-x: auto`를 안전망으로 뒀다(`SplitPane` 공용 스타일). 조절한 비율은 `localStorage`(`gde:splitRatio:mainGrid`)에 저장되어 재실행 후에도 유지된다.
+
+**정정 (핸들 두께 축소, 2026-08-07, 사용자 피드백)**: 좌우/상하 구분선(드래그 핸들)이 처음엔 그리드 트랙 6px + 양옆 `gap` 8px씩(합 22px)이라 두꺼워 보였고, 그만큼 실제 목록이 보여줄 수 있는 공간을 줄이고 있었다. 그리드 트랙은 마우스로 잡기 편하도록 8px로 유지하되 `gap`은 0으로 없애고, 트랙 안에는 2px 두께의 얇은 막대만 중앙에 그리도록 바꿨다 — 영역 사이 낭비 폭이 22px → 8px로 줄어 그만큼 목록에 더 많은 데이터가 보인다.
 
 **정정 (DeployFilesPanel 최소 높이 = MainGrid, 2026-08-04, 사용자 요청)**: DeployFilesPanel은 MainGrid보다 최소 높이가 낮게 잡혀 있어(flex-basis 160px/min-height 120px) MainGrid(240px/200px)보다 눈에 띄게 낮게 보였다. 여러 파일을 보여줘야 하는 영역인데 공간이 상대적으로 적게 배정돼 있었다는 점에서 위 80:20 비율 건과 같은 성격의 문제라, DeployFilesPanel의 flex-basis·min-height를 MainGrid와 동일한 값(240px/200px)으로 맞췄다 — 두 영역이 같은 flex-grow 비율로 남은 세로 공간을 나눠 가지므로 사실상 항상 같은 높이로 자란다.
 
@@ -83,6 +88,8 @@ AppShell
 
 **상태**: `branches: string[]`, `selectedBranch: string | null`, `searchTerm: string`, `startDate: string`(기본 오늘-7일, `YYYY-MM-DD`), `endDate: string`(기본 오늘), `maxCount: number`(기본 100)
 
+**정정 (2줄 레이아웃 고정, 2026-08-07, 사용자 요청)**: REQUIREDMENT.md §8 원본 와이어프레임은 "Branch/Search"를 1줄, "조회 기간/최대"를 2줄로 그렸지만, 구현은 단일 `flex-wrap` 컨테이너 하나에 네 그룹을 전부 넣어 창 폭에 따라 우연히만 2줄로 보였다(넓은 창에서는 네 그룹이 한 줄에 다 들어감). 항상 와이어프레임대로 2줄로 고정되도록 `branch-search-bar__row` 두 개(Branch+Search+버튼 / 조회기간+최대)로 분리했다 — 바깥 컨테이너는 세로 flex, 각 줄 내부에서만 flex-wrap이 적용된다(좁은 창에서 한 줄 내부 항목이 넘치는 경우의 안전망은 유지).
+
 기본값(7일/100개)에서는 `maxCount`(100)와 CommitListPanel 페이지 크기(100, DETAILED_DESIGN.md §3.4)가 같아서 대부분 첫 페이지 한 번으로 끝난다. 사용자가 `maxCount`를 늘리면 그때부터 여러 페이지에 걸쳐 무한 스크롤이 동작한다. `endDate`는 종료일 하루 전체(23:59:59까지)를 포함한다 — git 쪽 시간 경계 처리는 DETAILED_DESIGN.md §3.2 참고.
 
 ## 2.4 CommitListPanel
@@ -100,9 +107,13 @@ AppShell
 
 **빈/로딩/에러 상태**: §5 참고.
 
+**정정 (SplitPane 셀 높이 꽉 채우기, RISK_ISSUES.md §7.4, 2026-08-07, 사용자 요청)**: MainGrid가 `SplitPane`(§7.4)으로 구현된 이후, `.commit-list-panel`에 `height:100%`가 빠져 있어서 커밋이 몇 줄 없을 때 패널이 콘텐츠 높이로만 줄어들고 `SplitPane`이 배정한 나머지 공간이 빈 배경으로 남아있었다. `.file-list-column`(§2.6)이 이미 쓰던 것과 같은 규칙(`height:100%`)을 추가해 항상 배정된 높이를 꽉 채우도록 고쳤다.
+
 ## 2.5 DeploymentPreviewPanel
 
 **책임**: REQ-005~007 계산 결과 집계를 읽기 전용으로 보여준다(Files/Added/Modified/Deleted — Renamed 없음, DR-008).
+
+**정정 (SplitPane 셀 높이 꽉 채우기, 2026-08-07)**: CommitListPanel과 같은 이유로 `.deployment-preview-panel`에도 `height:100%`를 추가했다 — 자세한 배경은 §2.4의 같은 날짜 정정 참고.
 
 **정정 (자동 재계산 제거, Preview가 유일한 트리거, 2026-08-04)**: 이전 초안은 `selectedHashes`가 바뀔 때마다 500ms 디바운스 후 자동으로 재계산하도록 설계했다. 하지만 이 방식은 "선택은 바뀌었는데 화면은 옛 결과"인 구간(디바운스 대기 중)이 항상 존재해, 그 구간에 `[Export]`를 누르면 방금 추가/해제한 커밋이 반영 안 된 채로 조용히 나갈 수 있는 위험이 있었다(§2.8 참고). 커밋 체크박스/Mapping Profile 변경은 이제 어떤 계산도 트리거하지 않는다 — `[Preview]` 클릭이 유일한 계산 트리거다.
 
@@ -143,12 +154,14 @@ AppShell
 
 | 구성 | 설명 |
 |---|---|
-| 패널 제목 | `Deploy Files (HEAD Latest Version)` — 분할 위 상단에 한 번만 표시(양쪽 공통 헤더가 아니라 패널 전체 제목) |
+| 패널 제목 | `Deploy Files (HEAD Latest Version)` — 테두리 없는 얇은 부모 영역 상단에 한 번만 표시(양쪽 공통 헤더가 아니라 부모 전체 제목) |
 | 좌: 포함된 파일 (`FileListColumn`) | 기존 `deployFiles` 그대로 — 헤더 "전체 선택" 체크박스(필터에 표시된 행 기준, indeterminate 지원), Filter 드롭다운(`all\|added\|modified`), **파일명 검색 입력(신규, 부분 일치)**, Local Path 단일 컬럼 |
 | 우: 누락된 의존성 (`FileListColumn`) | REQ-013 결과(`missingDependencies`) — 헤더에 체크박스 대신 **`[전체 추가]` 버튼**(아직 추가 안 된 항목이 없으면 비활성화), Filter 드롭다운 없음(상태 개념이 없으므로), 파일명 검색 입력, 경로 옆에 `(인터페이스)`/`(구현체)` 라벨 |
 | 좌우 경계 | `SplitPane`으로 드래그 조절(§7.4), 기본 50:50, 최소 폭 260px씩 |
 
-**우측 패널의 로딩/비활성 상태**: Preview 완료 후 의존성 검사가 자동으로 체이닝 실행되는 동안(`dependencyAnalyzing`)은 "의존성 확인 중..."을 표시한다. 이 저장소에 적용할 수 없으면(`dependencyApplicable === false` — Java 파일이 대상에 없거나 `@SpringBootApplication`을 못 찾은 경우) 그 사유(`dependencyReason`)를 표시하고 목록/검색 UI 자체를 렌더링하지 않는다. 실패해도 좌측 패널과 나머지 화면은 정상 동작한다(best-effort).
+**정정 (부모/자식 패널 경계 분리 — 독립 스크롤, 2026-08-07, 사용자 요청)**: 처음 §7.2 구현 시점에는 `DeployFilesPanel` 바깥 div 하나가 `.panel`(테두리+배경+`overflow:auto`)이었고 제목·좌우 `FileListColumn` 전부를 그 안에 담았다 — MainGrid(CommitListPanel/DeploymentPreviewPanel이 각자 독립된 `.panel`이고, 그걸 감싸는 `SplitPane`은 제목도 테두리도 없는 순수 레이아웃 wrapper인 구조)와 다른 패턴이었다. 사용자가 "누락된 의존성 목록과 포함된 파일 목록의 스크롤을 개별적으로 하고 싶다"고 요청하면서 MainGrid와 같은 패턴으로 맞췄다 — `DeployFilesPanel`의 바깥 div는 이제 `.panel` 클래스를 갖지 않는 얇은 제목 전용 컨테이너이고(`main-grid`처럼 세로 flex 크기만 담당), 좌우 `FileListColumn` 각각이 `.panel`(자기 테두리 + 자기 배경)이 되어 그 안의 `.deploy-files-panel__scroll`이 완전히 독립적으로 스크롤된다. Stale 상태(§2.5 `isStale`) 표시도 이 변경에 맞춰 부모 전체를 한 메시지로 대체하던 방식에서, 좌우 각자의 `.panel` 박스 안에서 개별적으로 표시하는 방식으로 바뀌었다(MainGrid에서 CommitListPanel/DeploymentPreviewPanel이 각자 자기 빈/로딩/에러 상태를 보여주는 것과 동일한 패턴).
+
+**우측 패널의 로딩/비활성 상태**: Preview 완료 후 의존성 검사가 자동으로 체이닝 실행되는 동안(`dependencyAnalyzing`)은 "의존성 확인 중..."을 표시한다. 이 저장소에 적용할 수 없으면(`dependencyApplicable === false` — Java 파일이 대상에 없거나 `@SpringBootApplication`을 못 찾은 경우) 그 사유(`dependencyReason`)를 표시하고 목록/검색 UI 자체를 렌더링하지 않는다. 실패해도 좌측 패널과 나머지 화면은 정상 동작한다(best-effort). 이 상태들도 위 정정과 같은 이유로 좌/우 각자의 `.panel` 박스 안에서 개별적으로 표시된다.
 
 **우측 항목의 체크 시맨틱**: 체크(추가)해도 목록에서 사라지지 않는다 — 좌측 `included`처럼 "이미 `deployFiles`에 들어갔는가"를 계속 보여준다(체크 해제하면 `deployFiles`에서 다시 빠진다). 경로 텍스트 클릭도 체크박스와 동일하게 토글된다(좌측과 동일한 상호작용 재사용).
 
