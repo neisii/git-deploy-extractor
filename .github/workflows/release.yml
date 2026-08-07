@@ -1,0 +1,50 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            build_script: build:mac
+            artifact_glob: dist/*.dmg
+          - os: windows-latest
+            build_script: build:win
+            artifact_glob: dist/*.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run ${{ matrix.build_script }}
+        env:
+          # 서명 인증서가 없는 CI 러너에서 electron-builder가 로컬 Keychain
+          # 자격 증명을 찾으려다 실패하지 않도록 명시적으로 끈다 — 지금까지의
+          # 로컬 빌드도 서명 없이 배포해왔으므로(electron-builder.yml notarize: false)
+          # 동작은 그대로다.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-build
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact_glob }}
