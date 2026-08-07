@@ -2,6 +2,8 @@ import { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   BuildPackageParams,
   BuildPackageResult,
+  DependencyAnalysisRequest,
+  DependencyAnalysisResult,
   DeployPlan,
   ListCommitsParams,
   ListCommitsResult,
@@ -23,6 +25,7 @@ export interface Api {
   }
   analysis: {
     preview: (req: PreviewRequest) => Promise<DeployPlan>
+    dependencies: (req: DependencyAnalysisRequest) => Promise<DependencyAnalysisResult>
   }
   package: {
     browseExportDir: () => Promise<string | null>

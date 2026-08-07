@@ -3,6 +3,8 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type {
   BuildPackageParams,
   BuildPackageResult,
+  DependencyAnalysisRequest,
+  DependencyAnalysisResult,
   DeployPlan,
   ListCommitsParams,
   ListCommitsResult,
@@ -28,7 +30,9 @@ const api = {
   },
   analysis: {
     preview: (req: PreviewRequest): Promise<DeployPlan> =>
-      ipcRenderer.invoke('analysis:preview', req)
+      ipcRenderer.invoke('analysis:preview', req),
+    dependencies: (req: DependencyAnalysisRequest): Promise<DependencyAnalysisResult> =>
+      ipcRenderer.invoke('analysis:dependencies', req)
   },
   package: {
     browseExportDir: (): Promise<string | null> => ipcRenderer.invoke('package:browseExportDir'),

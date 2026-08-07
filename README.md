@@ -38,9 +38,20 @@ Application.
    체크박스를 해제한 파일은 최종 추출/`deploy-files.txt`에서 빠진다.
 9. **안전장치**: 대소문자만 다른 두 경로가 같은 Server Path로 매핑되면(파일시스템이
    두 경로를 같은 파일로 착각할 수 있어) 아무 파일도 쓰지 않고 즉시 중단한다.
+10. **Java/Spring 의존성 완결성 검사(선택적, HEAD 기준 별도 경로)**: 위 1~9번은
+    전부 "선택한 Commit의 변경 파일"에서 출발하지만, 이 검사는 커밋 diff와
+    무관하게 **현재 배포 대상 목록에 이미 있는 Java 파일들이 참조하는 다른
+    Java 파일이 목록에 빠져 있는지**를 HEAD 트리 기준으로 직접 확인한다(import
+    문, Spring DI로 주입되는 인터페이스 → 그 인터페이스를 구현하는 클래스).
+    Java/Spring 단일 모듈(`@SpringBootApplication` 클래스를 찾을 수 있는
+    경우)에서만 동작하며, 사용자가 확인 후 개별적으로 또는 한 번에 배포 대상에
+    추가할 수 있다. 추가된 파일도 원본 바이트 그대로 복사되고(5번과 동일),
+    Mapping Rule도 동일하게 적용된다(7번과 동일) — 다른 점은 오직 "어떻게
+    후보 목록에 들어왔는가"뿐이다.
 
 알고리즘 근거와 재현 테스트 이력은 `DETAILED_DESIGN.md` §1(Mapping),
-§3(Commit 분석), §4(플랫폼 이슈)를, 구현은 `src/main/analysis/`,
+§3(Commit 분석), §4(플랫폼 이슈), §6(의존성 완결성 검사)를, 구현은
+`src/main/analysis/`(`dependencyAnalysis.ts`, `java/parseJavaFile.ts` 포함),
 `src/main/mapping/`, `src/main/package/buildPackage.ts`를 참고한다.
 
 ## Tech Stack

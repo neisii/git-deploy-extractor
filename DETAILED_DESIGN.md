@@ -287,7 +287,96 @@ deployDir = join(exportParentDir ?? repoPath, 'git-deploy-extracted')
 
 ---
 
-# 5. 결정 사항 요약
+# 6. 의존성 완결성 검사 설계 (REQ-013, DR-014, RISK_ISSUES.md §7.2)
+
+## 6.1 Java 파싱 도구
+
+**선정**: `java-parser`(npm, chevrotain 기반, `prettier-java` 프로젝트가 실사용·유지보수 중). 대안으로 `java-ast`(antlr4ts 기반)를 함께 조사했으나, `java-parser`가 더 최근에 발행되었고(2025-08) 실제 프로덕션 도구(prettier-java)에 쓰이고 있어 신뢰도가 더 높다고 판단했다.
+
+**재현 검증** (§0.1 원칙 적용): 실제로 패키지를 설치해 다음을 확인했다.
+- 기본 필드 주입/생성자 주입, `@Component`류 stereotype 애노테이션, `implements`/`extends`(class·interface 양쪽), 제네릭(`List<Foo>`), 람다·스트림·`var` 등 실사용 Java 문법이 정상 파싱됨.
+- 200회 반복 파싱 평균 약 0.4ms/파일 — 성능 문제 없음.
+
+**알려진 트레이드오프**: `java-parser`의 전이 의존성(chevrotain 내부의 `lodash`/`lodash-es`)에서 `npm audit` 경고가 발생한다(moderate 4건, high 2건 — `_.template`/`_.unset`/`_.omit` 관련). 이 앱은 오프라인 로컬 데스크톱 도구이고, 취약 함수들은 chevrotain이 **자기 자신의 정적 문법을 빌드할 때만** 내부적으로 쓰는 것이지 사용자가 넘긴 Java 소스 텍스트가 그 경로를 타지 않는다 — 공격 표면이 사실상 없다고 판단해 감수하고 채택했다. 향후 `java-parser`/`chevrotain` 업스트림이 이 의존성을 정리하면 재검토한다.
+
+**CST 순회 방식**: `java-parser`가 내보내는 CST 타입은 문법 규칙 하나하나가 `children`이 서로 다른 정밀 타입으로 좁혀진 형태다(수백 개 규칙 각각 별도 인터페이스). 이 프로젝트가 필요한 건 "이름이 X인 규칙을 재귀적으로 다 찾아서 Identifier 토큰만 모으는" 범용 순회이므로, `src/main/analysis/java/parseJavaFile.ts` 내부에서만 쓰는 느슨한 구조 타입(`AnyCstNode`/`AnyCstElement`)을 따로 정의하고 `parse()` 결과를 그 타입으로 한 번만 캐스팅한다. 이 파일 밖으로 노출되는 공개 타입(`ParsedJavaFile`, `JavaImport`, `JavaTypeInfo`)은 그대로 정확한 타입을 유지한다.
+
+**재현으로 확인한 CST 구조 세부사항** (§0.1 — 기억/추측이 아니라 실제 파싱 결과로 확인):
+- `unannType`은 `fieldDeclaration`에서는 직접 자식이지만 `formalParameter`(생성자 파라미터)에서는 `variableParaRegularParameter`를 한 단계 거쳐야 한다 — 두 구조를 각각 외우는 대신 재귀 탐색(`findAll`)으로 통일했다.
+- 클래스 레벨 애노테이션은 인자가 있든 없든(`@Component` vs `@Component("name")`) 항상 `classModifier > annotation > typeName > Identifier` 형태로 동일하다.
+- 필드/파라미터 타입, `implements`/`extends` 절 안의 식별자는 점(`.`)으로 이어진 qualified 이름이나 제네릭 타입 인자를 구조적으로 구분하지 않고, 그 부분트리 안의 모든 `Identifier` 토큰을 평평하게 모으는 방식(`collectIdentifiers`)으로 충분하다 — `List<Foo>` 같은 제네릭도 별도 처리 없이 `Foo`가 그대로 수집된다.
+
+## 6.2 Base Package 감지
+
+`@SpringBootApplication` 애노테이션이 붙은 클래스를 찾아 그 패키지를 기준 패키지로 삼는다(DR-014, 하드코딩 금지).
+
+```
+1. git grep -l -F "@SpringBootApplication" <branch> -- '*.java'   (저장소 전체, 후보 경로만 빠르게 좁힘)
+2. 각 후보를 git show <branch>:<path>로 읽어 파싱, 실제로 클래스 레벨에
+   @SpringBootApplication이 붙어 있고 package 선언이 있는지 확인
+3. 확인된 결과가 정확히 1건이면 그 package를 기준 패키지로 채택
+   0건 또는 2건 이상이면(모호함) 폴백 없이 기능 비활성화(applicable: false)
+```
+
+**소스 루트 계산**: 기준 패키지 문자열을 하드코딩된 `src/main/java/`에 그냥 이어붙이지 않고, `@SpringBootApplication` 클래스 파일의 실제 경로에서 "패키지 세그먼트 수 + 1(파일명)"만큼 뒤에서부터 잘라내 역산한다. 이 프로젝트가 이미 Spring 표준 구조를 전제하므로(DR-011/012) 실제로는 항상 `src/main/java`로 계산되지만, 문자열을 직접 박아넣지 않고 실제 파일 경로로부터 유도하는 쪽이 더 방어적이라고 판단했다.
+
+## 6.3 프로젝트 인덱스 (경로 ↔ FQN)
+
+기준 패키지 경로 아래 `.java` 파일 목록은 `git ls-tree -r <branch> --name-only -- <prefix>`로 한 번에 가져온다(재현 테스트로 디렉터리 접두사 pathspec이 하위 전체를 재귀적으로 매칭함을 확인, §0.1). 각 파일의 FQN은 **내용을 읽지 않고 경로에서 바로 유도**한다(`sourceRoot` 기준 상대경로의 `/`를 `.`으로 치환) — Spring 표준 구조(파일 경로가 패키지·클래스명과 일치)를 전제하는 건 이 프로젝트 전체가 이미 하는 가정과 같다. 이 덕분에 기준 패키지 아래 파일 전부를 미리 파싱할 필요가 없다.
+
+## 6.4 참조 해석(resolve) 전략
+
+필드/파라미터 타입, `implements`/`extends`, import에서 뽑은 이름(항상 점 없는 단순 이름 — §6.1의 평평한 수집 방식 때문)을 프로젝트 내부 파일로 해석하는 순서:
+
+```
+1. 현재 파일의 import 목록에 명시적으로 있으면 그 FQN
+2. 같은 패키지에 그 이름의 클래스가 있으면 그것 (Java 기본 규칙)
+3. 프로젝트 전체에서 그 이름이 유일하면 그것
+4. 여러 개 있으면 같은 패키지 후보로 좁혀서 유일해지면 그것
+5. 그래도 모호하면 포기 (추측하지 않는다 — false positive를 만들 바엔 안 잡는다)
+```
+
+이 전략은 완전한 Java 심볼 해석(실제 컴파일러가 하는 classpath 기반 해석)이 아니라 실용적 근사치다. 5번 케이스(진짜 모호함)는 이론상 false negative가 될 수 있는 유일한 지점이지만, 기준 패키지 범위(단일 모듈) 안에서 같은 단순 이름이 서로 다른 패키지에 여러 번 존재하는 경우는 실무에서 드물다고 판단해 범위에서 제외했다(알려진 한계).
+
+## 6.5 전이적 폐쇄 탐색 (BFS) + 구현체 탐색
+
+포함된 파일(`deployFiles`) 중 `.java` 파일들을 시작점으로 BFS를 돈다. 각 파일을 파싱해서:
+- import·`implements`·`extends`에서 뽑은 이름을 해석해 프로젝트 내부 파일이면 엣지로 추가
+- 필드/생성자 파라미터 타입에서 뽑은 이름도 동일하게 해석해 엣지로 추가하되, 그 대상이 나중에 실제로 **인터페이스**로 확인되면 구현체 탐색을 트리거한다
+
+구현체 탐색은 그 인터페이스의 단순 이름으로 `git grep -l -F <이름> <branch> -- <기준 패키지 경로>`를 돌려 후보를 빠르게 좁히고(사전 필터 — 주석이나 무관한 문자열 매치까지 섞여 들어올 수 있음), 각 후보를 실제로 파싱해서 **그 이름을 `implements`하고 있고 stereotype 애노테이션(`@Component`/`@Repository`/`@Service`/`@Controller`/`@RestController`/`@Configuration`)이 붙어 있는지** 확정 확인한다(DR-014, false positive 후보를 최종 필터링). 같은 인터페이스에 구현체가 여러 개 확인되면 전부 후보로 남긴다(모호성 처리, 하나로 확정하지 않음).
+
+큐가 빌 때까지(더 이상 새 파일이 발견되지 않을 때까지) 반복하므로 깊이 제한 없는 완전 전이적 폐쇄가 된다. `git grep`은 인터페이스 단순 이름 단위로 결과를 캐싱해 같은 인터페이스가 여러 경로에서 재발견돼도 중복 호출하지 않는다.
+
+**Java 파싱/조회 실패 처리**: 개별 파일이 파싱에 실패하거나(문법 오류, 지원하지 않는 문법) `git show`가 실패하면 그 파일만 건너뛰고 `parseWarnings`에 기록한다 — 전체 검사를 중단하지 않는다.
+
+## 6.6 트리거 시점과 결과 반영
+
+`[Preview]` 버튼 클릭 한 번이 Commit 분석·Mapping Rule 계산에 이어 의존성 검사까지 자동으로 체이닝한다(별도 트리거 버튼 없음 — TO-BE 와이어프레임에도 없음, UI_UX_SPEC.md §2.6 참고). 의존성 검사가 실패해도(예: 예외) 앞서 계산된 `summary`/`deployFiles`/`deleteList`는 그대로 유효하다 — 우측 "누락된 의존성" 패널에만 영향을 준다(best-effort 후속 단계).
+
+**우측 패널 항목의 표시/추가 시맨틱**: 발견된 후보(`missingDependencies`)는 사용자가 체크/추가해도 목록에서 사라지지 않는다 — 좌측 "포함된 파일" 체크박스가 `included` 여부를 계속 보여주는 것과 동일하게, 우측도 "이미 `deployFiles`에 들어갔는가"를 체크 상태로 계속 보여준다. 개별 체크박스는 그 자리에서 즉시 `deployFiles`에 추가/제거하고, `[전체 추가]` 버튼은 아직 추가되지 않은 후보를 한 번에 전부 추가한다(모두 추가된 상태면 비활성화). 추가된 항목은 커밋 diff와 무관하게 HEAD 기준으로 포함되므로 `status: 'added'`로 기록한다(새로운 상태값을 추가하지 않고 기존 `DeployFileStatus` 재사용 — README.md "파일 추출 기준" 갱신 참고).
+
+**알려진 한계**: 새 `[Preview]` 실행 시 `deployFiles`가 통째로 다시 계산되므로, 이전 Preview에서 수동으로 추가한 의존성 파일은 새 Preview 결과에 자동으로 이어지지 않는다(그 파일이 새 선택 커밋들의 diff에 실제로 포함되지 않는 한). RISK_ISSUES.md §6.1 케이스 E(개별 `included` 제외 상태가 재계산 시 초기화되는 것)와 같은 성격의 기존 한계이며, 같은 이유로 이번에도 해결하지 않고 문서화만 한다(범위 확대 방지, §0.2).
+
+---
+
+# 7. 좌우 분할 드래그 리사이즈 설계 (REQ-014, RISK_ISSUES.md §7.4)
+
+**적용 대상 2곳**: (a) MainGrid의 CommitListPanel↔DeploymentPreviewPanel, (b) DeployFilesPanel의 포함된 파일↔누락된 의존성. 공통 컴포넌트 `SplitPane`(`src/renderer/src/components/SplitPane.tsx`)으로 구현해 두 곳에서 재사용한다.
+
+**비율 계산**: 왼쪽 영역이 차지하는 비율(0~1)을 상태로 갖고, `grid-template-columns: minmax(<minLeftPx>px, <ratio*100>%) <handle폭>px minmax(<minRightPx>px, 1fr)`로 렌더링한다. `minmax()`가 각 영역의 최소 폭을 보장하고, 컨테이너 자체의 `overflow-x: auto`가 두 최소 폭의 합보다 창이 좁아졌을 때의 안전망 역할을 한다(#22와 같은 패턴).
+
+**드래그 처리**: RISK #21의 컬럼 리사이즈(`handleResizeStart`)와 같은 mousedown/mousemove/mouseup 패턴을 재사용하되, mouseup에서도 mousemove와 **같은 계산 함수**로 마지막 좌표를 한 번 더 계산해 확정값을 저장한다 — 드래그 시작 시점에 캡처된 클로저가 최신 상태를 못 따라가는 stale closure 문제를 피하기 위함이다(React state 대신 매번 좌표에서 직접 재계산).
+
+**영속화**: `localStorage`에 두 경계선을 별도 키(`gde:splitRatio:mainGrid`, `gde:splitRatio:deployFiles`)로 저장한다 — 컬럼 폭 저장과 같은 전역 패턴(저장소별 구분 없음).
+
+**MainGrid 기본값**: 결정 이력 #22의 80:20 고정값을 `defaultRatio={0.8}`(및 기존 `minLeftPx=320`/`minRightPx=180`)로 그대로 이어받았다 — 이제 이 값은 "초기 기본값"일 뿐이고 사용자가 드래그로 바꿀 수 있다(#22를 대체).
+
+**DeployFilesPanel 분할 기본값**: 50:50(§7.2 point 8), 최소 폭은 양쪽 다 260px로 정했다 — 이 구현 세션에서 새로 결정한 값이다(RISK_ISSUES.md §7.4가 "§7.2 분할은 구현 시 결정"으로 위임한 부분). 두 컬럼 다 비슷한 성격(파일 경로 목록)이라 MainGrid처럼 비대칭 근거가 없어 대칭으로 뒀고, 어차피 컬럼 자체도 가로 스크롤이 기본값이라(§7.2 point 8) 260px는 "읽기 불가능하게 좁아지지 않을 정도"의 여유치일 뿐이다.
+
+---
+
+# 8. 결정 사항 요약
 
 | 항목 | 결정 | 근거 | 재검토 필요도 |
 |---|---|---|---|
@@ -309,3 +398,7 @@ deployDir = join(exportParentDir ?? repoPath, 'git-deploy-extracted')
 | 소스 파일 쓰기 모드 | binary/raw 모드, 텍스트 처리 없음 | Windows+IntelliJ System-Dependent 환경이라 CRLF 가능성 높음. `git show`가 이미 autocrlf 미적용이라 원본 보존되지만, 쓰기 단계에서 텍스트 모드 사용 시 훼손 위험, 2026-08-04 확정 | 해결됨 |
 | Export 결과물 위치(REQ-012) | 사용자가 부모 디렉터리만 선택 가능(네이티브 다이얼로그), 하위 폴더명(`git-deploy-extracted`)은 고정 | 결정 이력 #20(이름 고정)과 일관성 유지 — 이름이 아니라 위치만 커스터마이징. `localStorage` 전역 저장, 2026-08-07 확정 | 해결됨 |
 | Export 대상 폴더 덮어쓰기(DR-013) | 기존 내용 있으면 `dialog.showMessageBox`로 확인, 취소 시 중단·기존 내용 보존 | 조용한 데이터 손실 방지("정확하게 추출" 원칙). `package:export`가 취소 시 `null` 반환(`repository:browse` 취소 패턴 재사용), 2026-08-07 확정 | 해결됨 |
+| Java 파싱 라이브러리(REQ-013) | `java-parser`(chevrotain 기반) 채택 | 실제 프로덕션 도구(prettier-java)가 쓰는 라이브러리, 재현 테스트로 실사용 Java 문법 파싱 확인. 전이 의존성 npm audit 경고(lodash)는 공격 표면 없다고 판단해 감수 | 낮음 — 업스트림이 lodash 의존성 정리하면 재검토 |
+| Base package 감지(DR-014) | `@SpringBootApplication` grep 사전필터 + 파싱 확정, 못 찾거나 모호하면 비활성화 | 하드코딩 금지 원칙(결정 이력 #3) 준수, "단순화 우선" | 해결됨 |
+| 심볼 참조 해석 모호성(DR-014) | import→같은 패키지→유일한 이름→같은 패키지 후보 순으로 시도, 그래도 모호하면 포기 | 완전한 classpath 기반 해석은 범위 밖(과설계 방지). 같은 단순 이름이 여러 패키지에 있는 극단적 케이스만 False Negative 가능성 있음(알려진 한계) | 낮음 |
+| SplitPane 기본 비율/최소폭(REQ-014) | MainGrid 80:20(320px/180px, 결정 이력 #22 계승), DeployFilesPanel 50:50(260px/260px, 이번에 신규 결정) | MainGrid는 기존 비대칭 근거 유지, DeployFilesPanel 좌우는 동일 성격 콘텐츠라 대칭 + 가로 스크롤 안전망 존재 | 낮음 |

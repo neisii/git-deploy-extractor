@@ -4,10 +4,12 @@ import { validateRepository, listBranches } from '../git/repository'
 import { listCommits } from '../git/commits'
 import { listProfileNames, loadProfile } from '../mapping/profileStore'
 import { computeDeployPlan } from '../analysis/computeDeployPlan'
+import { analyzeDependencies } from '../analysis/dependencyAnalysis'
 import { buildPackage, getDeployDir, deployDirHasContent } from '../package/buildPackage'
 import type {
   BuildPackageParams,
   BuildPackageResult,
+  DependencyAnalysisRequest,
   ListCommitsParams,
   PreviewRequest
 } from '../../shared/types'
@@ -45,6 +47,13 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('analysis:preview', async (_event, req: PreviewRequest) => {
     const profile = await loadProfile(getProfilesDir(), req.profileName)
     return computeDeployPlan(req.repoPath, req.branch, req.commitHashes, profile)
+  })
+
+  // RISK_ISSUES.md §7.2: Preview 완료 직후 Renderer가 체이닝 호출한다
+  // (별도 트리거 버튼 없음 — UI_UX_SPEC.md §2.6a 참고).
+  ipcMain.handle('analysis:dependencies', async (_event, req: DependencyAnalysisRequest) => {
+    const profile = await loadProfile(getProfilesDir(), req.profileName)
+    return analyzeDependencies(req.repoPath, req.branch, req.includedLocalPaths, profile)
   })
 
   // RISK_ISSUES.md §7.1: Export 결과물을 저장할 부모 디렉터리 선택.

@@ -29,10 +29,13 @@ AppShell
 ├── TitleBar                     (읽기 전용 상태 표시)
 ├── RepositoryPanel               (저장소 선택/새로고침)
 ├── BranchSearchBar               (브랜치 선택 + 커밋 검색)
-├── MainGrid
+├── SplitPane (MainGrid)
 │   ├── CommitListPanel           (좌: 커밋 목록, 다중 선택 + 전체 선택 + Preview 트리거)
 │   └── DeploymentPreviewPanel    (우: 집계 미리보기, 읽기 전용)
-├── DeployFilesPanel              (배포 대상 파일 목록 + 개별/전체 선택)
+├── DeployFilesPanel
+│   └── SplitPane
+│       ├── FileListColumn        (좌: 포함된 파일, 개별/전체 선택 + 상태 Filter + 파일명 검색)
+│       └── FileListColumn        (우: 누락된 의존성, 개별 선택 + 전체 추가 + 파일명 검색)
 ├── DeleteListPanel               (삭제 대상 목록, 읽기 전용)
 ├── FooterActionBar               (Export 경로 선택 + Export)
 └── Credit                        (화면 우측 하단 고정, 제작자 GitHub 링크)
@@ -40,7 +43,7 @@ AppShell
 
 **정정 (Preview 위치 이동, 2026-08-04, 사용자 요청)**: `[Preview]`는 원래 FooterActionBar에 있었으나, "커밋을 고르고 → 바로 그 자리에서 계산한다"는 흐름이 더 직관적이라는 사용자 피드백으로 CommitListPanel 헤더로 옮겼다 — "전체 선택" 체크박스와 같은 행, 패널 우측 끝에 배치한다(§2.4).
 
-**정정 (MainGrid 비율 80:20, 2026-08-04, 사용자 요청)**: CommitListPanel과 DeploymentPreviewPanel은 원래 폭을 50:50으로 균등 분할했으나, CommitListPanel은 hash/author/date/message 네 개 컬럼을 담아야 하는 반면 DeploymentPreviewPanel은 짧은 집계 숫자 4줄뿐이라 균등 분할이 불필요하게 넓다는 사용자 피드백으로 대략 80:20 비율(CSS `grid-template-columns: minmax(320px, 4fr) minmax(180px, 1fr)`)로 바꿨다. 각 영역은 지정된 최소 폭(320px/180px) 아래로는 줄어들지 않으며, 창을 그 합보다 더 좁히면 우측이 잘려 보이지 않도록 MainGrid에 `overflow-x: auto`를 안전망으로 뒀다.
+**정정 (MainGrid 비율 80:20 → 드래그 조절 가능, RISK_ISSUES.md §7.4, 2026-08-07)**: CommitListPanel과 DeploymentPreviewPanel은 원래 폭을 50:50으로 균등 분할했으나, CommitListPanel은 hash/author/date/message 네 개 컬럼을 담아야 하는 반면 DeploymentPreviewPanel은 짧은 집계 숫자 4줄뿐이라 균등 분할이 불필요하게 넓다는 사용자 피드백으로 대략 80:20 비율(`minmax(320px, 4fr) minmax(180px, 1fr)`)로 바꿨다(2026-08-04, 결정 이력 #22). 이후 §7.4로 이 고정 비율이 **사용자가 마우스로 드래그해 조절 가능한 값**으로 대체됐다 — 80:20은 이제 `SplitPane`(`src/renderer/src/components/SplitPane.tsx`)의 `defaultRatio={0.8}` 초기값일 뿐이다. 각 영역은 지정된 최소 폭(`minLeftPx=320`/`minRightPx=180`) 아래로는 줄어들지 않으며, 창을 그 합보다 더 좁히면 우측이 잘려 보이지 않도록 `overflow-x: auto`를 안전망으로 뒀다(`SplitPane` 공용 스타일). 조절한 비율은 `localStorage`(`gde:splitRatio:mainGrid`)에 저장되어 재실행 후에도 유지된다.
 
 **정정 (DeployFilesPanel 최소 높이 = MainGrid, 2026-08-04, 사용자 요청)**: DeployFilesPanel은 MainGrid보다 최소 높이가 낮게 잡혀 있어(flex-basis 160px/min-height 120px) MainGrid(240px/200px)보다 눈에 띄게 낮게 보였다. 여러 파일을 보여줘야 하는 영역인데 공간이 상대적으로 적게 배정돼 있었다는 점에서 위 80:20 비율 건과 같은 성격의 문제라, DeployFilesPanel의 flex-basis·min-height를 MainGrid와 동일한 값(240px/200px)으로 맞췄다 — 두 영역이 같은 flex-grow 비율로 남은 세로 공간을 나눠 가지므로 사실상 항상 같은 높이로 자란다.
 
@@ -134,6 +137,27 @@ AppShell
 
 **정정 (Server Path 열 삭제, RISK_ISSUES.md §7.1, 2026-08-07)**: FooterActionBar(§2.8)에서 Mapping Profile 드롭다운을 숨기면서, 유일한 프로필인 `default`의 `overrides`가 항상 빈 배열이라는 게 재확인되었다 — 즉 Server Path가 사실상 항상 Local Path와 같은 값이었다. 화면에 항상 동일한 두 열을 나란히 보여줄 이유가 없어 Server Path 열을 삭제하고 Local Path 단일 컬럼으로 바꿨다. 위 세 문단(컬럼 리사이즈/폭 불일치 수정/알려진 제약)에 있던 Server Path 관련 서술은 이번 정정으로 모두 제거됐다.
 
+**정정 (좌우 분할 재구성 — 의존성 완결성 검사, REQ-013, RISK_ISSUES.md §7.2, 2026-08-07)**: 위에서 설명한 단일 목록 구조를 `SplitPane`(§7.4)으로 좌우 분할했다. 이 정정 이후의 최신 구조는 다음과 같다 — 위 문단들의 "컬럼 실측 폭/리사이즈/가상 스크롤" 메커니즘 자체는 그대로 재사용되지만(공용 컴포넌트 `FileListColumn`, `src/renderer/src/components/deployFiles/FileListColumn.tsx`), 좌우 각각 독립적으로 적용된다.
+
+**책임 추가**: REQ-013(의존성 완결성 검사)도 이 패널이 담당한다.
+
+| 구성 | 설명 |
+|---|---|
+| 패널 제목 | `Deploy Files (HEAD Latest Version)` — 분할 위 상단에 한 번만 표시(양쪽 공통 헤더가 아니라 패널 전체 제목) |
+| 좌: 포함된 파일 (`FileListColumn`) | 기존 `deployFiles` 그대로 — 헤더 "전체 선택" 체크박스(필터에 표시된 행 기준, indeterminate 지원), Filter 드롭다운(`all\|added\|modified`), **파일명 검색 입력(신규, 부분 일치)**, Local Path 단일 컬럼 |
+| 우: 누락된 의존성 (`FileListColumn`) | REQ-013 결과(`missingDependencies`) — 헤더에 체크박스 대신 **`[전체 추가]` 버튼**(아직 추가 안 된 항목이 없으면 비활성화), Filter 드롭다운 없음(상태 개념이 없으므로), 파일명 검색 입력, 경로 옆에 `(인터페이스)`/`(구현체)` 라벨 |
+| 좌우 경계 | `SplitPane`으로 드래그 조절(§7.4), 기본 50:50, 최소 폭 260px씩 |
+
+**우측 패널의 로딩/비활성 상태**: Preview 완료 후 의존성 검사가 자동으로 체이닝 실행되는 동안(`dependencyAnalyzing`)은 "의존성 확인 중..."을 표시한다. 이 저장소에 적용할 수 없으면(`dependencyApplicable === false` — Java 파일이 대상에 없거나 `@SpringBootApplication`을 못 찾은 경우) 그 사유(`dependencyReason`)를 표시하고 목록/검색 UI 자체를 렌더링하지 않는다. 실패해도 좌측 패널과 나머지 화면은 정상 동작한다(best-effort).
+
+**우측 항목의 체크 시맨틱**: 체크(추가)해도 목록에서 사라지지 않는다 — 좌측 `included`처럼 "이미 `deployFiles`에 들어갔는가"를 계속 보여준다(체크 해제하면 `deployFiles`에서 다시 빠진다). 경로 텍스트 클릭도 체크박스와 동일하게 토글된다(좌측과 동일한 상호작용 재사용).
+
+**파일명 검색(좌우 공통, 신규)**: 경로 전체가 아니라 **파일명(경로의 마지막 조각)** 부분 일치로 필터링한다 — §7.3(파일명으로 커밋 검색)과 매칭 기준을 통일했다. 상태 Filter(좌측만 있음) 이후에 적용된다.
+
+**상태 추가**: `missingDependencies: { localPath: string; serverPath: string; status: 'added'; kind: 'interface'|'class' }[]`, `dependencyApplicable: boolean`, `dependencyReason: string | null`, `dependencyAnalyzing: boolean`, `dependencyParseWarnings: { path: string; reason: string }[]`, `deployFilesSearchTerm: string`, `dependencySearchTerm: string`(§3 참고).
+
+**경고 배너 추가**: 기존 "N개 파일이 HEAD에 없어 제외되었습니다"(DR-009) 배너 아래, 의존성 검사 중 파싱에 실패한 파일이 있으면 "N개 파일을 파싱하지 못해 의존성 검사에서 제외했습니다" 배너를 추가로 보여준다(`dependencyParseWarnings`).
+
 ## 2.7 DeleteListPanel
 
 **책임**: DR-007. 읽기 전용.
@@ -205,8 +229,17 @@ interface AppState {
   summary: { files: number; added: number; modified: number; deleted: number } | null;
   deployFiles: DeployFileEntry[];
   deployFilesFilter: 'all' | 'added' | 'modified';   // §2.6 Filter dropdown 상태
+  deployFilesSearchTerm: string;    // §2.6, REQ-013과 함께 추가 — 좌측 파일명 검색
   deleteList: DeleteEntry[];
   warnings: { path: string; reason: string }[];
+
+  // REQ-013, §2.6 우측 "누락된 의존성" 패널. Preview 성공 직후 자동 체이닝된다.
+  dependencyAnalyzing: boolean;
+  dependencyApplicable: boolean;
+  dependencyReason: string | null;
+  missingDependencies: { localPath: string; serverPath: string; status: 'added'; kind: 'interface'|'class' }[];
+  dependencyParseWarnings: { path: string; reason: string }[];
+  dependencySearchTerm: string;
 
   profiles: string[];
   selectedProfile: string;
@@ -220,6 +253,8 @@ interface AppState {
 ```
 
 **파생 계산 흐름 (정정, 2026-08-04)**: `selectedHashes`/`selectedBranch`/`selectedProfile` 변경은 더 이상 IPC를 트리거하지 않는다 — `[Preview]` 클릭만이 단일 IPC 호출(Commit 분석 엔진 + Mapping Rule 엔진 결과)을 일으키고, 그 결과로 `summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection`이 동시 갱신된다. `isStale = 현재 (selectedHashes, selectedBranch, selectedProfile) ≠ analyzedSelection`으로 파생 계산하며, 세 미리보기 패널(§2.5~2.7)과 `[Export]` 비활성 조건(§2.8)이 모두 이 값을 공유한다. 개별 `included` 토글(DeployFilesPanel)만 예외로 로컬 갱신(재계산도, staleness 판정도 없음 — 이미 계산된 목록 안에서의 선택/해제이기 때문).
+
+**추가 (의존성 검사 체이닝, REQ-013, 2026-08-07)**: `[Preview]`가 성공하면(위 IPC 완료 직후) 곧바로 두 번째 IPC(`analysis:dependencies`)를 자동으로 호출해 `missingDependencies`/`dependencyApplicable`/`dependencyReason`/`dependencyParseWarnings`를 채운다 — 별도 버튼 없음. 이 두 번째 호출이 실패해도 첫 번째 IPC의 결과(`summary`/`deployFiles` 등)는 그대로 유효하다(우측 패널에만 영향). `missingDependencies`의 개별/전체 추가(`toggleDependencyIncluded`/`addAllMissingDependencies`)도 `toggleDeployFileIncluded`와 동일하게 로컬 갱신이며 재계산·staleness 판정을 일으키지 않는다 — 대상이 `deployFiles` 배열에 항목을 추가/제거하는 것뿐이기 때문이다.
 
 ---
 
@@ -235,11 +270,15 @@ interface AppState {
 | Search 입력 (디바운스) | 없음 (요청 중 표시만) | `git log --grep` | REQ-003 |
 | 커밋 체크박스 토글 | `selectedHashes` add/remove. IPC도, 어떤 계산도 트리거하지 않는다 — `isStale`이 즉시 파생 계산으로 true가 된다 | 없음 | REQ-004~008 |
 | Mapping Profile 변경 | `selectedProfile` 갱신. 마찬가지로 계산을 트리거하지 않는다 | 없음 | REQ-008 |
-| DeployFilesPanel 체크박스 토글 | 해당 항목 `included` 반전 | 없음 (로컬) | REQ-011 |
-| DeployFilesPanel 전체 선택 토글 | 필터에 표시된 행 전체 `included` 일괄 반전 | 없음 (로컬) | REQ-011 |
-| `[Preview]` 클릭 | `analyzing = true` → 완료 시 `summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection` 동시 갱신 | Commit 분석 + Mapping 엔진 | REQ-005~008 |
+| DeployFilesPanel(좌) 체크박스 토글 | 해당 항목 `included` 반전 | 없음 (로컬) | REQ-011 |
+| DeployFilesPanel(좌) 전체 선택 토글 | 필터+검색에 표시된 행 전체 `included` 일괄 반전 | 없음 (로컬) | REQ-011 |
+| DeployFilesPanel(좌/우) 파일명 검색 입력 | `deployFilesSearchTerm`/`dependencySearchTerm` 갱신, 즉시 클라이언트 필터링(디바운스 없음) | 없음 (로컬) | REQ-013 |
+| `[Preview]` 클릭 | `analyzing = true` → 완료 시 `summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection` 동시 갱신, 이어서 `dependencyAnalyzing = true` → 완료 시 `missingDependencies` 등 갱신(체이닝) | Commit 분석 + Mapping 엔진 → 의존성 완결성 검사 | REQ-005~008, REQ-013 |
+| DeployFilesPanel(우) 개별 체크박스 토글 | `deployFiles`에 없으면 추가, 있으면 제거 | 없음 (로컬) | REQ-013 |
+| `[전체 추가]` 클릭 (우) | 아직 `deployFiles`에 없는 `missingDependencies` 전부를 `included: true`로 추가 | 없음 (로컬) | REQ-013 |
 | `[변경]` 클릭 (FooterActionBar) | 취소 시 상태 변화 없음. 선택 시 `exportParentDir` 갱신 + `localStorage` 저장 | `dialog.showOpenDialog`(`package:browseExportDir`) | REQ-012 |
 | `[Export]` 클릭 | `exportStatus = 'exporting'` → `'done'`\|`'error'`\|(취소 시)`'idle'` | Package Builder(전체: 파일 복사 + 3종 Export). 대상 폴더에 기존 내용 있으면 먼저 `dialog.showMessageBox` 확인 | REQ-009, REQ-010, DR-013 |
+| SplitPane 경계 드래그(MainGrid/DeployFilesPanel) | 드래그 중 실시간 비율 반영, mouseup 시 `localStorage`에 최종 비율 저장 | 없음 (로컬) | REQ-014 |
 
 **정정 (자동 재계산 완전 제거, `[Preview]`가 유일한 트리거, 2026-08-04)**: 이전 초안(및 그 초안을 최적화하려던 캐싱 계획)은 커밋 체크박스나 Mapping Profile이 바뀔 때마다 디바운스 후 자동으로 재계산하는 것을 전제로 했다. 하지만 이 방식은 "선택은 바뀌었는데 화면·Export 대상은 옛 결과"인 구간(디바운스 대기 중)이 항상 존재해, 그 구간에 `[Export]`를 누르면 방금 바뀐 선택 일부가 반영 안 된 채로 조용히 나갈 수 있는 위험이 있었다(§2.8 "Export 직전 레이스 컨디션 방지" 참고). 자동 재계산 자체를 없애고 `[Preview]`를 유일한 계산 트리거로 확정하면서, 애초에 "자동 재계산을 최적화(캐싱)할지" 논의 자체가 무의미해졌다 — 자동 재계산이 없으니 최적화할 대상도 없다.
 
@@ -252,10 +291,11 @@ interface AppState {
 | RepositoryPanel | "저장소를 선택하세요" | 버튼 disable + 스피너 | "Git 저장소가 아닙니다" 등 구체 메시지 |
 | CommitListPanel | "커밋이 없습니다" | 스켈레톤 행 (초기 로드) / 하단 스피너 (다음 페이지) | "커밋 조회 실패" + 재시도 버튼 |
 | DeploymentPreviewPanel | "커밋을 선택하세요" | 집계 숫자 자리에 스켈레톤 | 계산 실패 메시지 (드물게 git diff-tree 실패 시) |
-| DeployFilesPanel / DeleteListPanel | DeploymentPreviewPanel과 동기화(같은 계산 1회 결과) | 위와 동일 | 위와 동일 |
+| DeployFilesPanel(좌) / DeleteListPanel | DeploymentPreviewPanel과 동기화(같은 계산 1회 결과) | 위와 동일 | 위와 동일 |
+| DeployFilesPanel(우, 누락된 의존성) | "누락된 의존성이 없습니다"(검사는 끝났지만 후보가 0건) | "의존성 확인 중..."(`dependencyAnalyzing`) | 이 저장소에 적용할 수 없으면(`dependencyApplicable=false`) `dependencyReason` 텍스트로 대체 표시(목록/검색 자체를 숨김) — 에러가 아니라 REQ-013의 정상적인 비적용 상태 |
 | FooterActionBar | — | `exportStatus`에 따라 `[Export]` label을 "내보내는 중..." 등으로 변경, 중복 클릭 방지 | 실패 사유를 인라인 배너로 표시, DR-009 Warning은 에러가 아니라 별도 경고 배지로 구분 |
 
-DR-009(HEAD 미존재)로 인한 `warnings`는 에러가 아니라 **경고**다 — 계산은 정상 완료된 상태이므로 Export를 막지 않고, DeployFilesPanel 상단에 노란 배너로 "N개 파일이 HEAD에 없어 제외되었습니다"만 표시한다.
+DR-009(HEAD 미존재)로 인한 `warnings`는 에러가 아니라 **경고**다 — 계산은 정상 완료된 상태이므로 Export를 막지 않고, DeployFilesPanel 상단에 노란 배너로 "N개 파일이 HEAD에 없어 제외되었습니다"만 표시한다. 같은 방식으로 의존성 검사 중 파싱에 실패한 파일이 있으면(`dependencyParseWarnings`) "N개 파일을 파싱하지 못해 의존성 검사에서 제외했습니다" 배너를 추가로 보여준다(DR-014).
 
 **추가 상태 — Stale (2026-08-04)**: 빈/로딩/에러 외에 네 번째 상태가 있다. 선택은 비어있지 않은데 `isStale`(§2.5)이 true인 경우로, DeploymentPreviewPanel/DeployFilesPanel/DeleteListPanel 모두 "선택이 변경되었습니다 — Preview를 눌러 계산하세요"를 표시하고, FooterActionBar는 `[Export]`를 비활성화한 채 "Preview를 먼저 실행하세요"를 보여준다. 커밋을 하나라도 체크한 직후(아직 한 번도 Preview를 안 누른 상태)는 이 Stale 상태의 특수한 경우다.
 

@@ -104,3 +104,33 @@ export interface PreviewRequest {
   commitHashes: string[]
   profileName: string
 }
+
+// RISK_ISSUES.md §7.2 — 의존성 완결성 검사 (Java/Spring 단일 모듈 전용)
+export type JavaDependencyKind = 'interface' | 'class'
+
+// DeployPlanFile과 같은 모양(localPath/serverPath/status)에 kind만 추가한
+// 것 — "전체 추가" 시 그대로 deployFiles 배열에 이어붙일 수 있도록
+// Mapping Rule까지 이미 적용된 상태로 내려준다(추가 IPC 왕복 없이).
+export interface DependencyCandidate {
+  localPath: string
+  serverPath: string
+  status: DeployFileStatus
+  kind: JavaDependencyKind
+}
+
+export interface DependencyAnalysisResult {
+  applicable: boolean
+  // applicable=false일 때 이유(Java 파일 없음/@SpringBootApplication 못 찾음 등).
+  // applicable=true일 때도 참고용으로 채워질 수 있다(예: 파싱 실패 파일 존재).
+  reason?: string
+  basePackage?: string
+  missingDependencies: DependencyCandidate[]
+  parseWarnings: AnalysisWarning[]
+}
+
+export interface DependencyAnalysisRequest {
+  repoPath: string
+  branch: string
+  includedLocalPaths: string[] // Preview로 계산된 deployFiles 전체의 localPath (§7.2 point 1 "선택된 파일들")
+  profileName: string // Server Path 계산에 Mapping Rule 엔진을 재사용하기 위함
+}

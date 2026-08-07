@@ -9,6 +9,7 @@ import { DeployFilesPanel } from './components/DeployFilesPanel'
 import { DeleteListPanel } from './components/DeleteListPanel'
 import { FooterActionBar } from './components/FooterActionBar'
 import { Credit } from './components/Credit'
+import { SplitPane } from './components/SplitPane'
 
 function App(): React.JSX.Element {
   const initProfiles = useAppStore((s) => s.initProfiles)
@@ -22,10 +23,15 @@ function App(): React.JSX.Element {
       <TitleBar />
       <RepositoryPanel />
       <BranchSearchBar />
-      <div className="main-grid">
-        <CommitListPanel />
-        <DeploymentPreviewPanel />
-      </div>
+      <SplitPane
+        className="main-grid"
+        storageKey="gde:splitRatio:mainGrid"
+        defaultRatio={0.8}
+        minLeftPx={320}
+        minRightPx={180}
+        left={<CommitListPanel />}
+        right={<DeploymentPreviewPanel />}
+      />
       <DeployFilesPanel />
       <DeleteListPanel />
       <FooterActionBar />

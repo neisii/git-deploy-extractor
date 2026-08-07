@@ -1,164 +1,68 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
-import { List } from 'react-window'
-import type { RowComponentProps } from 'react-window'
+import { useMemo } from 'react'
 import { useAppStore, selectIsAnalysisStale } from '../store/appStore'
-import type { DeployFileEntry, DeployFilesFilter } from '../store/appStore'
-import { loadColumnWidths, saveColumnWidths } from '../lib/columnWidths'
-import type { ColumnWidths } from '../lib/columnWidths'
+import type { DeployFilesFilter } from '../store/appStore'
+import { FileListColumn } from './deployFiles/FileListColumn'
+import type { FileListItem } from './deployFiles/FileListColumn'
+import { SplitPane } from './SplitPane'
 
-// 300개 기준은 UI_UX_SPEC.md §2.6의 대략치 — 행 하나(체크박스+경로 1열)
-// 기준이며 실사용 데이터로 재조정 가능하다.
-const VIRTUALIZE_THRESHOLD = 300
-const ROW_HEIGHT = 28
-const MIN_COLUMN_WIDTH = 100
-
-const CSS_VAR_MIN = '--local-col-min'
-const CSS_VAR_NATURAL = '--local-col-natural'
-
-function DeployFileRow({
-  file,
-  onToggle,
-  style
-}: {
-  file: DeployFileEntry
-  onToggle: (localPath: string) => void
-  style?: CSSProperties
-}): React.JSX.Element {
-  return (
-    <div
-      style={{ ...style, width: 'max-content' }}
-      className="deploy-files-grid-row deploy-files-row"
-    >
-      <input type="checkbox" checked={file.included} onChange={() => onToggle(file.localPath)} />
-      <span
-        className="deploy-files-row__local deploy-files-row__local--clickable"
-        onClick={() => onToggle(file.localPath)}
-      >
-        {file.localPath}
-      </span>
-    </div>
-  )
+// RISK_ISSUES.md §7.2 — 파일명(경로의 마지막 조각)에 대한 부분 일치.
+// §7.3(파일명으로 커밋 검색)과 동일한 매칭 기준을 좌우 두 검색 필드에도
+// 그대로 적용한다.
+function matchesFileName(path: string, term: string): boolean {
+  if (!term) return true
+  const fileName = path.slice(path.lastIndexOf('/') + 1)
+  return fileName.toLowerCase().includes(term.toLowerCase())
 }
 
-interface VirtualRowProps {
-  files: DeployFileEntry[]
-  onToggle: (localPath: string) => void
-}
-
-function VirtualRow({
-  index,
-  style,
-  files,
-  onToggle
-}: RowComponentProps<VirtualRowProps>): React.JSX.Element {
-  return <DeployFileRow file={files[index]} onToggle={onToggle} style={style} />
-}
+const SPLIT_MIN_PX = 260
 
 export function DeployFilesPanel(): React.JSX.Element {
   const deployFiles = useAppStore((s) => s.deployFiles)
   const filter = useAppStore((s) => s.deployFilesFilter)
   const setFilter = useAppStore((s) => s.setDeployFilesFilter)
+  const deployFilesSearchTerm = useAppStore((s) => s.deployFilesSearchTerm)
+  const setDeployFilesSearchTerm = useAppStore((s) => s.setDeployFilesSearchTerm)
   const warnings = useAppStore((s) => s.warnings)
   const toggleIncluded = useAppStore((s) => s.toggleDeployFileIncluded)
   const toggleAll = useAppStore((s) => s.toggleAllDeployFiles)
+
+  const dependencyAnalyzing = useAppStore((s) => s.dependencyAnalyzing)
+  const dependencyApplicable = useAppStore((s) => s.dependencyApplicable)
+  const dependencyReason = useAppStore((s) => s.dependencyReason)
+  const missingDependencies = useAppStore((s) => s.missingDependencies)
+  const dependencyParseWarnings = useAppStore((s) => s.dependencyParseWarnings)
+  const dependencySearchTerm = useAppStore((s) => s.dependencySearchTerm)
+  const setDependencySearchTerm = useAppStore((s) => s.setDependencySearchTerm)
+  const toggleDependencyIncluded = useAppStore((s) => s.toggleDependencyIncluded)
+  const addAllMissingDependencies = useAppStore((s) => s.addAllMissingDependencies)
+
   const isStale = useAppStore(selectIsAnalysisStale)
 
-  const filtered = useMemo(
-    () => (filter === 'all' ? deployFiles : deployFiles.filter((f) => f.status === filter)),
-    [deployFiles, filter]
-  )
+  const includedItems = useMemo((): FileListItem[] => {
+    const statusFiltered =
+      filter === 'all' ? deployFiles : deployFiles.filter((f) => f.status === filter)
+    return statusFiltered
+      .filter((f) => matchesFileName(f.localPath, deployFilesSearchTerm))
+      .map((f) => ({ localPath: f.localPath, checked: f.included }))
+  }, [deployFiles, filter, deployFilesSearchTerm])
 
-  // 전체 선택 체크 상태는 저장하지 않고 매번 파생 계산한다 (UI_UX_SPEC.md §2.6)
-  const allChecked = filtered.length > 0 && filtered.every((f) => f.included)
-  const someChecked = filtered.some((f) => f.included)
-  const indeterminate = someChecked && !allChecked
+  const allChecked = includedItems.length > 0 && includedItems.every((f) => f.checked)
+  const someChecked = includedItems.some((f) => f.checked)
 
-  const headerCheckboxRef = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (headerCheckboxRef.current) {
-      headerCheckboxRef.current.indeterminate = indeterminate
-    }
-  }, [indeterminate])
+  const includedSet = useMemo(() => new Set(deployFiles.map((f) => f.localPath)), [deployFiles])
 
-  // 컬럼 폭: 리사이즈는 "최소 폭"을 지정하는 것일 뿐이다. 실제 폭은
-  // (최소 폭, 내용 폭) 중 큰 값으로 결정된다. 내용 폭은 CSS의 max-content에
-  // 맡기지 않는다 — 헤더/각 행이 서로 별도의 grid 컨테이너라 max-content가
-  // 행마다 독립적으로 계산되어 헤더와 목록의 폭이 어긋나는 문제가 있었다.
-  // 대신 전체 필터링된 행 + 헤더 라벨 중 가장 넓은 실측 폭을 JS로 계산해
-  // 모든 행(가상 스크롤 포함)에 동일하게 주입한다.
-  const [columnWidths, setColumnWidths] = useState<ColumnWidths>(() => loadColumnWidths())
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const dragState = useRef<{ startX: number; startWidth: number } | null>(null)
+  const missingItems = useMemo((): FileListItem[] => {
+    return missingDependencies
+      .filter((d) => matchesFileName(d.localPath, dependencySearchTerm))
+      .map((d) => ({
+        localPath: d.localPath,
+        checked: includedSet.has(d.localPath),
+        extraLabel: d.kind === 'interface' ? '(인터페이스)' : '(구현체)'
+      }))
+  }, [missingDependencies, dependencySearchTerm, includedSet])
 
-  const [naturalWidth, setNaturalWidth] = useState<number>(MIN_COLUMN_WIDTH)
-  const probeHeaderRef = useRef<HTMLSpanElement>(null)
-  const probeRowRef = useRef<HTMLSpanElement>(null)
-  const measureCanvasRef = useRef<HTMLCanvasElement | null>(null)
-
-  useLayoutEffect(() => {
-    const headerEl = probeHeaderRef.current
-    const rowEl = probeRowRef.current
-    if (!headerEl || !rowEl) return
-
-    if (!measureCanvasRef.current) measureCanvasRef.current = document.createElement('canvas')
-    const ctx = measureCanvasRef.current.getContext('2d')
-    if (!ctx) return
-
-    const measure = (el: HTMLElement, text: string): number => {
-      const computed = getComputedStyle(el)
-      ctx.font = computed.font
-      const padding = parseFloat(computed.paddingLeft) + parseFloat(computed.paddingRight)
-      return Math.ceil(ctx.measureText(text).width + padding)
-    }
-
-    let max = measure(headerEl, 'Local Path')
-    for (const file of filtered) {
-      max = Math.max(max, measure(rowEl, file.localPath))
-    }
-    setNaturalWidth(Math.max(max, MIN_COLUMN_WIDTH))
-  }, [filtered])
-
-  const scrollStyle = useMemo(() => {
-    const style: Record<string, string> = {}
-    const min = columnWidths.localPath ?? MIN_COLUMN_WIDTH
-    if (columnWidths.localPath) style[CSS_VAR_MIN] = `${columnWidths.localPath}px`
-    style[CSS_VAR_NATURAL] = `${Math.max(naturalWidth, min)}px`
-    return style as CSSProperties
-  }, [columnWidths, naturalWidth])
-
-  const handleResizeStart = useCallback((event: ReactMouseEvent<HTMLSpanElement>) => {
-    event.preventDefault()
-    const headerCell = (event.currentTarget as HTMLElement).closest<HTMLElement>('[data-col]')
-    const startWidth = headerCell?.getBoundingClientRect().width ?? 200
-    dragState.current = { startX: event.clientX, startWidth }
-
-    const computeWidth = (clientX: number): number => {
-      const drag = dragState.current
-      if (!drag) return MIN_COLUMN_WIDTH
-      return Math.max(MIN_COLUMN_WIDTH, Math.round(drag.startWidth + (clientX - drag.startX)))
-    }
-
-    const onMouseMove = (moveEvent: MouseEvent): void => {
-      if (!dragState.current || !scrollRef.current) return
-      scrollRef.current.style.setProperty(CSS_VAR_MIN, `${computeWidth(moveEvent.clientX)}px`)
-    }
-    const onMouseUp = (upEvent: MouseEvent): void => {
-      if (dragState.current) {
-        const finalWidth = computeWidth(upEvent.clientX)
-        setColumnWidths((prev) => {
-          const next = { ...prev, localPath: finalWidth }
-          saveColumnWidths(next)
-          return next
-        })
-      }
-      dragState.current = null
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
-    }
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
-  }, [])
+  const allMissingAdded =
+    missingDependencies.length > 0 && missingDependencies.every((d) => includedSet.has(d.localPath))
 
   if (isStale) {
     return (
@@ -168,78 +72,88 @@ export function DeployFilesPanel(): React.JSX.Element {
     )
   }
 
+  const rightContent = dependencyAnalyzing ? (
+    <div className="file-list-column">
+      <div className="deploy-files-panel__header">
+        <span className="file-list-column__title">누락된 의존성</span>
+      </div>
+      <div className="status-text">의존성 확인 중...</div>
+    </div>
+  ) : !dependencyApplicable ? (
+    <div className="file-list-column">
+      <div className="deploy-files-panel__header">
+        <span className="file-list-column__title">누락된 의존성</span>
+      </div>
+      <div className="status-text">{dependencyReason ?? '이 저장소에는 적용할 수 없습니다'}</div>
+    </div>
+  ) : (
+    <FileListColumn
+      headerTitle="누락된 의존성"
+      items={missingItems}
+      onToggleItem={toggleDependencyIncluded}
+      searchTerm={dependencySearchTerm}
+      onSearchTermChange={setDependencySearchTerm}
+      bulkAction={{
+        kind: 'button',
+        label: '전체 추가',
+        onClick: addAllMissingDependencies,
+        disabled: missingDependencies.length === 0 || allMissingAdded
+      }}
+      columnWidthKey="missingPath"
+      emptyMessage="누락된 의존성이 없습니다"
+    />
+  )
+
   return (
     <div className="panel deploy-files-panel">
-      <div className="deploy-files-panel__header">
-        <label>
-          <input
-            ref={headerCheckboxRef}
-            type="checkbox"
-            checked={allChecked}
-            onChange={() => toggleAll()}
-          />
-          전체 선택
-        </label>
-        <span>Deploy Files (HEAD Latest Version)</span>
-        <label>
-          Filter:
-          <select value={filter} onChange={(e) => setFilter(e.target.value as DeployFilesFilter)}>
-            <option value="all">All</option>
-            <option value="added">Added</option>
-            <option value="modified">Modified</option>
-          </select>
-        </label>
-      </div>
+      <div className="deploy-files-panel__title">Deploy Files (HEAD Latest Version)</div>
       {warnings.length > 0 && (
         <div className="warning-banner">{warnings.length}개 파일이 HEAD에 없어 제외되었습니다</div>
       )}
-      <div className="deploy-files-panel__scroll" ref={scrollRef} style={scrollStyle}>
-        <div className="deploy-files-grid-row deploy-files-panel__columns">
-          <span></span>
-          <span data-col="localPath" className="deploy-files-panel__col-header">
-            Local Path
-            <span
-              className="deploy-files-resize-handle"
-              onMouseDown={handleResizeStart}
-              title="드래그해서 최소 폭 조절"
-            />
-          </span>
-          {/* 컬럼 실측 폭 계산용 — 화면에 보이지 않고 레이아웃에도 관여하지 않는다 */}
-          <span
-            ref={probeHeaderRef}
-            data-col="localPath"
-            className="deploy-files-panel__col-header deploy-files-measure-probe"
-            aria-hidden
+      {dependencyParseWarnings.length > 0 && (
+        <div className="warning-banner">
+          {dependencyParseWarnings.length}개 파일을 파싱하지 못해 의존성 검사에서 제외했습니다
+        </div>
+      )}
+      <SplitPane
+        className="deploy-files-panel__split"
+        storageKey="gde:splitRatio:deployFiles"
+        defaultRatio={0.5}
+        minLeftPx={SPLIT_MIN_PX}
+        minRightPx={SPLIT_MIN_PX}
+        left={
+          <FileListColumn
+            headerTitle="포함된 파일"
+            items={includedItems}
+            onToggleItem={toggleIncluded}
+            searchTerm={deployFilesSearchTerm}
+            onSearchTermChange={setDeployFilesSearchTerm}
+            bulkAction={{
+              kind: 'checkbox',
+              label: '전체 선택',
+              checked: allChecked,
+              indeterminate: someChecked && !allChecked,
+              onClick: toggleAll
+            }}
+            extraHeaderControl={
+              <label>
+                Filter:
+                <select
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value as DeployFilesFilter)}
+                >
+                  <option value="all">All</option>
+                  <option value="added">Added</option>
+                  <option value="modified">Modified</option>
+                </select>
+              </label>
+            }
+            columnWidthKey="includedPath"
+            emptyMessage="파일이 없습니다"
           />
-        </div>
-        <span
-          ref={probeRowRef}
-          className="deploy-files-row__local deploy-files-measure-probe"
-          aria-hidden
-        />
-        <div className="deploy-files-panel__body">
-          {filtered.length === 0 ? (
-            <div className="status-text">파일이 없습니다</div>
-          ) : filtered.length > VIRTUALIZE_THRESHOLD ? (
-            <List
-              rowComponent={VirtualRow}
-              rowCount={filtered.length}
-              rowHeight={ROW_HEIGHT}
-              rowProps={{ files: filtered, onToggle: toggleIncluded }}
-              style={{ height: '100%' }}
-            />
-          ) : (
-            filtered.map((file) => (
-              <DeployFileRow
-                key={file.localPath}
-                file={file}
-                onToggle={toggleIncluded}
-                style={{ height: ROW_HEIGHT }}
-              />
-            ))
-          )}
-        </div>
-      </div>
+        }
+        right={rightContent}
+      />
     </div>
   )
 }

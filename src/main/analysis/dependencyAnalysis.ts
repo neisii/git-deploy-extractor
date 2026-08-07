@@ -1,0 +1,332 @@
+import { listTrackedFiles } from '../git/lsTree'
+import { grepTree } from '../git/grep'
+import { getHeadFileContent } from '../git/showFile'
+import { resolveServerPath } from '../mapping/resolveServerPath'
+import { parseJavaFile } from './java/parseJavaFile'
+import type { JavaTypeKind } from './java/parseJavaFile'
+import type {
+  AnalysisWarning,
+  DependencyAnalysisResult,
+  DependencyCandidate,
+  MappingProfile
+} from '../../shared/types'
+
+// RISK_ISSUES.md §7.2 — Java/Spring 단일 모듈 의존성 완결성 검사.
+//
+// 알고리즘 개요 (설계 근거는 DETAILED_DESIGN.md §4.4 참고):
+// 1. `@SpringBootApplication` 클래스를 저장소 전체에서 찾아 base package를
+//    감지한다(하드코딩 금지 — §7.2 point 4). 못 찾으면 기능을 비활성화한다.
+// 2. base package 경로 아래 .java 파일 목록으로 "경로 ↔ FQN" 인덱스를
+//    구성한다(파일 내용을 읽지 않고 경로에서 바로 유도 — Spring 표준 구조
+//    전제는 이 프로젝트 전체가 이미 하고 있는 가정과 같다).
+// 3. 포함된 파일들에서 시작해 BFS로 전이적 폐쇄까지 따라간다(point 5).
+//    각 파일을 파싱해 import/implements/extends/필드·생성자 파라미터
+//    타입에서 참조를 뽑고, 우리 프로젝트 내부로 해석되는 것만 엣지로 삼는다.
+// 4. 필드/생성자 파라미터로 참조된 타입이 실제로 인터페이스로 확인되면,
+//    `git grep`으로 그 이름을 텍스트로 언급하는 파일을 먼저 좁히고(빠른
+//    사전 필터), 파싱으로 실제 `implements` + stereotype 애노테이션 여부를
+//    확인해 구현체 후보를 전부 수집한다(point 6, 모호하면 전부 제안).
+
+const JAVA_SUFFIX = '.java'
+const STEREOTYPE_ANNOTATIONS = new Set([
+  'Component',
+  'Service',
+  'Repository',
+  'Controller',
+  'RestController',
+  'Configuration'
+])
+
+interface ProjectIndex {
+  sourceRoot: string
+  basePackagePathPrefix: string
+  fqnToPath: Map<string, string>
+  simpleNameToFqns: Map<string, string[]>
+}
+
+function pathToFqn(path: string, sourceRoot: string): string {
+  const rel = path.slice(sourceRoot.length + 1, -JAVA_SUFFIX.length)
+  return rel.split('/').join('.')
+}
+
+async function detectBasePackage(
+  repoPath: string,
+  branch: string
+): Promise<{ basePackage: string; sourceRoot: string } | null> {
+  const candidates = await grepTree(repoPath, branch, '@SpringBootApplication', ['*.java'])
+
+  const confirmed: { basePackage: string; sourceRoot: string }[] = []
+  for (const path of candidates) {
+    let content: Buffer
+    try {
+      content = await getHeadFileContent(repoPath, branch, path)
+    } catch {
+      continue
+    }
+    let parsed
+    try {
+      parsed = parseJavaFile(content.toString('utf8'))
+    } catch {
+      continue
+    }
+    const hasAnnotation = parsed.types.some(
+      (t) => t.kind === 'class' && t.annotationSimpleNames.includes('SpringBootApplication')
+    )
+    if (!hasAnnotation || !parsed.packageName) continue
+
+    const packageSegments = parsed.packageName.split('.')
+    const pathSegments = path.split('/')
+    const trailingCount = packageSegments.length + 1 // + 파일명 자체
+    if (pathSegments.length <= trailingCount) continue
+    const sourceRoot = pathSegments.slice(0, pathSegments.length - trailingCount).join('/')
+    confirmed.push({ basePackage: parsed.packageName, sourceRoot })
+  }
+
+  // 못 찾거나(0건) 모호하면(2건 이상) 폴백 없이 비활성화한다(§7.2 point 4).
+  if (confirmed.length !== 1) return null
+  return confirmed[0]
+}
+
+async function buildProjectIndex(
+  repoPath: string,
+  branch: string,
+  basePackage: string,
+  sourceRoot: string
+): Promise<ProjectIndex> {
+  const basePackagePathPrefix = `${sourceRoot}/${basePackage.replace(/\./g, '/')}`
+  const paths = (await listTrackedFiles(repoPath, branch, basePackagePathPrefix)).filter((p) =>
+    p.endsWith(JAVA_SUFFIX)
+  )
+
+  const fqnToPath = new Map<string, string>()
+  const simpleNameToFqns = new Map<string, string[]>()
+  for (const path of paths) {
+    const fqn = pathToFqn(path, sourceRoot)
+    fqnToPath.set(fqn, path)
+    const simpleName = fqn.slice(fqn.lastIndexOf('.') + 1)
+    const list = simpleNameToFqns.get(simpleName) ?? []
+    list.push(fqn)
+    simpleNameToFqns.set(simpleName, list)
+  }
+
+  return { sourceRoot, basePackagePathPrefix, fqnToPath, simpleNameToFqns }
+}
+
+// 식별자 하나(항상 점 없는 단순 이름 — collectIdentifiers가 dotted qualified
+// 이름을 구조적으로 만들지 않고 세그먼트 단위로 평평하게 뽑기 때문)를 우리
+// 프로젝트 내부 파일 경로로 해석한다. 순서: 명시적 import → 같은 패키지
+// 기본 규칙 → 이름이 프로젝트 안에서 유일하면 그것 → 같은 패키지 후보가
+// 여러 개 중에 있으면 그것 → 그래도 모호하면 포기(추측하지 않는다).
+function resolveToPath(
+  simpleName: string,
+  currentPackage: string,
+  importedSimpleNameToFqn: Map<string, string>,
+  index: ProjectIndex
+): string | undefined {
+  const importedFqn = importedSimpleNameToFqn.get(simpleName)
+  if (importedFqn && index.fqnToPath.has(importedFqn)) return index.fqnToPath.get(importedFqn)
+
+  const samePackageFqn = currentPackage ? `${currentPackage}.${simpleName}` : simpleName
+  if (index.fqnToPath.has(samePackageFqn)) return index.fqnToPath.get(samePackageFqn)
+
+  const candidates = index.simpleNameToFqns.get(simpleName)
+  if (!candidates || candidates.length === 0) return undefined
+  if (candidates.length === 1) return index.fqnToPath.get(candidates[0])
+
+  const inSamePackage = candidates.filter((fqn) => fqn.startsWith(`${currentPackage}.`))
+  if (inSamePackage.length === 1) return index.fqnToPath.get(inSamePackage[0])
+
+  return undefined // 진짜 모호함 — 추측하지 않는다
+}
+
+export async function analyzeDependencies(
+  repoPath: string,
+  branch: string,
+  includedLocalPaths: string[],
+  profile: MappingProfile
+): Promise<DependencyAnalysisResult> {
+  const javaIncluded = includedLocalPaths.filter((p) => p.endsWith(JAVA_SUFFIX))
+  if (javaIncluded.length === 0) {
+    return {
+      applicable: false,
+      reason: '포함된 파일 중 Java 파일이 없습니다',
+      missingDependencies: [],
+      parseWarnings: []
+    }
+  }
+
+  const base = await detectBasePackage(repoPath, branch)
+  if (!base) {
+    return {
+      applicable: false,
+      reason: '@SpringBootApplication 클래스를 찾지 못해 의존성 검사를 사용할 수 없습니다',
+      missingDependencies: [],
+      parseWarnings: []
+    }
+  }
+
+  const index = await buildProjectIndex(repoPath, branch, base.basePackage, base.sourceRoot)
+  const includedSet = new Set(includedLocalPaths)
+
+  const visited = new Set<string>()
+  const queued = new Set<string>()
+  const queue: string[] = []
+  const discoveredKind = new Map<string, JavaTypeKind>() // 포함되지 않은(missing) 경로만
+  const pendingInterfaceCheck = new Set<string>()
+  const implementorCache = new Map<string, string[]>()
+  const parseWarnings: AnalysisWarning[] = []
+
+  function enqueue(path: string): void {
+    if (visited.has(path) || queued.has(path)) return
+    queued.add(path)
+    queue.push(path)
+  }
+
+  function addEdge(path: string): void {
+    if (!index.fqnToPath.has(pathToFqn(path, base!.sourceRoot))) return
+    if (!includedSet.has(path) && !discoveredKind.has(path)) {
+      discoveredKind.set(path, 'class') // 방문 전 잠정값 — 실제 방문 시 확정
+    }
+    enqueue(path)
+  }
+
+  async function findImplementors(interfaceSimpleName: string): Promise<string[]> {
+    const cached = implementorCache.get(interfaceSimpleName)
+    if (cached) return cached
+    const candidates = await grepTree(repoPath, branch, interfaceSimpleName, [
+      index.basePackagePathPrefix
+    ])
+    implementorCache.set(interfaceSimpleName, candidates)
+    return candidates
+  }
+
+  for (const path of javaIncluded) enqueue(path)
+
+  while (queue.length > 0) {
+    const path = queue.shift()!
+    queued.delete(path)
+    if (visited.has(path)) continue
+    visited.add(path)
+
+    let content: Buffer
+    try {
+      content = await getHeadFileContent(repoPath, branch, path)
+    } catch {
+      parseWarnings.push({ path, reason: 'HEAD 파일 조회 실패 — 의존성 검사에서 제외' })
+      continue
+    }
+
+    let parsed
+    try {
+      parsed = parseJavaFile(content.toString('utf8'))
+    } catch {
+      parseWarnings.push({ path, reason: 'Java 파싱 실패 — 의존성 검사에서 제외' })
+      continue
+    }
+
+    const currentPackage = parsed.packageName ?? ''
+    const importedSimpleNameToFqn = new Map<string, string>()
+    for (const imp of parsed.imports) {
+      if (!imp.isWildcard) importedSimpleNameToFqn.set(imp.simpleName, imp.fqn)
+    }
+    const resolve = (name: string): string | undefined =>
+      resolveToPath(name, currentPackage, importedSimpleNameToFqn, index)
+
+    // import 기반 텍스트 참조
+    for (const imp of parsed.imports) {
+      if (imp.isWildcard) continue
+      const p = index.fqnToPath.get(imp.fqn)
+      if (p && p !== path) addEdge(p)
+    }
+
+    for (const type of parsed.types) {
+      for (const name of type.structuralReferenceNames) {
+        const p = resolve(name)
+        if (p && p !== path) addEdge(p)
+      }
+      for (const name of type.fieldAndParamTypeNames) {
+        const p = resolve(name)
+        if (!p || p === path) continue
+        addEdge(p)
+        pendingInterfaceCheck.add(p)
+      }
+    }
+
+    // 이 파일이 "필드/파라미터로 참조된" 대상이었다면, 실제로 인터페이스인지
+    // 이제 확인할 수 있다 — 맞으면 구현체 후보를 찾아 엣지에 더한다.
+    if (pendingInterfaceCheck.has(path)) {
+      const iface = parsed.types.find((t) => t.kind === 'interface')
+      if (iface) {
+        const candidatePaths = await findImplementors(iface.simpleName)
+        for (const candidatePath of candidatePaths) {
+          if (candidatePath === path) continue
+          addEdge(candidatePath)
+        }
+      }
+    }
+
+    if (discoveredKind.has(path) && parsed.types.length > 0) {
+      const matched =
+        parsed.types.find(
+          (t) => t.simpleName === path.slice(path.lastIndexOf('/') + 1, -JAVA_SUFFIX.length)
+        ) ?? parsed.types[0]
+      discoveredKind.set(path, matched.kind)
+    }
+  }
+
+  // pendingInterfaceCheck 대상 중 "이미 방문된" 파일도 있었을 케이스를 대비해
+  // implements 여부를 최종적으로 한 번 더 필터링한다 — 구현체 후보로
+  // enqueue된 경로 중 실제로 그 인터페이스를 implements하고 stereotype
+  // 애노테이션이 붙은 것만 최종 missingDependencies에 남긴다. 이 판정은
+  // 이미 parsed 결과가 없으므로(방문 루프 안에서 로컬 변수였음), 다시
+  // 한 번 읽어야 한다 — implementorCache로 좁혀진 소수 후보에 대해서만
+  // 수행되므로 비용이 크지 않다.
+  const finalMissing: DependencyCandidate[] = []
+  for (const [path, kind] of discoveredKind) {
+    if (kind === 'class') {
+      // 이 경로가 findImplementors 후보로 들어온 것이라면, 실제
+      // implements + stereotype 여부를 확인해서 아니면 제외한다.
+      const isImplementorCandidate = [...implementorCache.values()].some((list) =>
+        list.includes(path)
+      )
+      if (isImplementorCandidate) {
+        let content: Buffer | null = null
+        try {
+          content = await getHeadFileContent(repoPath, branch, path)
+        } catch {
+          continue
+        }
+        let parsed
+        try {
+          parsed = parseJavaFile(content.toString('utf8'))
+        } catch {
+          continue
+        }
+        const classType = parsed.types.find((t) => t.kind === 'class')
+        const hasStereotype = classType?.annotationSimpleNames.some((a) =>
+          STEREOTYPE_ANNOTATIONS.has(a)
+        )
+        const implementsTarget = [...implementorCache.entries()].some(
+          ([ifaceName, list]) =>
+            list.includes(path) && classType?.implementsSimpleNames.includes(ifaceName)
+        )
+        if (!hasStereotype || !implementsTarget) continue
+      }
+    }
+    finalMissing.push({
+      localPath: path,
+      serverPath: resolveServerPath(path, profile),
+      status: 'added',
+      kind
+    })
+  }
+
+  finalMissing.sort((a, b) => a.localPath.localeCompare(b.localPath))
+
+  return {
+    applicable: true,
+    basePackage: base.basePackage,
+    missingDependencies: finalMissing,
+    parseWarnings
+  }
+}

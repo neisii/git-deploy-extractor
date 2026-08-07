@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type {
   AnalysisWarning,
   CommitEntry,
+  DependencyCandidate,
   DeployFileStatus,
   DeployPlanSummary
 } from '../../../shared/types'
@@ -68,8 +69,20 @@ interface AppState {
   summary: DeployPlanSummary | null
   deployFiles: DeployFileEntry[]
   deployFilesFilter: DeployFilesFilter
+  deployFilesSearchTerm: string // §7.2 point 8 — 좌측 "포함된 파일" 파일명 검색(부분 일치)
   deleteList: DeleteEntry[]
   warnings: AnalysisWarning[]
+
+  // RISK_ISSUES.md §7.2 — 의존성 완결성 검사(Java/Spring). Preview 성공
+  // 직후 자동으로 체이닝 호출된다(별도 트리거 버튼 없음). 실패해도 나머지
+  // Preview 결과(summary/deployFiles 등)는 그대로 유효하다 — 이 결과는
+  // 우측 "누락된 의존성" 패널 전용이라 실패가 전체 Preview를 막지 않는다.
+  dependencyAnalyzing: boolean
+  dependencyApplicable: boolean
+  dependencyReason: string | null
+  missingDependencies: DependencyCandidate[]
+  dependencyParseWarnings: AnalysisWarning[]
+  dependencySearchTerm: string // §7.2 point 8 — 우측 "누락된 의존성" 파일명 검색(부분 일치)
 
   profiles: string[]
   selectedProfile: string
@@ -96,8 +109,12 @@ interface AppState {
   toggleCommit: (hash: string) => void
   toggleAllCommits: () => void
   setDeployFilesFilter: (filter: DeployFilesFilter) => void
+  setDeployFilesSearchTerm: (term: string) => void
   toggleDeployFileIncluded: (localPath: string) => void
   toggleAllDeployFiles: () => void
+  setDependencySearchTerm: (term: string) => void
+  toggleDependencyIncluded: (localPath: string) => void
+  addAllMissingDependencies: () => void
   setProfile: (profileName: string) => void
   runPreview: () => Promise<void>
   runExport: () => Promise<void>
@@ -121,6 +138,16 @@ let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const defaultRange = getDefaultDateRange()
 
+// 커밋 선택이 리셋되거나 새 Preview를 시작할 때 §7.2 의존성 상태도 같이
+// 초기화한다 — 옛 계산 결과가 새 선택의 우측 패널에 남아있지 않도록.
+const emptyDependencyState = {
+  dependencyAnalyzing: false,
+  dependencyApplicable: false,
+  dependencyReason: null,
+  missingDependencies: [] as DependencyCandidate[],
+  dependencyParseWarnings: [] as AnalysisWarning[]
+}
+
 export const useAppStore = create<AppState>((set, get) => {
   async function loadCommitsFirstPage(): Promise<void> {
     const { repository, selectedBranch, startDate, endDate, maxCount, searchTerm } = get()
@@ -136,7 +163,8 @@ export const useAppStore = create<AppState>((set, get) => {
       deleteList: [],
       warnings: [],
       analyzedSelection: null,
-      analysisError: null
+      analysisError: null,
+      ...emptyDependencyState
     })
 
     try {
@@ -176,12 +204,13 @@ export const useAppStore = create<AppState>((set, get) => {
         deleteList: [],
         warnings: [],
         analysisError: null,
-        analyzedSelection: null
+        analyzedSelection: null,
+        ...emptyDependencyState
       })
       return
     }
 
-    set({ analyzing: true, analysisError: null })
+    set({ analyzing: true, analysisError: null, ...emptyDependencyState })
     try {
       const hashes = [...selectedHashes]
       const plan = await window.api.analysis.preview({
@@ -198,6 +227,32 @@ export const useAppStore = create<AppState>((set, get) => {
         warnings: plan.warnings,
         analyzedSelection: { hashes, branch: selectedBranch, profileName: selectedProfile }
       })
+
+      // §7.2: Preview 완료 직후 자동으로 체이닝 호출한다(별도 트리거 버튼
+      // 없음). 실패해도 위에서 이미 반영된 summary/deployFiles 등은 그대로
+      // 유효하다 — 우측 패널에만 영향을 주는 best-effort 후속 단계다.
+      set({ dependencyAnalyzing: true })
+      try {
+        const depResult = await window.api.analysis.dependencies({
+          repoPath: repository.path,
+          branch: selectedBranch,
+          includedLocalPaths: plan.files.map((f) => f.localPath),
+          profileName: selectedProfile
+        })
+        set({
+          dependencyAnalyzing: false,
+          dependencyApplicable: depResult.applicable,
+          dependencyReason: depResult.reason ?? null,
+          missingDependencies: depResult.missingDependencies,
+          dependencyParseWarnings: depResult.parseWarnings
+        })
+      } catch (error) {
+        set({
+          dependencyAnalyzing: false,
+          dependencyApplicable: false,
+          dependencyReason: error instanceof Error ? error.message : String(error)
+        })
+      }
     } catch (error) {
       set({
         analyzing: false,
@@ -227,8 +282,12 @@ export const useAppStore = create<AppState>((set, get) => {
     summary: null,
     deployFiles: [],
     deployFilesFilter: 'all',
+    deployFilesSearchTerm: '',
     deleteList: [],
     warnings: [],
+
+    ...emptyDependencyState,
+    dependencySearchTerm: '',
 
     profiles: [],
     selectedProfile: 'default',
@@ -382,7 +441,8 @@ export const useAppStore = create<AppState>((set, get) => {
           deleteList: [],
           warnings: [],
           analysisError: null,
-          analyzedSelection: null
+          analyzedSelection: null,
+          ...emptyDependencyState
         })
       }
       // 선택이 비어있지 않은 채로 바뀌었을 때는 아무 계산도 트리거하지
@@ -412,12 +472,14 @@ export const useAppStore = create<AppState>((set, get) => {
           deleteList: [],
           warnings: [],
           analysisError: null,
-          analyzedSelection: null
+          analyzedSelection: null,
+          ...emptyDependencyState
         })
       }
     },
 
     setDeployFilesFilter: (filter) => set({ deployFilesFilter: filter }),
+    setDeployFilesSearchTerm: (term) => set({ deployFilesSearchTerm: term }),
 
     toggleDeployFileIncluded: (localPath) => {
       set((state) => ({
@@ -444,6 +506,54 @@ export const useAppStore = create<AppState>((set, get) => {
           deployFiles: state.deployFiles.map((f) =>
             filteredPaths.has(f.localPath) ? { ...f, included: nextIncluded } : f
           )
+        }
+      })
+    },
+
+    setDependencySearchTerm: (term) => set({ dependencySearchTerm: term }),
+
+    // 우측 "누락된 의존성" 개별 체크박스 — 이미 좌측(deployFiles)에 들어가
+    // 있으면 빼고(다시 "누락됨"으로 보이게), 없으면 추가한다. missingDependencies
+    // 자체는 건드리지 않는다 — 우측에 실제로 표시되는 목록은 컴포넌트가
+    // "missingDependencies 중 deployFiles에 아직 없는 것"으로 파생 계산한다
+    // (전체 선택 indeterminate 판정과 같은 이유로 상태 중복 저장을 피함).
+    toggleDependencyIncluded: (localPath) => {
+      set((state) => {
+        const alreadyIncluded = state.deployFiles.some((f) => f.localPath === localPath)
+        if (alreadyIncluded) {
+          return { deployFiles: state.deployFiles.filter((f) => f.localPath !== localPath) }
+        }
+        const candidate = state.missingDependencies.find((d) => d.localPath === localPath)
+        if (!candidate) return {}
+        return {
+          deployFiles: [
+            ...state.deployFiles,
+            {
+              localPath: candidate.localPath,
+              serverPath: candidate.serverPath,
+              status: candidate.status,
+              included: true
+            }
+          ]
+        }
+      })
+    },
+
+    addAllMissingDependencies: () => {
+      set((state) => {
+        const existing = new Set(state.deployFiles.map((f) => f.localPath))
+        const toAdd = state.missingDependencies.filter((d) => !existing.has(d.localPath))
+        if (toAdd.length === 0) return {}
+        return {
+          deployFiles: [
+            ...state.deployFiles,
+            ...toAdd.map((d) => ({
+              localPath: d.localPath,
+              serverPath: d.serverPath,
+              status: d.status,
+              included: true
+            }))
+          ]
         }
       })
     },

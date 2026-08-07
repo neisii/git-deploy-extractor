@@ -112,16 +112,46 @@ body,
   text-decoration: underline;
 }
 
+/* .main-grid는 세로 방향 크기(app-shell flex 안에서 얼마나 자랄지)만
+   맡는다. 가로 분할(grid-template-columns)은 .split-pane이 SplitPane의
+   드래그 비율에 따라 인라인 스타일로 직접 계산해 넣는다(RISK_ISSUES.md
+   §7.4) — 원래 이 자리에 있던 80:20 minmax는 SplitPane의 defaultRatio(0.8)
+   + minLeftPx(320)/minRightPx(180)로 그대로 이어졌다. */
 .main-grid {
-  display: grid;
-  /* CommitListPanel : DeploymentPreviewPanel ≈ 80:20. 양쪽 다 minmax 최소폭을
-     둬서 창을 좁혀도 읽기 힘든 폭 이하로 줄지 않고, 그래도 모자라면
-     overflow-x로 가로 스크롤이 뜬다(우측이 창 밖으로 잘려 보이는 것 방지). */
-  grid-template-columns: minmax(320px, 4fr) minmax(180px, 1fr);
-  overflow-x: auto;
-  gap: 8px;
   flex: 1 1 240px;
   min-height: 200px;
+}
+
+/* RISK_ISSUES.md §7.4 — 좌우 드래그 리사이즈 스플릿의 공용 스타일.
+   MainGrid(.main-grid와 함께 사용)와 DeployFilesPanel 내부 분할 두 곳에서
+   재사용한다. grid-template-columns 값 자체는 SplitPane이 비율에 따라
+   인라인으로 계산해 넣는다 — 여기서는 grid 컨테이너로서의 공통 성질만
+   정의한다. 창이 두 min 폭의 합보다 좁아지면 overflow-x로 가로 스크롤이
+   떠서 우측이 잘려 보이지 않게 한다(#22와 같은 안전망). */
+.split-pane {
+  display: grid;
+  align-items: stretch;
+  overflow-x: auto;
+  gap: 8px;
+  height: 100%;
+}
+
+.split-pane__left,
+.split-pane__right {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.split-pane__handle {
+  cursor: col-resize;
+  border-radius: 3px;
+  background: var(--ev-c-gray-3);
+}
+
+.split-pane__handle:hover,
+.split-pane__handle:active {
+  background: var(--ev-c-gray-1);
 }
 
 .commit-list-panel {
@@ -207,10 +237,44 @@ body,
   flex-direction: column;
 }
 
+.deploy-files-panel__title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+/* §7.2 — 좌우 분할(SplitPane)이 패널의 남은 세로 공간을 전부 채운다. */
+.deploy-files-panel__split {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 좌(포함된 파일)/우(누락된 의존성) 각 컬럼의 세로 레이아웃 — 헤더/검색
+   행은 고정 높이, 목록만 남은 공간을 채우며 스크롤한다. */
+.file-list-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.file-list-column__title {
+  font-weight: 600;
+}
+
+.file-list-column__search {
+  margin-bottom: 6px;
+}
+
+.file-list-column__search input {
+  flex: 1;
+}
+
 .deploy-files-panel__header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
@@ -311,6 +375,11 @@ body,
 
 .deploy-files-row__local--clickable:hover {
   text-decoration: underline;
+}
+
+/* §7.2 — 우측 "누락된 의존성" 목록에서 인터페이스/구현체 구분 라벨 */
+.deploy-files-row__extra-label {
+  color: var(--ev-c-text-2);
 }
 
 .warning-banner {
