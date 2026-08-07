@@ -384,7 +384,50 @@ deployDir = join(exportParentDir ?? repoPath, 'git-deploy-extracted')
 
 ---
 
-# 8. 결정 사항 요약
+# 8. 커밋 선택 유지 및 파일명 검색 설계 (REQ-015/016, DR-015, RISK_ISSUES.md §6.1/§7.3)
+
+## 8.1 선택 유지/초기화 (DR-015)
+
+`loadCommitsFirstPage(keepSelection = false)`가 Renderer(`appStore.ts`)의 모든 커밋 재조회 경로의 단일 진입점이다. 호출자가 `keepSelection`을 명시적으로 넘긴다.
+
+| 호출자 | keepSelection | 근거 |
+|---|---|---|
+| `browseRepository()` | `false`(기본값) | DR-015 예외 (a) — 다른 저장소 |
+| `setBranch()` | `false`(기본값) | DR-015 예외 (b) — 다른 Branch |
+| `reloadRepository()` | `true` | 같은 저장소를 다시 읽을 뿐, 예외 (a)/(b) 어느 쪽도 아님 |
+| `setSearchTerm()`(디바운스), `triggerSearch()`, `setSearchMode()`, `setDateRange()`, `setMaxCount()` | `true` | 검색 조건만 바뀜 — REQ-015가 유지를 요구하는 대상 |
+
+`keepSelection=false`일 때만 `set()` 페이로드에 `selectedHashes: new Set()`을 포함시키고, `true`면 아예 그 필드를 생략해 기존 `Set`을 그대로 둔다(스프레드 조건부 포함 — `...(keepSelection ? {} : { selectedHashes: new Set() })`).
+
+**Preview 관련 상태는 keepSelection과 무관하게 항상 리셋된다**(`summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection`/의존성 상태). `commits` 목록 자체가 매번 새로 로드되므로, `selectedHashes`가 그대로여도 "마지막 Preview가 지금 선택과 일치하는가"는 항상 다시 확인시킨다 — `isStale`이 즉시 true가 되어 사용자가 `[Preview]`를 다시 눌러야 한다(REQ-015 이전부터 있던 안전장치, 이번 기능으로 바뀌지 않음).
+
+## 8.2 레이스 컨디션 가드 (§6.1 케이스 C)
+
+`runAnalysis()`가 IPC 응답을 받은 시점에, 요청을 보낸 시점의 선택(`requestSelection`)과 **현재** `selectedHashes`/`selectedBranch`/`selectedProfile`이 여전히 같은지 확인한다(`selectionMatches()` — `selectIsAnalysisStale`과 비교 로직을 공유). 다르면(계산 중 사용자가 체크박스를 바꿨다면) 결과를 적용하지 않고 조용히 버린다 — `analyzedSelection`이 "요청 시점의 옛 선택"을 가리키게 되는 걸 막기 위함이다. 이 가드는 메인 Preview 계산과 §7.2 의존성 체이닝 호출 양쪽에 동일하게 적용된다(성공/실패 경로 전부).
+
+REQ-015로 선택이 여러 검색을 거쳐 누적되면서 "Preview 계산 중에 다시 검색해 선택을 바꾸는" 시나리오가 실사용에서 더 자주 노출될 수 있다고 판단해, 이번 세션에서 §6.1 케이스 C(원래 미결정)를 같이 고쳤다(사용자 확인).
+
+## 8.3 파일명으로 커밋 검색 (REQ-016)
+
+**2단계 git 명령** (`src/main/git/commits.ts`):
+
+```
+1. git ls-tree -r <branch> --name-only        (listTrackedFiles 재사용, §6.3과 동일 함수)
+2. 파일명(경로 마지막 조각) 부분 일치로 클라이언트 측 필터링
+3. git log <branch> --since --until --pretty=format:... --skip --n -- <path1> <path2> ...
+```
+
+기존 메시지 검색(`--grep=<term> -i`)과는 완전히 다른 인자 구성이라 `listCommits()` 내부에서 `searchMode`로 분기한다 — `searchMode==='filename'`이면 `--grep`을 붙이는 대신 pathspec(`--`)을 맨 끝에 붙인다.
+
+**재현으로 확인한 git 함정 (§0.1)**: `git log ... --`처럼 `--` 뒤에 경로를 하나도 안 주면 pathspec이 "없음"으로 해석되어 **필터링되지 않은 전체 커밋**을 돌려준다 — 빈 배열을 "매치 없음"으로 의도했다면 정반대의 결과가 나오는 함정이다. 실제 저장소로 재현해 확인했고, 매치된 경로가 0건이면 git을 아예 호출하지 않고 `{ commits: [], hasMore: false }`를 바로 반환하는 방식으로 회피했다.
+
+pathspec 필터링과 `--skip`/`-n` 페이지네이션이 함께 정상 동작하는지도 재현 테스트로 확인했다(`--skip=1 -n 1 -- a b`가 필터링된 3건 중 2번째 항목만 정확히 반환).
+
+**모드 전환 UI**: BranchSearchBar에 "검색 대상 : (●메시지 ○파일명)" 라디오 토글 추가(RISK_ISSUES.md §7.5 TO-BE 와이어프레임 그대로). 모드를 바꾸면 같은 검색어로 즉시 재조회하며(`keepSelection=true`), 검색어 자체는 지우지 않는다.
+
+---
+
+# 9. 결정 사항 요약
 
 | 항목 | 결정 | 근거 | 재검토 필요도 |
 |---|---|---|---|
@@ -410,3 +453,8 @@ deployDir = join(exportParentDir ?? repoPath, 'git-deploy-extracted')
 | Base package 감지(DR-014) | `@SpringBootApplication` grep 사전필터 + 파싱 확정, 못 찾거나 모호하면 비활성화 | 하드코딩 금지 원칙(결정 이력 #3) 준수, "단순화 우선" | 해결됨 |
 | 심볼 참조 해석 모호성(DR-014) | import→같은 패키지→유일한 이름→같은 패키지 후보 순으로 시도, 그래도 모호하면 포기 | 완전한 classpath 기반 해석은 범위 밖(과설계 방지). 같은 단순 이름이 여러 패키지에 있는 극단적 케이스만 False Negative 가능성 있음(알려진 한계) | 낮음 |
 | SplitPane 기본 비율/최소폭(REQ-014) | MainGrid 80:20(320px/180px, 결정 이력 #22 계승), DeployFilesPanel 50:50(260px/260px, 이번에 신규 결정) | MainGrid는 기존 비대칭 근거 유지, DeployFilesPanel 좌우는 동일 성격 콘텐츠라 대칭 + 가로 스크롤 안전망 존재 | 낮음 |
+| 커밋 선택 유지 범위(REQ-015, DR-015) | Repository 전환·Branch 전환만 초기화, 그 외(Reload/검색/기간/개수)는 유지 | RISK_ISSUES.md §6.1 케이스 A/B를 사용자 확인 후 확정 — "다른 저장소/Branch 커밋이 섞이는 위험"만 예외로 남김 | 해결됨 |
+| Preview 레이스 컨디션(§6.1 케이스 C) | IPC 응답 시점에 요청 시점 선택과 비교, 다르면 결과 폐기 | REQ-015로 검색 반복 워크플로우가 늘면서 노출 가능성도 같이 커진다고 판단해 이번에 같이 수정(사용자 확인) | 해결됨 |
+| 커밋 목록 카운터 UI(§6.1 케이스 D) | 추가하지 않음 | "이번 요구사항 범위를 넘음"으로 이미 결론난 사안, §0.2에 따라 범위 유지 | 후속 제안으로만 남김 |
+| Preview 재계산 시 included 상태(§6.1 케이스 E) | 수정하지 않음(기존 동작 유지) | 이번 기능이 만든 문제가 아니고, 고치려면 범위가 커짐 — 알려진 한계로만 문서화 | 알려진 한계 |
+| 파일명 커밋 검색 pathspec(REQ-016) | `git log ... -- <path1> <path2> ...`, 매치 0건이면 git 호출 자체를 생략 | `--` 뒤 경로가 없으면 "필터 없음"으로 해석되어 전체 커밋이 반환되는 함정을 재현 테스트로 발견 | 해결됨 |

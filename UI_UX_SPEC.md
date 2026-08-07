@@ -76,17 +76,20 @@ AppShell
 
 ## 2.3 BranchSearchBar
 
-**책임**: REQ-002, REQ-003(Search + 조회 범위).
+**책임**: REQ-002, REQ-003(Search + 조회 범위), REQ-015(선택 유지), REQ-016(파일명 검색).
 
 | 요소 | 동작 |
 |---|---|
-| Branch dropdown | `branches: string[]` 표시. `branches` 로드 완료 시 `main` 우선, 없으면 `master`를 `selectedBranch`에 자동 설정(REQ-002). 사용자가 변경하면 `selectedBranch` 갱신 + CommitListPanel 리셋(첫 페이지부터 재조회) |
-| Search 입력 | 로컬 텍스트 상태. 입력 300ms 디바운스 후 자동 검색 트리거(`git log --grep`) |
+| Branch dropdown | `branches: string[]` 표시. `branches` 로드 완료 시 `main` 우선, 없으면 `master`를 `selectedBranch`에 자동 설정(REQ-002). 사용자가 변경하면 `selectedBranch` 갱신 + CommitListPanel 리셋(첫 페이지부터 재조회, **`selectedHashes`도 초기화** — DR-015 예외 (b)) |
+| "검색 대상 : (●메시지 ○파일명)" 라디오 토글 | `searchMode` 갱신(`'message'\|'filename'`, 기본 메시지). 즉시 같은 검색어로 재조회(REQ-016). `selectedHashes`는 유지된다 |
+| Search 입력 | 로컬 텍스트 상태. 입력 300ms 디바운스 후 자동 검색 트리거 — `searchMode`에 따라 `git log --grep`(메시지) 또는 파일명 부분 일치 pathspec(REQ-016) 경로로 분기 |
 | `[Search]` 버튼 | 디바운스를 기다리지 않고 즉시 검색 트리거 (보조 수단) |
 | "조회 기간 : [시작일] ~ [종료일]" 날짜 선택 | `startDate`/`endDate` 갱신. 변경 시 CommitListPanel 리셋 후 재조회(REQ-003, 기본값 오늘-7일 ~ 오늘) |
 | "최대 [N] 개" 입력 | `maxCount` 갱신. 변경 시 CommitListPanel 리셋 후 재조회(REQ-003, 기본값 100). 이 값이 무한 스크롤의 상한선 — 스크롤이 `maxCount`에 도달하면 더 이상 다음 페이지를 요청하지 않는다 |
 
-**상태**: `branches: string[]`, `selectedBranch: string | null`, `searchTerm: string`, `startDate: string`(기본 오늘-7일, `YYYY-MM-DD`), `endDate: string`(기본 오늘), `maxCount: number`(기본 100)
+**정정 (선택 유지, REQ-015, 2026-08-07)**: 검색 대상 토글/Search/조회 기간/최대 개수 — 이 네 가지로 인한 재조회는 전부 `selectedHashes`를 **유지**한다(Branch 변경만 예외로 초기화, 위 표 참고). 이전에는 "CommitListPanel 리셋"이 `commits`와 `selectedHashes` 둘 다를 항상 지우는 의미였지만, 이제는 `commits`만 항상 지우고 `selectedHashes`는 재조회 경로에 따라 다르다 — 자세한 규칙은 REQUIREDMENT.md DR-015, DETAILED_DESIGN.md §8.1 참고.
+
+**상태**: `branches: string[]`, `selectedBranch: string | null`, `searchTerm: string`, `searchMode: 'message'|'filename'`(기본 `'message'`), `startDate: string`(기본 오늘-7일, `YYYY-MM-DD`), `endDate: string`(기본 오늘), `maxCount: number`(기본 100)
 
 **정정 (2줄 레이아웃 고정, 2026-08-07, 사용자 요청)**: REQUIREDMENT.md §8 원본 와이어프레임은 "Branch/Search"를 1줄, "조회 기간/최대"를 2줄로 그렸지만, 구현은 단일 `flex-wrap` 컨테이너 하나에 네 그룹을 전부 넣어 창 폭에 따라 우연히만 2줄로 보였다(넓은 창에서는 네 그룹이 한 줄에 다 들어감). 항상 와이어프레임대로 2줄로 고정되도록 `branch-search-bar__row` 두 개(Branch+Search+버튼 / 조회기간+최대)로 분리했다 — 바깥 컨테이너는 세로 flex, 각 줄 내부에서만 flex-wrap이 적용된다(좁은 창에서 한 줄 내부 항목이 넘치는 경우의 안전망은 유지).
 
@@ -230,6 +233,7 @@ interface AppState {
   endDate: string;     // YYYY-MM-DD, 기본 오늘
   maxCount: number;    // 기본 100
   searchTerm: string;
+  searchMode: 'message' | 'filename';   // REQ-016, 기본 'message'
 
   commits: CommitEntry[];
   selectedHashes: Set<string>;
@@ -277,10 +281,12 @@ interface AppState {
 |---|---|---|---|
 | `[Browse...]` 클릭 | `repository.status = 'validating'` | `dialog.showOpenDialog` → `git rev-parse` | REQ-001 |
 | Branch 목록 로드 완료 | `selectedBranch`를 main/master 우선순위로 자동 설정 | 없음(로컬 판단) | REQ-002 |
-| Branch 변경 | `commits = []`, `selectedHashes = {}`, `commitPagination.loading = true` | `git log --since --max-count` 첫 페이지 | REQ-002 |
-| `startDate`/`endDate`/`maxCount` 변경 | `commits = []`, `selectedHashes = {}`, `commitPagination.loading = true` | `git log --since --until` 첫 페이지 | REQ-003 |
-| 커밋 목록 스크롤 하단 도달 | `commitPagination.loading = true`. 이미 `maxCount`만큼 로드했으면 요청하지 않음(`hasMore = false`) | `git log --skip` 다음 페이지 | REQ-003 |
-| Search 입력 (디바운스) | 없음 (요청 중 표시만) | `git log --grep` | REQ-003 |
+| Branch 변경 | `commits = []`, **`selectedHashes = {}`**(DR-015 예외), `commitPagination.loading = true` | `git log --since --max-count` 첫 페이지 | REQ-002, DR-015 |
+| Repository Reload | `commits = []`, `selectedHashes`는 **유지**, `commitPagination.loading = true` | `git log --since --max-count` 첫 페이지 | REQ-015, DR-015 |
+| `startDate`/`endDate`/`maxCount`/`searchMode` 변경, Search 트리거 | `commits = []`, `selectedHashes`는 **유지**, `commitPagination.loading = true` | `git log --since --until`(+`--grep` 또는 파일명 pathspec) 첫 페이지 | REQ-003, REQ-015, REQ-016 |
+| 커밋 목록 스크롤 하단 도달 | `commitPagination.loading = true`. 이미 `maxCount`만큼 로드했으면 요청하지 않음(`hasMore = false`) | `git log --skip` 다음 페이지(현재 `searchMode` 유지) | REQ-003 |
+| Search 입력 (디바운스) | 없음 (요청 중 표시만) | `searchMode`에 따라 `git log --grep` 또는 파일명 pathspec | REQ-003, REQ-016 |
+| 검색 대상 라디오 토글 | `searchMode` 갱신, 즉시 재조회(디바운스 없음) | `searchMode`에 따라 `git log --grep` 또는 파일명 pathspec | REQ-016 |
 | 커밋 체크박스 토글 | `selectedHashes` add/remove. IPC도, 어떤 계산도 트리거하지 않는다 — `isStale`이 즉시 파생 계산으로 true가 된다 | 없음 | REQ-004~008 |
 | Mapping Profile 변경 | `selectedProfile` 갱신. 마찬가지로 계산을 트리거하지 않는다 | 없음 | REQ-008 |
 | DeployFilesPanel(좌) 체크박스 토글 | 해당 항목 `included` 반전 | 없음 (로컬) | REQ-011 |
@@ -292,6 +298,8 @@ interface AppState {
 | `[변경]` 클릭 (FooterActionBar) | 취소 시 상태 변화 없음. 선택 시 `exportParentDir` 갱신 + `localStorage` 저장 | `dialog.showOpenDialog`(`package:browseExportDir`) | REQ-012 |
 | `[Export]` 클릭 | `exportStatus = 'exporting'` → `'done'`\|`'error'`\|(취소 시)`'idle'` | Package Builder(전체: 파일 복사 + 3종 Export). 대상 폴더에 기존 내용 있으면 먼저 `dialog.showMessageBox` 확인 | REQ-009, REQ-010, DR-013 |
 | SplitPane 경계 드래그(MainGrid/DeployFilesPanel) | 드래그 중 실시간 비율 반영, mouseup 시 `localStorage`에 최종 비율 저장 | 없음 (로컬) | REQ-014 |
+
+**정정 (커밋 선택 유지, REQ-015/016, 2026-08-07)**: 위 표에서 "`selectedHashes = {}`"로 표시된 두 트리거(Browse, Branch 변경)만 선택을 지운다 — 나머지 재조회 트리거는 전부 `selectedHashes`를 유지한다. 이전 버전 이 표는 모든 재조회 트리거가 "CommitListPanel 리셋"이라는 이름으로 뭉뚱그려져 있었고, 그 리셋이 `selectedHashes`까지 항상 지운다는 뜻이었다 — 검색 조건을 바꿔가며 관련 커밋을 여러 번 찾아 누적 체크하는 워크플로우가 실사용에서 나오면서, 이 전면 초기화가 워크플로우를 방해한다는 게 확인되어 DR-015로 예외 범위를 좁혔다.
 
 **정정 (자동 재계산 완전 제거, `[Preview]`가 유일한 트리거, 2026-08-04)**: 이전 초안(및 그 초안을 최적화하려던 캐싱 계획)은 커밋 체크박스나 Mapping Profile이 바뀔 때마다 디바운스 후 자동으로 재계산하는 것을 전제로 했다. 하지만 이 방식은 "선택은 바뀌었는데 화면·Export 대상은 옛 결과"인 구간(디바운스 대기 중)이 항상 존재해, 그 구간에 `[Export]`를 누르면 방금 바뀐 선택 일부가 반영 안 된 채로 조용히 나갈 수 있는 위험이 있었다(§2.8 "Export 직전 레이스 컨디션 방지" 참고). 자동 재계산 자체를 없애고 `[Preview]`를 유일한 계산 트리거로 확정하면서, 애초에 "자동 재계산을 최적화(캐싱)할지" 논의 자체가 무의미해졌다 — 자동 재계산이 없으니 최적화할 대상도 없다.
 

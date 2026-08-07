@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type {
   AnalysisWarning,
   CommitEntry,
+  CommitSearchMode,
   DependencyCandidate,
   DeployFileStatus,
   DeployPlanSummary
@@ -57,6 +58,7 @@ interface AppState {
   endDate: string
   maxCount: number
   searchTerm: string
+  searchMode: CommitSearchMode // RISK_ISSUES.md §7.3 — 메시지/파일명 토글, 기본 'message'
 
   commits: CommitEntry[]
   selectedHashes: Set<string>
@@ -102,6 +104,7 @@ interface AppState {
   reloadRepository: () => Promise<void>
   setBranch: (branch: string) => Promise<void>
   setSearchTerm: (term: string) => void
+  setSearchMode: (mode: CommitSearchMode) => Promise<void>
   triggerSearch: () => Promise<void>
   setDateRange: (startDate: string, endDate: string) => Promise<void>
   setMaxCount: (maxCount: number) => Promise<void>
@@ -120,6 +123,17 @@ interface AppState {
   runExport: () => Promise<void>
 }
 
+// 어떤 선택(a)이 현재 state의 선택과 정확히 같은지 비교하는 공용 함수.
+// selectIsAnalysisStale과 runAnalysis()의 레이스 컨디션 가드(§6.1 케이스 C)가
+// 이 함수를 공유한다 — 비교 기준이 둘로 갈라지면 나중에 한쪽만 고치는
+// 실수가 생기기 쉬우므로 하나로 합쳤다.
+function selectionMatches(a: AnalyzedSelection, state: AppState): boolean {
+  if (a.branch !== state.selectedBranch) return false
+  if (a.profileName !== state.selectedProfile) return false
+  if (a.hashes.length !== state.selectedHashes.size) return false
+  return a.hashes.every((h) => state.selectedHashes.has(h))
+}
+
 // 현재 선택(브랜치/커밋/프로필)이 마지막 분석 입력과 정확히 같은지 비교한다.
 // 값을 별도 boolean으로 저장하지 않고 매번 파생 계산한다 — 저장하면 어느
 // 변경 경로에서 갱신을 깜빡할 위험이 있지만, 비교식은 그럴 여지가 없다
@@ -128,10 +142,7 @@ export function selectIsAnalysisStale(state: AppState): boolean {
   if (state.selectedHashes.size === 0) return false
   const analyzed = state.analyzedSelection
   if (!analyzed) return true
-  if (analyzed.branch !== state.selectedBranch) return true
-  if (analyzed.profileName !== state.selectedProfile) return true
-  if (analyzed.hashes.length !== state.selectedHashes.size) return true
-  return !analyzed.hashes.every((h) => state.selectedHashes.has(h))
+  return !selectionMatches(analyzed, state)
 }
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -149,13 +160,20 @@ const emptyDependencyState = {
 }
 
 export const useAppStore = create<AppState>((set, get) => {
-  async function loadCommitsFirstPage(): Promise<void> {
-    const { repository, selectedBranch, startDate, endDate, maxCount, searchTerm } = get()
+  // RISK_ISSUES.md §6.1 — 재조회 시 selectedHashes를 지울지 유지할지는
+  // 호출자가 결정한다(케이스 A/B: Repository 전환·Branch 전환은 지움 —
+  // 다른 저장소/Branch의 hash가 남아있으면 최종 Export가 "현재 선택된
+  // Branch의 HEAD" 기준으로 엉뚱하게 해석될 위험이 있다. 그 외 — Reload,
+  // 검색어/모드, 조회 기간, 최대 개수 변경 — 는 전부 유지한다. 그래야
+  // "검색 조건을 바꿔가며 여러 번 찾아 누적 체크"하는 워크플로우가 성립한다).
+  async function loadCommitsFirstPage(keepSelection = false): Promise<void> {
+    const { repository, selectedBranch, startDate, endDate, maxCount, searchTerm, searchMode } =
+      get()
     if (repository.status !== 'valid' || !selectedBranch || !repository.path) return
 
     set({
       commits: [],
-      selectedHashes: new Set(),
+      ...(keepSelection ? {} : { selectedHashes: new Set<string>() }),
       commitPagination: { hasMore: false, loading: true },
       commitListError: null,
       summary: null,
@@ -176,7 +194,8 @@ export const useAppStore = create<AppState>((set, get) => {
         maxCount,
         skip: 0,
         pageSize: PAGE_SIZE,
-        searchTerm: searchTerm || undefined
+        searchTerm: searchTerm || undefined,
+        searchMode
       })
       set({
         commits: result.commits,
@@ -210,22 +229,39 @@ export const useAppStore = create<AppState>((set, get) => {
       return
     }
 
+    const hashes = [...selectedHashes]
+    const requestSelection: AnalyzedSelection = {
+      hashes,
+      branch: selectedBranch,
+      profileName: selectedProfile
+    }
+
     set({ analyzing: true, analysisError: null, ...emptyDependencyState })
     try {
-      const hashes = [...selectedHashes]
       const plan = await window.api.analysis.preview({
         repoPath: repository.path,
         branch: selectedBranch,
         commitHashes: hashes,
         profileName: selectedProfile
       })
+
+      // §6.1 케이스 C(레이스 컨디션 가드): 계산이 끝난 시점에 선택이 요청
+      // 시점과 다르면(계산 중 커밋 체크박스를 바꿨다면) 이 결과를 적용하지
+      // 않는다 — 적용하면 analyzedSelection이 "방금 바뀐 선택"이 아니라
+      // "요청 시점의 옛 선택"을 가리키게 되어 isStale 판정이 틀릴 수 있다.
+      // 사용자가 다시 [Preview]를 눌러야 최신 선택 기준으로 재계산된다.
+      if (!selectionMatches(requestSelection, get())) {
+        set({ analyzing: false })
+        return
+      }
+
       set({
         analyzing: false,
         summary: plan.summary,
         deployFiles: plan.files.map((f) => ({ ...f, included: true })),
         deleteList: plan.deletedServerPaths.map((path) => ({ path })),
         warnings: plan.warnings,
-        analyzedSelection: { hashes, branch: selectedBranch, profileName: selectedProfile }
+        analyzedSelection: requestSelection
       })
 
       // §7.2: Preview 완료 직후 자동으로 체이닝 호출한다(별도 트리거 버튼
@@ -239,6 +275,10 @@ export const useAppStore = create<AppState>((set, get) => {
           includedLocalPaths: plan.files.map((f) => f.localPath),
           profileName: selectedProfile
         })
+        if (!selectionMatches(requestSelection, get())) {
+          set({ dependencyAnalyzing: false })
+          return
+        }
         set({
           dependencyAnalyzing: false,
           dependencyApplicable: depResult.applicable,
@@ -247,6 +287,10 @@ export const useAppStore = create<AppState>((set, get) => {
           dependencyParseWarnings: depResult.parseWarnings
         })
       } catch (error) {
+        if (!selectionMatches(requestSelection, get())) {
+          set({ dependencyAnalyzing: false })
+          return
+        }
         set({
           dependencyAnalyzing: false,
           dependencyApplicable: false,
@@ -254,6 +298,10 @@ export const useAppStore = create<AppState>((set, get) => {
         })
       }
     } catch (error) {
+      if (!selectionMatches(requestSelection, get())) {
+        set({ analyzing: false })
+        return
+      }
       set({
         analyzing: false,
         analysisError: error instanceof Error ? error.message : String(error)
@@ -270,6 +318,7 @@ export const useAppStore = create<AppState>((set, get) => {
     endDate: defaultRange.endDate,
     maxCount: 100,
     searchTerm: '',
+    searchMode: 'message',
 
     commits: [],
     selectedHashes: new Set(),
@@ -330,6 +379,8 @@ export const useAppStore = create<AppState>((set, get) => {
       const branches = await window.api.git.listBranches(path)
       const selectedBranch = pickDefaultBranch(branches)
       set({ branches, selectedBranch })
+      // §6.1 케이스 A: 다른 저장소로 전환하면 이전 저장소의 커밋 hash로 git
+      // 명령을 시도하게 되므로 선택을 지운다(keepSelection 기본값 false).
       await loadCommitsFirstPage()
     },
 
@@ -352,20 +403,36 @@ export const useAppStore = create<AppState>((set, get) => {
           ? currentBranch
           : pickDefaultBranch(branches)
       set({ branches, selectedBranch })
-      await loadCommitsFirstPage()
+      // A/B 어느 쪽에도 해당하지 않는다 — 같은 저장소를 다시 읽는 것뿐이라
+      // (Branch가 그대로 존재하면 그대로 유지) 선택을 지울 이유가 없다.
+      await loadCommitsFirstPage(true)
     },
 
     setBranch: async (branch) => {
       set({ selectedBranch: branch })
+      // §6.1 케이스 B: 서로 다른 Branch의 커밋이 한 Export에 섞이는 걸
+      // 막기 위해 Branch 전환 시 선택을 지운다(keepSelection 기본값 false).
       await loadCommitsFirstPage()
     },
 
+    // §6.1: 검색어/기간/최대개수/검색모드 변경은 전부 선택을 유지한다
+    // (keepSelection=true) — "검색 조건을 바꿔가며 여러 번 찾아 누적
+    // 체크"하는 워크플로우가 이 기능의 핵심 목적이다.
     setSearchTerm: (term) => {
       set({ searchTerm: term })
       if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
       searchDebounceTimer = setTimeout(() => {
-        void loadCommitsFirstPage()
+        void loadCommitsFirstPage(true)
       }, SEARCH_DEBOUNCE_MS)
+    },
+
+    setSearchMode: async (mode) => {
+      set({ searchMode: mode })
+      if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer)
+        searchDebounceTimer = null
+      }
+      await loadCommitsFirstPage(true)
     },
 
     triggerSearch: async () => {
@@ -373,17 +440,17 @@ export const useAppStore = create<AppState>((set, get) => {
         clearTimeout(searchDebounceTimer)
         searchDebounceTimer = null
       }
-      await loadCommitsFirstPage()
+      await loadCommitsFirstPage(true)
     },
 
     setDateRange: async (startDate, endDate) => {
       set({ startDate, endDate })
-      await loadCommitsFirstPage()
+      await loadCommitsFirstPage(true)
     },
 
     setMaxCount: async (maxCount) => {
       set({ maxCount })
-      await loadCommitsFirstPage()
+      await loadCommitsFirstPage(true)
     },
 
     loadNextPage: async () => {
@@ -394,6 +461,7 @@ export const useAppStore = create<AppState>((set, get) => {
         endDate,
         maxCount,
         searchTerm,
+        searchMode,
         commits,
         commitPagination
       } = get()
@@ -410,7 +478,8 @@ export const useAppStore = create<AppState>((set, get) => {
           maxCount,
           skip: commits.length,
           pageSize: PAGE_SIZE,
-          searchTerm: searchTerm || undefined
+          searchTerm: searchTerm || undefined,
+          searchMode
         })
         set({
           commits: [...commits, ...result.commits],

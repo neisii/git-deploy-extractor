@@ -1,4 +1,5 @@
 import { useAppStore } from '../store/appStore'
+import type { CommitSearchMode } from '../../../shared/types'
 
 export function BranchSearchBar(): React.JSX.Element {
   const branches = useAppStore((s) => s.branches)
@@ -6,6 +7,8 @@ export function BranchSearchBar(): React.JSX.Element {
   const setBranch = useAppStore((s) => s.setBranch)
   const searchTerm = useAppStore((s) => s.searchTerm)
   const setSearchTerm = useAppStore((s) => s.setSearchTerm)
+  const searchMode = useAppStore((s) => s.searchMode)
+  const setSearchMode = useAppStore((s) => s.setSearchMode)
   const triggerSearch = useAppStore((s) => s.triggerSearch)
   const startDate = useAppStore((s) => s.startDate)
   const endDate = useAppStore((s) => s.endDate)
@@ -31,6 +34,28 @@ export function BranchSearchBar(): React.JSX.Element {
             ))}
           </select>
         </label>
+
+        <span className="branch-search-bar__search-mode">
+          검색 대상 :
+          <label>
+            <input
+              type="radio"
+              name="searchMode"
+              checked={searchMode === 'message'}
+              onChange={() => void setSearchMode('message' satisfies CommitSearchMode)}
+            />
+            메시지
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="searchMode"
+              checked={searchMode === 'filename'}
+              onChange={() => void setSearchMode('filename' satisfies CommitSearchMode)}
+            />
+            파일명
+          </label>
+        </span>
 
         <label>
           Search :

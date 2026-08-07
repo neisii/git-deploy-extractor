@@ -71,6 +71,14 @@ body,
   gap: 12px;
 }
 
+/* RISK_ISSUES.md §7.3 — "검색 대상 : (●메시지 ○파일명)" 라디오 토글을
+   한 그룹으로 묶어 보여준다. */
+.branch-search-bar__search-mode {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 /* 우측 하단 고정 이미지(.credit-link, 50px)와 겹치지 않도록 그만큼
    오른쪽 여백을 확보한다. */
 .footer-action-bar {

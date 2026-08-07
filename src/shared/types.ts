@@ -54,6 +54,10 @@ export interface RepositoryValidation {
   error?: string
 }
 
+// RISK_ISSUES.md §7.3 — 메시지 검색(`git log --grep`)과 파일명 검색(HEAD
+// 트리 파일명 부분 일치 → pathspec)은 완전히 다른 git 경로라 모드로 분리한다.
+export type CommitSearchMode = 'message' | 'filename'
+
 export interface ListCommitsParams {
   repoPath: string
   branch: string
@@ -63,6 +67,7 @@ export interface ListCommitsParams {
   skip: number
   pageSize: number
   searchTerm?: string
+  searchMode?: CommitSearchMode // 기본 'message'
 }
 
 export interface ListCommitsResult {

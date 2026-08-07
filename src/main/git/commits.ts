@@ -1,4 +1,5 @@
 import { runGit } from './exec'
+import { listTrackedFiles } from './lsTree'
 import type { CommitEntry } from './types'
 import type { ListCommitsParams, ListCommitsResult } from '../../shared/types'
 import { getDefaultDateRange } from '../../shared/dateRange'
@@ -20,8 +21,16 @@ function parseCommitRecords(stdout: string): CommitEntry[] {
     })
 }
 
+// RISK_ISSUES.md §7.3 — 파일 경로의 마지막 조각(파일명)에 대한 부분 일치.
+// §7.2의 좌우 검색 필드와 매칭 기준을 통일했다.
+function matchesFileName(path: string, term: string): boolean {
+  const fileName = path.slice(path.lastIndexOf('/') + 1)
+  return fileName.toLowerCase().includes(term.toLowerCase())
+}
+
 export async function listCommits(params: ListCommitsParams): Promise<ListCommitsResult> {
   const { repoPath, branch, startDate, endDate, maxCount, skip, pageSize, searchTerm } = params
+  const searchMode = params.searchMode ?? 'message'
 
   if (skip >= maxCount) {
     return { commits: [], hasMore: false }
@@ -37,10 +46,26 @@ export async function listCommits(params: ListCommitsParams): Promise<ListCommit
     '--date=iso-strict',
     `--pretty=format:%H${FIELD_SEP}%an${FIELD_SEP}%ad${FIELD_SEP}%s${RECORD_SEP}`
   ]
-  if (searchTerm) {
+
+  let pathspecArgs: string[] = []
+  if (searchTerm && searchMode === 'filename') {
+    // 2단계 구현(RISK_ISSUES.md §7.3): ① HEAD 트리 전체 파일 목록 조회
+    // ② 파일명이 매치하는 경로만 pathspec으로 좁혀 git log에 전달.
+    const allPaths = await listTrackedFiles(repoPath, branch)
+    const matched = allPaths.filter((path) => matchesFileName(path, searchTerm))
+    // `git log ... --`처럼 `--` 뒤에 경로를 하나도 안 주면 "필터 없음"으로
+    // 해석되어 오히려 전체 커밋을 돌려준다(재현 테스트로 확인,
+    // DETAILED_DESIGN.md §0.1) — 매치가 0건이면 git을 호출하지 않고
+    // 바로 빈 결과를 반환해 이 함정을 피한다.
+    if (matched.length === 0) {
+      return { commits: [], hasMore: false }
+    }
+    pathspecArgs = ['--', ...matched]
+  } else if (searchTerm) {
     args.push(`--grep=${searchTerm}`, '-i')
   }
-  args.push(`--skip=${skip}`, '-n', String(limit))
+
+  args.push(`--skip=${skip}`, '-n', String(limit), ...pathspecArgs)
 
   const result = await runGit(repoPath, args)
   if (result.exitCode !== 0) {
