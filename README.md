@@ -83,6 +83,8 @@ npm run build:mac
 
 macOS/Windows만 지원한다 (REQUIREDMENT.md §10).
 
+**정정 (Intel Mac 미지원, 2026-08-09)**: macOS 빌드는 Apple Silicon(arm64) 전용이다. Intel Mac(x64)은 지원하지 않는다 — universal 바이너리는 두 아키텍처를 한 파일에 담아 용량이 거의 2배가 되므로, 패키징 용량 절감 목적과 반대 방향이라 채택하지 않았다(`electron-builder.yml` `mac.target.arch: [arm64]`로 명시). 같은 작업에서 Chromium 기본 번들 로케일(220개 언어)도 `ko`/`en`만 남기도록 잘라냈다(`build/afterPack.js`) — mac 앱 번들 기준 261MB → 218MB(-16%). RISK_ISSUES.md 결정 이력 참고.
+
 ## Contributing
 
 이슈/버그 제보는 [GitHub Issues](https://github.com/neisii/git-deploy-extractor/issues)로

@@ -11,6 +11,12 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+# 로케일 리소스를 ko/en만 남기고 지운다(패키징 용량 절감, 2026-08-09 결정 —
+# RISK_ISSUES.md 결정 이력 참고). 앱 코드가 아니라 electron-builder가 내려받는
+# Electron 배포판 자체를 후처리하는 것이라 asar 밖에서 동작해야 하며, mac은
+# .app 번들이 만들어진 뒤, win은 nsis로 묶기 전 unpack된 디렉터리 단계에서
+# 지워야 해서 afterPack 훅을 쓴다(files 제외 패턴으로는 손댈 수 없는 대상).
+afterPack: build/afterPack.js
 win:
   executableName: git-deploy-extractor
 nsis:
@@ -24,6 +30,15 @@ mac:
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
+  # Intel Mac 미지원 결정(2026-08-09) — universal(x64+arm64) 빌드는 하나의
+  # 바이너리에 두 아키텍처를 모두 담아 mac 용량이 그대로 거의 2배가 되므로,
+  # 용량 절감 목적과 반대 방향이라 채택하지 않는다. CI 러너(macos-latest)가
+  # 이미 arm64라 이 설정이 없어도 지금 당장은 arm64만 나오지만, 명시적으로
+  # 고정해 향후 Intel Mac에서 로컬 빌드해도 실수로 x64가 섞여 나오지 않게 한다.
+  target:
+    - target: dmg
+      arch:
+        - arm64
 dmg:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false

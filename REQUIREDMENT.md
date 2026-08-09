@@ -622,7 +622,7 @@ git-deploy-extracted/
 
 # 10. 비기능 요구사항
 
-- macOS 지원
+- macOS 지원(**정정, 2026-08-09**: Apple Silicon/arm64 전용, Intel Mac(x64) 미지원 — 패키징 용량 절감을 위해 universal 바이너리를 채택하지 않기로 결정. RISK_ISSUES.md 결정 이력 참고)
 - Windows 지원
 - Local Git Repository 기반 동작
 - Git CLI 사용
