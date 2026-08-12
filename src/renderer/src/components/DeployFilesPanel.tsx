@@ -86,7 +86,10 @@ export function DeployFilesPanel(): React.JSX.Element {
         label: '전체 선택',
         checked: allChecked,
         indeterminate: someChecked && !allChecked,
-        onClick: toggleAll
+        // 정정(#33): 화면에 실제로 표시 중인 목록(상태 Filter+검색어 반영됨)의
+        // 경로만 넘긴다 — 이전엔 store가 Filter만 다시 계산하고 검색어를
+        // 무시했다.
+        onClick: () => toggleAll(includedItems.map((item) => item.localPath))
       }}
       extraHeaderControl={
         <label>
@@ -134,7 +137,9 @@ export function DeployFilesPanel(): React.JSX.Element {
       bulkAction={{
         kind: 'button',
         label: '전체 추가',
-        onClick: addAllMissingDependencies,
+        // 정정(#33): 화면에 실제로 표시 중인 목록(검색어 반영됨)의 경로만
+        // 넘긴다 — 이전엔 검색어를 완전히 무시하고 항상 전체를 대상으로 했다.
+        onClick: () => addAllMissingDependencies(missingItems.map((item) => item.localPath)),
         disabled: missingDependencies.length === 0 || allMissingAdded
       }}
       columnWidthKey="missingPath"

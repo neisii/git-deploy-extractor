@@ -1,24 +1,37 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
-import { validateRepository, listBranches } from '../git/repository'
+import { validateRepository, listBranches, getRemoteProjectName } from '../git/repository'
 import { listCommits } from '../git/commits'
 import { listProfileNames, loadProfile } from '../mapping/profileStore'
 import { computeDeployPlan } from '../analysis/computeDeployPlan'
 import { analyzeDependencies } from '../analysis/dependencyAnalysis'
 import { buildPackage, getDeployDir, deployDirHasContent } from '../package/buildPackage'
+import { checkForUpdate } from '../update/checkForUpdate'
 import type {
   BuildPackageParams,
   BuildPackageResult,
+  CheckUpdateResult,
   DependencyAnalysisRequest,
   ListCommitsParams,
   PreviewRequest
 } from '../../shared/types'
+
+// REQ-017: 클릭 시 항상 이 고정 인덱스 URL만 연다 — 특정 릴리스 태그로
+// 딥링크하지 않는다(DETAILED_DESIGN.md §10.5).
+const RELEASES_URL = 'https://github.com/neisii/git-deploy-extractor/releases'
 
 export function getProfilesDir(): string {
   return join(app.getPath('userData'), 'profiles')
 }
 
 export function registerIpcHandlers(): void {
+  // REQ-017: 버전 배지에 항상 표시할 현재 앱 버전. update:check는 캐시가
+  // 신선하면 아예 호출되지 않으므로, 배지 텍스트 자체는 이 별도 채널로
+  // 가져온다.
+  ipcMain.handle('app:getVersion', () => {
+    return app.getVersion()
+  })
+
   ipcMain.handle('repository:browse', async () => {
     const window = BrowserWindow.getFocusedWindow()
     const result = window
@@ -34,6 +47,13 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('git:listBranches', (_event, repoPath: string) => {
     return listBranches(repoPath)
+  })
+
+  // RepositoryPanel 라벨 표시용 — remote가 없거나 파싱 실패하면
+  // null(getRemoteProjectName 자체가 절대 throw하지 않는다). Renderer가
+  // null이면 폴더명으로 폴백한다.
+  ipcMain.handle('git:getRemoteProjectName', (_event, repoPath: string) => {
+    return getRemoteProjectName(repoPath)
   })
 
   ipcMain.handle('git:listCommits', (_event, params: ListCommitsParams) => {
@@ -91,4 +111,29 @@ export function registerIpcHandlers(): void {
       return buildPackage(params)
     }
   )
+
+  ipcMain.handle('update:check', async (): Promise<CheckUpdateResult> => {
+    return checkForUpdate()
+  })
+
+  // REQ-017: 클릭 시 뜨는 확인창. update:check(강제 재확인)와는 독립된
+  // 흐름이라 그 응답을 기다리지 않는다(DETAILED_DESIGN.md §10.3) — Renderer가
+  // 두 IPC를 동시에 호출한다.
+  ipcMain.handle('update:confirmAndOpen', async (): Promise<boolean> => {
+    const window = BrowserWindow.getFocusedWindow()
+    const options = {
+      type: 'question' as const,
+      buttons: ['아니오', '네'],
+      defaultId: 1,
+      cancelId: 0,
+      message: 'GitHub 저장소를 여시겠습니까?',
+      detail: RELEASES_URL
+    }
+    const confirm = window
+      ? await dialog.showMessageBox(window, options)
+      : await dialog.showMessageBox(options)
+    if (confirm.response !== 1) return false
+    await shell.openExternal(RELEASES_URL)
+    return true
+  })
 }

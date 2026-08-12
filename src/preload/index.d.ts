@@ -2,6 +2,7 @@ import { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   BuildPackageParams,
   BuildPackageResult,
+  CheckUpdateResult,
   DependencyAnalysisRequest,
   DependencyAnalysisResult,
   DeployPlan,
@@ -12,6 +13,9 @@ import type {
 } from '../shared/types'
 
 export interface Api {
+  app: {
+    getVersion: () => Promise<string>
+  }
   repository: {
     browse: () => Promise<string | null>
     validate: (repoPath: string) => Promise<RepositoryValidation>
@@ -19,6 +23,7 @@ export interface Api {
   git: {
     listBranches: (repoPath: string) => Promise<string[]>
     listCommits: (params: ListCommitsParams) => Promise<ListCommitsResult>
+    getRemoteProjectName: (repoPath: string) => Promise<string | null>
   }
   mapping: {
     listProfiles: () => Promise<string[]>
@@ -30,6 +35,10 @@ export interface Api {
   package: {
     browseExportDir: () => Promise<string | null>
     export: (params: BuildPackageParams) => Promise<BuildPackageResult | null>
+  }
+  update: {
+    check: () => Promise<CheckUpdateResult>
+    confirmAndOpen: () => Promise<boolean>
   }
 }
 

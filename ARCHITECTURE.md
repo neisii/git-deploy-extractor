@@ -115,6 +115,7 @@ Git 프로세스 실행, 파일시스템 쓰기(Deploy Package 생성)는 전부
 | HEAD 파일 조회 | `git show <branch>:<path>` | REQ-007, DR-003 |
 | 경로 접두사 하위 파일 목록 | `git ls-tree -r <branch> --name-only -- <prefix>`(접두사 생략 시 전체 트리 — REQ-016은 접두사 없이 호출) | REQ-013, REQ-016 |
 | 텍스트 사전 필터 검색 | `git grep -l -F <문자열> <branch> -- <pathspec>` | REQ-013 |
+| RepositoryPanel 라벨용 프로젝트 이름 유도 | `git remote get-url origin`(없거나 실패하면 `null`, 절대 throw 안 함) | REQ-018, DR-017 |
 
 이 계층은 Git CLI의 원시 출력만 파싱해서 상위 계층에 넘긴다. Merge/Rebase 전략 해석(DR-005)은 이 계층이 아니라 Commit 분석 엔진의 책임이다 — `git diff-tree`로 각 commit의 변경 파일만 뽑으면 Merge 전략과 무관하게 동일한 인터페이스로 처리 가능하기 때문이다.
 
@@ -182,8 +183,19 @@ REQUIREDMENT.md 섹션 8 와이어프레임(및 RISK_ISSUES.md §7.5 TO-BE 와�
 - Delete List
 - Export 경로 선택 + Export 액션 (2버튼 — UI_UX_SPEC.md §0-3. Mapping Profile 선택 UI는 REQ-012로 숨김)
 - 분할 영역 드래그 리사이즈 (REQ-014)
+- 버전 배지 — 새 GitHub Release 알림 + 클릭 시 릴리스 페이지 오픈 (REQ-017)
 
 세부 컴포넌트 분해와 상태(State) 정의는 DOCUMENT_CHECKLIST.md 4번(UI/UX 명세)에서 진행한다.
+
+## 4.7 업데이트 확인 모듈 (REQ-017, DR-016, 2026-08-12 추가)
+
+**책임**: GitHub Releases API로 최신 릴리스 태그를 확인해 Renderer에 전달. 다른 모듈과 달리 로컬 git 저장소나 파일시스템을 전혀 건드리지 않는 유일한 모듈이다 — 순수 외부 네트워크 호출(`https.get` 또는 `fetch`, `GET https://api.github.com/repos/neisii/git-deploy-extractor/releases/latest`, 타임아웃 5초) + 버전 문자열 비교뿐이다.
+
+Main process는 상태를 갖지 않는다(stateless) — 캐시(마지막 확인 시각/결과)는 Renderer의 `localStorage`에 있다(다른 화면 설정과 동일한 위치, ARCHITECTURE.md §2.2). Main은 호출될 때마다 매번 실제로 GitHub API를 때리고, 24시간 캐시 게이트는 Renderer가 IPC를 호출하기 전에 스스로 판단한다.
+
+실패(오프라인, 타임아웃, GitHub API 오류, 응답에서 기대한 필드를 못 찾거나 버전 형식이 `vX.Y.Z`가 아닌 경우 포함)는 예외를 던지지 않고 `{ ok: false }` 형태로 Renderer에 그대로 전달한다 — REQ-010(인터넷 연결 없이 동작 가능)과 공존해야 하므로, 이 모듈의 실패가 앱의 다른 어떤 기능에도 영향을 줘서는 안 된다. 5초 타임아웃이 있어 이 IPC 호출은 항상 유한 시간 내 응답한다.
+
+출력: `{ ok: true; hasUpdate: boolean; latestVersion: string } | { ok: false }` — 특정 릴리스 태그로의 딥링크(`html_url`)는 담지 않는다(클릭 시 항상 고정된 릴리스 인덱스 URL만 열도록 확정되어 필요 없음). `hasUpdate` 판정(원격이 로컬보다 엄격히 큰지)까지 이 모듈이 끝내서 반환한다 — `app.getVersion()`이 이미 Main에 있어 Renderer에 따로 노출할 이유가 없기 때문(구현 시점 단순화, DETAILED_DESIGN.md §10.1 참고). 배지에 항상 표시할 현재 버전 텍스트는 이 IPC와 별도로 `app:getVersion`을 통해 가져온다(캐시가 신선하면 `checkForUpdate` 자체가 호출 안 될 수 있어서). 자세한 흐름/캐시 규칙/"엄격히 크다" 비교 기준은 DETAILED_DESIGN.md §10 참고.
 
 ---
 

@@ -3,6 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type {
   BuildPackageParams,
   BuildPackageResult,
+  CheckUpdateResult,
   DependencyAnalysisRequest,
   DependencyAnalysisResult,
   DeployPlan,
@@ -14,6 +15,9 @@ import type {
 
 // Custom APIs for renderer
 const api = {
+  app: {
+    getVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion')
+  },
   repository: {
     browse: (): Promise<string | null> => ipcRenderer.invoke('repository:browse'),
     validate: (repoPath: string): Promise<RepositoryValidation> =>
@@ -23,7 +27,9 @@ const api = {
     listBranches: (repoPath: string): Promise<string[]> =>
       ipcRenderer.invoke('git:listBranches', repoPath),
     listCommits: (params: ListCommitsParams): Promise<ListCommitsResult> =>
-      ipcRenderer.invoke('git:listCommits', params)
+      ipcRenderer.invoke('git:listCommits', params),
+    getRemoteProjectName: (repoPath: string): Promise<string | null> =>
+      ipcRenderer.invoke('git:getRemoteProjectName', repoPath)
   },
   mapping: {
     listProfiles: (): Promise<string[]> => ipcRenderer.invoke('mapping:listProfiles')
@@ -38,6 +44,10 @@ const api = {
     browseExportDir: (): Promise<string | null> => ipcRenderer.invoke('package:browseExportDir'),
     export: (params: BuildPackageParams): Promise<BuildPackageResult | null> =>
       ipcRenderer.invoke('package:export', params)
+  },
+  update: {
+    check: (): Promise<CheckUpdateResult> => ipcRenderer.invoke('update:check'),
+    confirmAndOpen: (): Promise<boolean> => ipcRenderer.invoke('update:confirmAndOpen')
   }
 }
 

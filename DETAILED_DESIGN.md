@@ -320,6 +320,8 @@ deployDir = join(exportParentDir ?? repoPath, 'git-deploy-extracted')
 
 **소스 루트 계산**: 기준 패키지 문자열을 하드코딩된 `src/main/java/`에 그냥 이어붙이지 않고, `@SpringBootApplication` 클래스 파일의 실제 경로에서 "패키지 세그먼트 수 + 1(파일명)"만큼 뒤에서부터 잘라내 역산한다. 이 프로젝트가 이미 Spring 표준 구조를 전제하므로(DR-011/012) 실제로는 항상 `src/main/java`로 계산되지만, 문자열을 직접 박아넣지 않고 실제 파일 경로로부터 유도하는 쪽이 더 방어적이라고 판단했다.
 
+**주의(fixture/테스트 작성 시 실수하기 쉬운 지점, RISK_ISSUES.md 결정 이력 #39로 재확인)**: 기준 패키지는 `@SpringBootApplication` 클래스가 선언된 **정확히 그 패키지**다 — 실제 Spring Boot의 기본 컴포넌트 스캔과 동일하게, 그 패키지의 **하위 패키지만** 스캔 대상이고 형제·조상 패키지는 대상 밖이다. 예를 들어 `Application.java`가 `com.example.sell.app`에 있고 나머지 코드가 `com.example.sell.interfaces.*`(형제 패키지)에 있으면, `interfaces.*` 전체가 인덱스 밖이라 참조 해석이 조용히 실패하고(§6.4 "그래도 모호하면 포기"가 아니라 애초에 후보 자체가 없음) 아무것도 missing으로 안 잡힌다 — 버그가 아니라 실제 Spring 프로젝트에서도 이 구조면 컴포넌트 스캔 자체가 안 되는 것과 같은 이치다. Fixture를 만들 때는 `Application.java`를 최상위 패키지에, 나머지 코드를 그 하위에 둬야 한다.
+
 ## 6.3 프로젝트 인덱스 (경로 ↔ FQN)
 
 기준 패키지 경로 아래 `.java` 파일 목록은 `git ls-tree -r <branch> --name-only -- <prefix>`로 한 번에 가져온다(재현 테스트로 디렉터리 접두사 pathspec이 하위 전체를 재귀적으로 매칭함을 확인, §0.1). 각 파일의 FQN은 **내용을 읽지 않고 경로에서 바로 유도**한다(`sourceRoot` 기준 상대경로의 `/`를 `.`으로 치환) — Spring 표준 구조(파일 경로가 패키지·클래스명과 일치)를 전제하는 건 이 프로젝트 전체가 이미 하는 가정과 같다. 이 덕분에 기준 패키지 아래 파일 전부를 미리 파싱할 필요가 없다.
@@ -455,6 +457,137 @@ pathspec 필터링과 `--skip`/`-n` 페이지네이션이 함께 정상 동작�
 | SplitPane 기본 비율/최소폭(REQ-014) | MainGrid 80:20(320px/180px, 결정 이력 #22 계승), DeployFilesPanel 50:50(260px/260px, 이번에 신규 결정) | MainGrid는 기존 비대칭 근거 유지, DeployFilesPanel 좌우는 동일 성격 콘텐츠라 대칭 + 가로 스크롤 안전망 존재 | 낮음 |
 | 커밋 선택 유지 범위(REQ-015, DR-015) | Repository 전환·Branch 전환만 초기화, 그 외(Reload/검색/기간/개수)는 유지 | RISK_ISSUES.md §6.1 케이스 A/B를 사용자 확인 후 확정 — "다른 저장소/Branch 커밋이 섞이는 위험"만 예외로 남김 | 해결됨 |
 | Preview 레이스 컨디션(§6.1 케이스 C) | IPC 응답 시점에 요청 시점 선택과 비교, 다르면 결과 폐기 | REQ-015로 검색 반복 워크플로우가 늘면서 노출 가능성도 같이 커진다고 판단해 이번에 같이 수정(사용자 확인) | 해결됨 |
-| 커밋 목록 카운터 UI(§6.1 케이스 D) | 추가하지 않음 | "이번 요구사항 범위를 넘음"으로 이미 결론난 사안, §0.2에 따라 범위 유지 | 후속 제안으로만 남김 |
+| 커밋 목록 카운터 UI(§6.1 케이스 D) | **정정(2026-08-07)**: 추가함 — "N개 선택됨" 카운터를 CommitListPanel 헤더에 항상 표시 | 최초엔 "범위를 넘음"으로 판단했으나 AskUserQuestion 없이 임의 판단한 것이었고, 사용자가 직접 뒤집음(RISK_ISSUES.md 결정 이력 #31) | 해결됨 |
 | Preview 재계산 시 included 상태(§6.1 케이스 E) | 수정하지 않음(기존 동작 유지) | 이번 기능이 만든 문제가 아니고, 고치려면 범위가 커짐 — 알려진 한계로만 문서화 | 알려진 한계 |
 | 파일명 커밋 검색 pathspec(REQ-016) | `git log ... -- <path1> <path2> ...`, 매치 0건이면 git 호출 자체를 생략 | `--` 뒤 경로가 없으면 "필터 없음"으로 해석되어 전체 커밋이 반환되는 함정을 재현 테스트로 발견 | 해결됨 |
+| DeployFilesPanel 필터-무시 버그 | `toggleAllDeployFiles()`/`addAllMissingDependencies()`가 화면에 보이는 필터링된 목록이 아니라 자체적으로 다시 계산한(그마저도 검색어는 반영 안 하는) 대상을 토글 — 검색어로 좁혀놓고 전체선택/전체추가를 누르면 화면에 안 보이는 파일까지 건드림. 근본 수정: 필터 로직을 store에서 다시 계산하지 않고, `DeployFilesPanel.tsx`가 이미 계산한 화면 표시 목록(`includedItems`/`missingItems`)의 경로를 액션 함수 파라미터로 그대로 넘겨 단일 진실 공급원으로 통일 | 필터 로직이 컴포넌트(화면 표시용)와 store(토글 대상 계산용) 두 곳에 중복 구현되어 서로 어긋난 것이 원인 — 코드 리딩으로 발견(RISK_ISSUES.md 결정 이력) | 해결됨 |
+| 업데이트 확인 UI 배지(REQ-017, DR-016) | §10 참고 | GitHub Release 알림 신규 설계 | 해결됨 |
+| 저장소/브랜치 요약 라벨(REQ-018, DR-017) | §11 참고 | 로컬 폴더명 대신 git remote 기반 "진짜" 이름 표시, 별도 행(TitleBar) 대신 RepositoryPanel 경로 왼쪽으로 합침, 앱 이름 접두어 제거 | 해결됨 |
+
+---
+
+# 10. GitHub Release 업데이트 확인 설계 (REQ-017, DR-016)
+
+## 10.1 체크 흐름
+
+```
+Renderer 시작(스토어 생성 시점 — 컴포넌트 마운트 후가 아니라 초기 상태값 자체를 localStorage에서 동기적으로 읽어 채운다.
+              splitRatio/columnWidths와 동일한 lazy initializer 패턴 — "깜빡임" 방지, §10.6)
+  → localStorage(gde:lastUpdateCheck) 확인
+  → 24시간 이내면: 캐시된 { hasUpdate, latestVersion, checkedAt }를 updateInfo 초기값으로 그대로 사용, 네트워크 호출 없음
+  → 24시간 초과/없으면: 캐시된 값(있다면)을 updateInfo 초기값으로 우선 사용하면서, window.api.checkForUpdate() IPC 호출(Main)
+
+Main: checkForUpdate()
+  → app.getVersion()을 /^v?\d+\.\d+\.\d+$/로 검증(로컬 버전이 형식에 안 맞으면 즉시 { ok: false })
+  → GET https://api.github.com/repos/neisii/git-deploy-extractor/releases/latest (타임아웃 5s)
+  → 성공 + 응답이 { tag_name: string, ... } 형태로 파싱 가능 + tag_name이 같은 정규식 형식:
+    hasUpdate(원격이 로컬보다 엄격히 큰지, §10.2)까지 Main에서 판정해 { ok: true, hasUpdate, latestVersion } 응답
+    (**구현 시점 정정** — 애초엔 Renderer가 app.getVersion()과 비교하는 설계였으나, app.getVersion()이
+    이미 Main에 있어 Renderer에 따로 노출할 이유가 없다는 판단으로 비교까지 Main에서 끝내는 쪽으로 단순화.
+    §10.5에서 이미 "구현 시점에 더 단순한 쪽으로 정한다"고 열어둔 부분. RISK_ISSUES.md 결정 이력 참고)
+  → 실패(네트워크/타임아웃/HTTP 에러/필드 없음/형식 불일치): { ok: false } 응답 — 예외를 던지지 않는다(§0.2, 실패는 정상 경로).
+    5초 타임아웃이 있으므로 이 IPC 프라미스는 항상 유한 시간 내 resolve된다 — Renderer 쪽에 별도 타임아웃이 필요 없다.
+
+Renderer: 응답 반영
+  → 성공 시: updateInfo 갱신, localStorage 갱신(checkedAt=now)
+  → 실패 시: updateInfo 변경 없음(직전 값 유지), localStorage 갱신 안 함(다음 트리거 때 재시도)
+```
+
+## 10.2 버전 비교
+
+`tag_name`(`vX.Y.Z`)과 `app.getVersion()` 둘 다 `/^v?(\d+)\.(\d+)\.(\d+)$/`로 검증 후 `[major, minor, patch]` 정수 배열로 비교한다. 이 프로젝트는 항상 단순 `X.Y.Z` 형식만 태깅하므로(pre-release 접미사·빌드 메타데이터 없음) 범용 semver 파서는 과설계(§0.2) — 3개 정수 배열 비교로 충분하다. 단, 형식이 어긋나면(수동 태그 실수, GitHub API 응답 변경 등) 조용히 실패 처리하고 **크래시하지 않는다**.
+
+**`hasUpdate`는 "다르다"가 아니라 "원격이 로컬보다 엄격히 크다"이다.** 로컬 버전이 GitHub 최신 릴리스보다 같거나 큰 경우(예: `package.json` 버전은 올렸지만 아직 태그/릴리스를 만들기 전 — 이번 프로젝트에서 실제로 여러 번 있었던 순서) 업데이트 없음으로 취급한다. `!==` 비교로 잘못 구현하면 이런 상황에서 "새 버전이 있다"는 오탐 배지가 뜬다.
+
+## 10.3 트리거와 클릭 상호작용
+
+| 트리거 | 캐시 확인 | 확인창 |
+|---|---|---|
+| 앱 시작 | 24시간 캐시 확인, 만료 시에만 호출 | 없음(백그라운드) |
+| 버전 배지 클릭 | 캐시 무시, 항상 강제 호출 — **단, 이미 `updateChecking===true`(진행 중인 확인이 있음)면 새 네트워크 호출은 생략하고 기존 진행 중인 호출을 그대로 기다린다** | `dialog.showMessageBox`("GitHub 저장소를 여시겠습니까?", 버튼 `[아니오, 네]`) — **재확인 완료를 기다리지 않고 클릭 즉시** 표시. 단, **확인창이 이미 열려 있으면(연속 클릭) 다시 띄우지 않는다** — Electron 모달 스택 동작이 검증되지 않았고(§0.1), 연속 클릭 자체가 실수일 가능성이 높다 |
+
+클릭 시 확인창과 강제 재확인은 서로 독립적인 두 흐름이다 — 확인창 문구가 버전 정보를 담지 않으므로 재확인 결과를 기다릴 이유가 없다("긴급 패치를 바로 인지해야 한다"는 사용자 요구, 2026-08-12). "네" 응답 시 `shell.openExternal('https://github.com/neisii/git-deploy-extractor/releases')`(항상 이 고정 인덱스 URL — 특정 릴리스 태그로 딥링크하지 않는다), "아니오"는 아무 동작 없음.
+
+재확인이 진행되는 동안(트리거 무관) 버전 배지 옆에 로딩 스피너를 표시하고, 기존 배지 색/툴팁은 그대로 유지한다 — 완료되면 스피너가 사라지고 결과가 반영된다.
+
+## 10.4 UI 상태 (RepositoryPanel 우측)
+
+| 상태 | 배경 | title 툴팁 |
+|---|---|---|
+| 최신 버전 확인됨(로컬 ≥ 원격 포함) | 없음(투명) | "최신 버전입니다" |
+| 새 버전 있음(원격 > 로컬) | 강조색(제안: `#d4ff00` 배경 / `#1a1a1a` 텍스트 — 구현 후 육안 조정 가능) | "새 버전으로 업데이트 하세요 (vX.Y.Z)" |
+| 확인 실패, 직전 캐시 없음 | 없음(투명) | "업데이트 확인 실패 — 인터넷 연결을 확인하세요" |
+| 확인 실패, 직전 캐시 있음 | 직전 상태 그대로 유지 | "업데이트 확인 실패 — 인터넷 연결을 확인하세요"(배경은 안 바뀜) |
+| 재확인 진행 중(위 4가지 중 하나에 중첩) | 직전 상태 유지 | 직전 상태 유지 + 스피너 아이콘 추가 |
+
+## 10.5 IPC/데이터 흐름 참고
+
+`dialog.showMessageBox`/`shell.openExternal` 둘 다 Main process 호출이라, 클릭 핸들러는 Main에 확인창 요청과 강제 재확인 요청을 각각 보낼 수도 있고, 하나의 IPC 핸들러가 두 동작을 순차로 처리(확인창 → 그 다음 강제 재확인)할 수도 있다 — 어느 쪽이든 **확인창이 재확인 완료를 기다리면 안 된다**는 제약만 지키면 되므로, 실제 구현 시점에 더 단순한 쪽으로 정한다(§0.2, 과설계 방지).
+
+`checkForUpdate` 응답에는 `html_url`(특정 릴리스 태그로의 딥링크)을 담지 않는다 — 클릭 시 항상 고정된 `.../releases` 인덱스 URL만 여는 걸로 확정했으므로(§10.3, 사용자가 원 지시에서 이 URL을 명시), 특정 태그 딥링크를 상태로 들고 있을 이유가 없다(§0.2, 안 쓰는 데이터를 만들지 않는다). 응답은 `{ ok: true; hasUpdate: boolean; latestVersion: string } | { ok: false }`로 충분하다.
+
+**구현 시점 추가 — `app:getVersion` IPC**: 버전 배지는 캐시가 신선한 동안(하루 이내 재실행 등) `checkForUpdate`가 아예 호출되지 않는 경우에도 항상 `vX.Y.Z` 텍스트를 표시해야 한다. 이 표시용 현재 버전은 `checkForUpdate`의 응답에서 얻을 수 없으므로(그 IPC 자체가 호출 안 될 수 있어서), 별도의 작은 IPC(`app:getVersion` → `app.getVersion()`)를 추가했다 — 최초 설계에는 없던 채널이지만 §0.2 범위를 벗어나는 기능 추가는 아니고, "배지가 항상 버전을 보여준다"는 이미 확정된 요구(REQ-017)를 만족시키기 위한 구현 디테일이다.
+
+## 10.6 알려진 제약 — 비인증 GitHub API 요청 제한 공유
+
+비인증 GitHub API 호출은 IP당 시간당 60회로 제한된다. 여러 사용자가 같은 사내망 공인 IP(NAT/프록시)를 공유하는 환경에서, 출근 직후처럼 짧은 시간에 여러 명이 동시에 앱을 켜면 이 한계에 걸려 일부 사용자의 확인 요청이 조용히 실패할 수 있다. 실패는 이미 "조용히 무시, 직전 상태 유지"로 설계돼 있어 안전하게 저하되지만(에러가 노출되거나 다른 기능이 멈추지 않음), **그 사용자에게는 새 버전이 나와도 배지가 계속 평시 상태로 보일 수 있다는 뜻**이다. 인증 토큰을 앱에 내장하면 이 한계를 없앨 수 있지만, 이 정도 편의 기능에 토큰 배포·회전 인프라를 두는 건 과설계로 판단해 채택하지 않는다 — 알려진 한계로만 문서화한다.
+
+---
+
+# 11. 저장소/브랜치 요약 라벨 표시 설계 (REQ-018, DR-017)
+
+**정정(2026-08-12, RISK_ISSUES.md 결정 이력 #38)**: 이 섹션은 원래 별도 컴포넌트(`TitleBar.tsx`, 앱 최상단 별도 행) 설계로 작성됐으나, 최종적으로 `RepositoryPanel.tsx`에 흡수되어 경로 텍스트 왼쪽에 같은 행으로 합쳐졌다 — `TitleBar.tsx`는 삭제됐다. §11.1~11.3(배경/파싱/조회 시점)은 그대로 유효하고, §11.4~11.5는 최종 위치 기준으로 갱신했다.
+
+## 11.1 배경
+
+TitleBar는 원래 `Git Deploy Extractor — {로컬 폴더명} / {브랜치}` 형식이었다. 두 가지 문제가 논의 중 드러났다:
+
+1. "Git Deploy Extractor" 부분은 macOS/Windows 앱 창 제목에 이미 표시되는 텍스트와 중복이다. 다만 창 타이틀로 이 정보를 옮기는 대안(`win.setTitle()`)은 검토 후 기각했다 — mac 네이티브 풀스크린은 진입 시 타이틀바 자체가 사라지고(재현 테스트로 확인, `.scratch-fullscreen-steady.png`류 스크린샷), 커서를 올려 나타나는 화면 상단 바는 창의 타이틀이 아니라 macOS 전역 메뉴바(빌드 시점에 고정된 `CFBundleName`)라 동적 텍스트를 애초에 못 받는다 — 이 프로젝트가 v0.1.1에서 "dev 모드 메뉴바 앱 이름이 여전히 'Electron'으로 표시된다"를 실측으로 확인했을 때 이미 드러난 사실과 일치한다. 결국 in-app 요소로 유지하는 쪽으로 결론났다.
+2. 로컬 폴더명은 사용자가 clone 시 임의로 바꿀 수 있어 "진짜" 프로젝트 이름과 다를 수 있다(예: `deep-backend`를 `shallow-backend`로 리네임).
+
+## 11.2 remote URL 파싱
+
+`getRemoteProjectName(repoPath)`(`src/main/git/repository.ts`):
+
+```
+git remote get-url origin
+  → exit code 0: stdout(URL 문자열)에서 ".git" 접미사·끝 슬래시 제거 후
+    "/"로 분리, 마지막 조각을 프로젝트 이름으로 사용
+  → exit code ≠ 0(origin 없음 등) 또는 명령 자체 실패: null
+```
+
+재현 테스트로 세 가지 URL 형식 모두 확인:
+
+| 형식 | 예시 | 파싱 결과 |
+|---|---|---|
+| HTTPS(.git 있음) | `https://github.com/org/deep-backend.git` | `deep-backend` |
+| HTTPS(.git 없음) | `https://github.com/org/deep-backend` | `deep-backend` |
+| SSH scp-like(GitLab 서브그룹) | `git@gitlab.internal:team/subteam/deep-backend.git` | `deep-backend` |
+
+특정 호스트를 하드코딩하지 않는 범용 파싱이라 사내 GitLab 등 내부 서버에도 동일하게 동작한다.
+
+**빌드 도구 설정 파일(Gradle `settings.gradle`의 `rootProject.name` 등)을 참조하는 대안은 검토 후 기각**했다 — 이 앱이 Java/Gradle 전용이 아니라 빌드 도구마다 다른 파일을 봐야 해 일반화가 안 되고, `settings.gradle`은 실행 가능한 스크립트라 정적 파싱이 불안정하며, 무엇보다 워킹트리에서 읽으면 GDE에서 **선택한 Branch**가 아니라 로컬에 실제 체크아웃된 Branch 값을 읽게 되는 위험이 있다 — §4.2가 이미 정한 "파일 내용은 워킹트리가 아니라 `git show <branch>:<path>`로 읽는다" 원칙과 상충한다. `git remote`는 브랜치와 무관한 저장소 레벨 정보라 이 문제 자체가 없다.
+
+## 11.3 조회 시점과 실패 처리
+
+`browseRepository()`/`reloadRepository()`에서 `listBranches()`와 함께 `Promise.all`로 동시 조회한다(순차 호출로 지연시키지 않음). `getRemoteProjectName`은 절대 throw하지 않고 실패 시 `null`을 반환하므로, 이 조회 실패가 저장소 전환 흐름 자체를 막지 않는다.
+
+## 11.4 표시 규칙
+
+`RepoLabel`(`RepositoryPanel.tsx`)이 `remoteProjectName`(store)과 `basename(repository.path)`를 비교해 렌더링을 분기한다:
+
+| 상태 | 표시 |
+|---|---|
+| remote 이름 있음, 폴더명과 다름 | `{remote 이름} ({폴더명})` — 폴더명은 `.repository-panel__title-local`(`--ev-c-text-2`, 기존 보조정보 색 토큰 재사용) |
+| remote 이름 있음, 폴더명과 같음 | `{remote 이름}`만(중복 표시 안 함) |
+| remote 이름 없음(null) | `{폴더명}`만(기존 동작과 동일) |
+
+Playwright로 세 상태 전부 실제 fixture 저장소(remote 다름/remote 없음/remote=폴더명)로 재현해 검증했다 — 스크린샷으로 색 구분(`rgb(199,199,207)` vs 기본 텍스트색)도 확인.
+
+## 11.5 RepositoryPanel로 흡수 + 앱 이름 접두어 제거
+
+**배치**: 별도 행이었던 TitleBar를 없애고, 그 내용(`{RepoLabel} / {브랜치}`)을 `RepositoryPanel`의 `.repository-panel__title`로 저장소 경로 텍스트(`.repository-panel__path`) **왼쪽**에 배치했다(`flex: 0 0 auto`, 경로 텍스트의 `flex:1` truncation을 방해하지 않음). "Git Deploy Extractor —" 접두어는 11.1의 결론에 따라 넣지 않는다.
+
+**경로 텍스트 truncation 추가**: 라벨이 새로 붙어 행이 붐빌 수 있어, `.repository-panel__path`에 `overflow:hidden; text-overflow:ellipsis; white-space:nowrap`을 추가했다 — 이전엔 이 규칙이 없어서(형제 요소인 `.footer-action-bar__export-path`엔 이미 있었음, 결정 이력 #19) 좁아지면 줄바꿈되는 잠재 버그가 있었는데 이번에 같이 고쳤다. 동시에 `title={repository.path}`로 hover 시 전체 경로를 보여준다.
+
+Playwright로 최종 배치(라벨+경로가 한 행, TitleBar 요소 자체가 DOM에 없음)와 경로 텍스트의 computed style(`overflow:hidden`/`ellipsis`/`nowrap`)을 재현 검증했다.

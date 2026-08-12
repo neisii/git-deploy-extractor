@@ -10,6 +10,11 @@ import type {
 import { getDefaultDateRange } from '../../../shared/dateRange'
 import { pickDefaultBranch } from '../../../shared/branch'
 import { loadExportParentDir, saveExportParentDir } from '../lib/exportPath'
+import {
+  loadUpdateCheckCache,
+  saveUpdateCheckCache,
+  isUpdateCheckCacheStale
+} from '../lib/updateCheckCache'
 
 const PAGE_SIZE = 100
 const SEARCH_DEBOUNCE_MS = 300
@@ -51,6 +56,10 @@ interface AnalyzedSelection {
 
 interface AppState {
   repository: RepositoryState
+  // RepositoryPanel 좌측 라벨 표시용 — git remote origin URL에서 유도한
+  // "진짜" 프로젝트 이름. 로컬 클론 폴더명과 다를 수 있어 별도로 둔다
+  // (null이면 remote 없음/파싱 실패, 폴더명으로 폴백).
+  remoteProjectName: string | null
   branches: string[]
   selectedBranch: string | null
 
@@ -98,6 +107,14 @@ interface AppState {
   exportError: string | null
   lastExportDir: string | null
 
+  // REQ-017/DR-016 — updateInfo가 null이면 "확인 안 됨/직전 캐시 없이 실패".
+  // updateChecking과는 독립적으로 갱신된다(재확인 중에도 직전 값을 그대로
+  // 보여주며 스피너만 추가). hasUpdate는 "다르다"가 아니라 "원격이 로컬보다
+  // 엄격히 크다" — Main(checkForUpdate)이 이미 이 판정까지 끝내서 반환한다.
+  updateInfo: { hasUpdate: boolean; latestVersion: string } | null
+  updateChecking: boolean
+  appVersion: string // REQ-017 버전 배지 텍스트. update:check 캐시가 신선하면 그건 아예 안 불리므로 별도 채널로 가져온다
+
   initProfiles: () => Promise<void>
   browseExportParentDir: () => Promise<void>
   browseRepository: () => Promise<void>
@@ -114,13 +131,16 @@ interface AppState {
   setDeployFilesFilter: (filter: DeployFilesFilter) => void
   setDeployFilesSearchTerm: (term: string) => void
   toggleDeployFileIncluded: (localPath: string) => void
-  toggleAllDeployFiles: () => void
+  toggleAllDeployFiles: (visibleLocalPaths: string[]) => void
   setDependencySearchTerm: (term: string) => void
   toggleDependencyIncluded: (localPath: string) => void
-  addAllMissingDependencies: () => void
+  addAllMissingDependencies: (visibleLocalPaths: string[]) => void
   setProfile: (profileName: string) => void
   runPreview: () => Promise<void>
   runExport: () => Promise<void>
+  initUpdateCheck: () => Promise<void>
+  clickUpdateBadge: () => void
+  loadAppVersion: () => Promise<void>
 }
 
 // 어떤 선택(a)이 현재 state의 선택과 정확히 같은지 비교하는 공용 함수.
@@ -147,7 +167,14 @@ export function selectIsAnalysisStale(state: AppState): boolean {
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
+// 연속 클릭 가드(DR-016) — Electron 네이티브 확인창이 이미 떠 있는 동안
+// 다시 클릭해도 새 확인창을 띄우지 않는다. 모듈 레벨 변수로 두는 이유는
+// searchDebounceTimer와 같다: 이 값 자체는 UI에 표시되지 않는 순수 가드용
+// 플래그라 굳이 store state로 만들 이유가 없다.
+let updateDialogOpen = false
+
 const defaultRange = getDefaultDateRange()
+const initialUpdateCache = loadUpdateCheckCache()
 
 // 커밋 선택이 리셋되거나 새 Preview를 시작할 때 §7.2 의존성 상태도 같이
 // 초기화한다 — 옛 계산 결과가 새 선택의 우측 패널에 남아있지 않도록.
@@ -309,8 +336,33 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   }
 
+  // REQ-017/DR-016. 캐시 나이와 무관하게 항상 실제로 호출한다(캐시
+  // 게이트는 호출자 쪽 책임 — initUpdateCheck는 만료 시에만, clickUpdateBadge는
+  // 항상 이 함수를 부른다). 이미 진행 중이면 새로 호출하지 않고 조용히
+  // 반환한다 — 연속 클릭 시 중복 API 호출을 막기 위함.
+  async function performUpdateCheck(): Promise<void> {
+    if (get().updateChecking) return
+    set({ updateChecking: true })
+    try {
+      const result = await window.api.update.check()
+      if (result.ok) {
+        saveUpdateCheckCache({
+          checkedAt: Date.now(),
+          hasUpdate: result.hasUpdate,
+          latestVersion: result.latestVersion
+        })
+        set({ updateInfo: { hasUpdate: result.hasUpdate, latestVersion: result.latestVersion } })
+      }
+      // 실패 시 updateInfo를 건드리지 않는다(직전 상태 유지) — 캐시도
+      // 갱신하지 않아 다음 트리거 때 다시 시도한다.
+    } finally {
+      set({ updateChecking: false })
+    }
+  }
+
   return {
     repository: { path: null, status: 'idle' },
+    remoteProjectName: null,
     branches: [],
     selectedBranch: null,
 
@@ -347,6 +399,15 @@ export const useAppStore = create<AppState>((set, get) => {
     exportError: null,
     lastExportDir: null,
 
+    // 캐시가 있으면 그 값으로 동기 초기화한다(splitRatio/columnWidths와 동일
+    // 패턴) — 마운트 후 비동기로 채우면 첫 렌더링에 배지가 "평시"로 잠깐
+    // 반짝이는 깜빡임이 생긴다(RISK_ISSUES.md 결정 이력 #35).
+    updateInfo: initialUpdateCache
+      ? { hasUpdate: initialUpdateCache.hasUpdate, latestVersion: initialUpdateCache.latestVersion }
+      : null,
+    updateChecking: false,
+    appVersion: '',
+
     initProfiles: async () => {
       const profiles = await window.api.mapping.listProfiles()
       set((state) => ({
@@ -376,9 +437,16 @@ export const useAppStore = create<AppState>((set, get) => {
       }
 
       set({ repository: { path, status: 'valid' } })
-      const branches = await window.api.git.listBranches(path)
+      // 라벨 표시용 프로젝트 이름도 Branch 목록과 같은 시점에 같이
+      // 가져온다(Promise.all — 순차 호출로 지연시키지 않음). 실패해도
+      // getRemoteProjectName 자체가 null을 반환하므로 이 조회가 저장소
+      // 전환 흐름을 막지 않는다.
+      const [branches, remoteProjectName] = await Promise.all([
+        window.api.git.listBranches(path),
+        window.api.git.getRemoteProjectName(path)
+      ])
       const selectedBranch = pickDefaultBranch(branches)
-      set({ branches, selectedBranch })
+      set({ branches, selectedBranch, remoteProjectName })
       // §6.1 케이스 A: 다른 저장소로 전환하면 이전 저장소의 커밋 hash로 git
       // 명령을 시도하게 되므로 선택을 지운다(keepSelection 기본값 false).
       await loadCommitsFirstPage()
@@ -396,13 +464,16 @@ export const useAppStore = create<AppState>((set, get) => {
       }
 
       set({ repository: { path: repository.path, status: 'valid' } })
-      const branches = await window.api.git.listBranches(repository.path)
+      const [branches, remoteProjectName] = await Promise.all([
+        window.api.git.listBranches(repository.path),
+        window.api.git.getRemoteProjectName(repository.path)
+      ])
       const currentBranch = get().selectedBranch
       const selectedBranch =
         currentBranch && branches.includes(currentBranch)
           ? currentBranch
           : pickDefaultBranch(branches)
-      set({ branches, selectedBranch })
+      set({ branches, selectedBranch, remoteProjectName })
       // A/B 어느 쪽에도 해당하지 않는다 — 같은 저장소를 다시 읽는 것뿐이라
       // (Branch가 그대로 존재하면 그대로 유지) 선택을 지울 이유가 없다.
       await loadCommitsFirstPage(true)
@@ -558,22 +629,21 @@ export const useAppStore = create<AppState>((set, get) => {
       }))
     },
 
-    // 필터에 표시된 행만 대상으로 한다 — 숨겨진 행은 건드리지 않는다
-    // (UI_UX_SPEC.md §2.6). 현재 필터된 행이 전부 included면 전체 해제,
-    // 그 외(일부만/전혀 없음)면 전체 선택 — indeterminate 상태를 별도
-    // 저장하지 않고 파생 계산하는 것과 같은 이유로 이 판정도 매번 계산한다.
-    toggleAllDeployFiles: () => {
+    // 정정(RISK_ISSUES.md 결정 이력 #33): 상태 Filter만 자체적으로 다시
+    // 계산하고 검색어는 무시하던 버그를 고쳤다 — 이제 필터 로직을 여기서
+    // 다시 계산하지 않고, 화면에 실제로 표시 중인 목록(DeployFilesPanel.tsx의
+    // includedItems, 상태 Filter+검색어 둘 다 반영됨)의 경로를 그대로
+    // 파라미터로 받는다(단일 진실 공급원). 받은 목록이 전부 included면
+    // 전체 해제, 그 외(일부만/전혀 없음)면 전체 선택.
+    toggleAllDeployFiles: (visibleLocalPaths) => {
       set((state) => {
-        const filtered =
-          state.deployFilesFilter === 'all'
-            ? state.deployFiles
-            : state.deployFiles.filter((f) => f.status === state.deployFilesFilter)
-        const filteredPaths = new Set(filtered.map((f) => f.localPath))
-        const allIncluded = filtered.length > 0 && filtered.every((f) => f.included)
+        const visibleSet = new Set(visibleLocalPaths)
+        const visible = state.deployFiles.filter((f) => visibleSet.has(f.localPath))
+        const allIncluded = visible.length > 0 && visible.every((f) => f.included)
         const nextIncluded = !allIncluded
         return {
           deployFiles: state.deployFiles.map((f) =>
-            filteredPaths.has(f.localPath) ? { ...f, included: nextIncluded } : f
+            visibleSet.has(f.localPath) ? { ...f, included: nextIncluded } : f
           )
         }
       })
@@ -608,10 +678,16 @@ export const useAppStore = create<AppState>((set, get) => {
       })
     },
 
-    addAllMissingDependencies: () => {
+    // 정정(RISK_ISSUES.md 결정 이력 #33): Filter/검색 둘 다 무시하고 항상
+    // missingDependencies 전체를 대상으로 하던 버그를 고쳤다 — 화면에 실제로
+    // 표시 중인 목록(DeployFilesPanel.tsx의 missingItems)의 경로만 받는다.
+    addAllMissingDependencies: (visibleLocalPaths) => {
       set((state) => {
+        const visibleSet = new Set(visibleLocalPaths)
         const existing = new Set(state.deployFiles.map((f) => f.localPath))
-        const toAdd = state.missingDependencies.filter((d) => !existing.has(d.localPath))
+        const toAdd = state.missingDependencies.filter(
+          (d) => visibleSet.has(d.localPath) && !existing.has(d.localPath)
+        )
         if (toAdd.length === 0) return {}
         return {
           deployFiles: [
@@ -680,6 +756,33 @@ export const useAppStore = create<AppState>((set, get) => {
           exportError: error instanceof Error ? error.message : String(error)
         })
       }
+    },
+
+    // 앱 시작 시 1회 호출(App.tsx). 캐시가 신선하면 아무것도 안 한다 —
+    // updateInfo는 이미 스토어 생성 시점에 캐시로 초기화돼 있다.
+    initUpdateCheck: async () => {
+      if (!isUpdateCheckCacheStale(initialUpdateCache)) return
+      await performUpdateCheck()
+    },
+
+    // 버전 배지 클릭(DR-016). 확인창과 강제 재확인은 서로 독립된 두
+    // 흐름이다 — 확인창 문구가 버전 정보를 담지 않으므로 재확인 결과를
+    // 기다릴 이유가 없다("긴급 패치를 바로 인지해야 한다"는 사용자 요구).
+    clickUpdateBadge: () => {
+      if (!updateDialogOpen) {
+        updateDialogOpen = true
+        void window.api.update.confirmAndOpen().finally(() => {
+          updateDialogOpen = false
+        })
+      }
+      // performUpdateCheck 자신이 updateChecking 가드를 갖고 있어, 이미
+      // 진행 중이면 여기서 다시 호출해도 조용히 무시된다.
+      void performUpdateCheck()
+    },
+
+    loadAppVersion: async () => {
+      const version = await window.api.app.getVersion()
+      set({ appVersion: version })
     }
   }
 })

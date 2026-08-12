@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { useAppStore } from './store/appStore'
-import { TitleBar } from './components/TitleBar'
 import { RepositoryPanel } from './components/RepositoryPanel'
 import { BranchSearchBar } from './components/BranchSearchBar'
 import { CommitListPanel } from './components/CommitListPanel'
@@ -13,14 +12,17 @@ import { SplitPane } from './components/SplitPane'
 
 function App(): React.JSX.Element {
   const initProfiles = useAppStore((s) => s.initProfiles)
+  const loadAppVersion = useAppStore((s) => s.loadAppVersion)
+  const initUpdateCheck = useAppStore((s) => s.initUpdateCheck)
 
   useEffect(() => {
     void initProfiles()
-  }, [initProfiles])
+    void loadAppVersion()
+    void initUpdateCheck()
+  }, [initProfiles, loadAppVersion, initUpdateCheck])
 
   return (
     <div className="app-shell">
-      <TitleBar />
       <RepositoryPanel />
       <BranchSearchBar />
       <SplitPane

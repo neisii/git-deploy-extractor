@@ -139,3 +139,12 @@ export interface DependencyAnalysisRequest {
   includedLocalPaths: string[] // Preview로 계산된 deployFiles 전체의 localPath (§7.2 point 1 "선택된 파일들")
   profileName: string // Server Path 계산에 Mapping Rule 엔진을 재사용하기 위함
 }
+
+// REQ-017/DR-016 — html_url(특정 태그 딥링크)은 담지 않는다. 클릭 시 항상
+// 고정된 릴리스 인덱스 URL만 열도록 확정되어 있어 필요 없다
+// (DETAILED_DESIGN.md §10.5, RISK_ISSUES.md 결정 이력 #35).
+// hasUpdate 판정(원격이 로컬보다 엄격히 큰지)까지 Main에서 끝내서 반환한다 —
+// app.getVersion()이 이미 Main에 있으니 Renderer에 따로 노출할 이유가 없다
+// (§10.5 "더 단순한 쪽으로 정한다"에 따른 구현 시점 단순화).
+export type CheckUpdateResult =
+  { ok: true; hasUpdate: boolean; latestVersion: string } | { ok: false }

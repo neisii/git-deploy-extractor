@@ -26,8 +26,7 @@ REQUIREDMENT.md 8번 섹션 와이어프레임을 컴포넌트/상태/인터랙�
 
 ```
 AppShell
-├── TitleBar                     (읽기 전용 상태 표시)
-├── RepositoryPanel               (저장소 선택/새로고침)
+├── RepositoryPanel               (저장소 선택/새로고침 + 저장소/브랜치 요약 라벨, REQ-018)
 ├── BranchSearchBar               (브랜치 선택 + 커밋 검색)
 ├── SplitPane (direction="vertical", className="vertical-main-split")
 │   ├── start: SplitPane (MainGrid, direction="horizontal" 기본값)
@@ -56,23 +55,23 @@ AppShell
 
 # 2. 컴포넌트 정의
 
-## 2.1 TitleBar
-
-**책임**: 앱 이름과 현재 저장소/브랜치를 요약해서 보여준다. 인터랙티브 컨트롤 없음(§0-1 결정).
-
-- 표시: `Git Deploy Extractor — {repository 폴더명} / {selectedBranch}` (미선택 시 `—`)
+**정정 (TitleBar를 RepositoryPanel로 흡수, REQ-018/DR-017, 2026-08-12, RISK_ISSUES.md 결정 이력 #38)**: 별도 컴포넌트였던 TitleBar(앱 최상단 별도 행)를 없애고 RepositoryPanel로 합쳤다 — 이 문서의 §2.1 번호는 이제 쓰지 않는다(건너뜀). 아래 §2.2 RepositoryPanel이 원래 TitleBar가 하던 역할까지 포함한다.
 
 ## 2.2 RepositoryPanel
 
-**책임**: REQ-001. 저장소 경로 선택 및 유효성 검사.
+**책임**: REQ-001(저장소 경로 선택/유효성 검사) + REQ-018(저장소/브랜치 요약 라벨).
 
 | 요소 | 동작 |
 |---|---|
-| 경로 표시 텍스트 | `repository.path` 표시, 미선택 시 placeholder("저장소를 선택하세요") |
+| 저장소/브랜치 요약 라벨(좌측, REQ-018) | `{RepoLabel} / {selectedBranch}`(브랜치 미선택 시 `—`). `RepoLabel`은 `git remote origin` URL에서 유도한 이름을 로컬 폴더명보다 우선 표시(사용자가 로컬 폴더명을 임의로 바꿀 수 있어서) — remote 이름이 폴더명과 다르면 `{remote 이름} ({폴더명})`(폴더명은 흐린 색 `--ev-c-text-2`), 같으면 `{remote 이름}`만, remote 없음/조회 실패면 `{폴더명}`만(DETAILED_DESIGN.md §11.4). "Git Deploy Extractor —" 같은 앱 이름 접두어는 안 붙인다 — macOS/Windows 창 제목과 중복이라서(대안으로 검토한 "창 제목에 저장소/브랜치 넣기"는 mac 풀스크린에서 창 타이틀 자체가 사라지고, 커서로 여는 화면 상단 바는 창 타이틀이 아니라 macOS 전역 메뉴바라 애초에 동적 텍스트를 못 받아 기각 — DETAILED_DESIGN.md §11.1) |
+| 경로 표시 텍스트 | `repository.path` 표시, 미선택 시 placeholder("저장소를 선택하세요"). 요약 라벨이 왼쪽에 붙으면서 행이 붐빌 수 있어 `overflow:hidden; text-overflow:ellipsis; white-space:nowrap` + hover 시 `title` 툴팁으로 전체 경로 표시(REQ-018 정정, `footer-action-bar__export-path`와 동일 패턴) |
 | `[Browse...]` | OS 폴더 선택 다이얼로그(Electron `dialog.showOpenDialog`, Main Process) → 선택 시 유효성 검사 IPC 호출 |
 | `[Reload]` | 현재 경로로 유효성 재검사 + 브랜치 목록/커밋 목록 전체 리셋 후 재조회 |
+| 버전 배지(우측, REQ-017) | `vX.Y.Z`(현재 앱 버전) 텍스트. 새 GitHub Release 있으면 배경 강조(제안 `#d4ff00`/`#1a1a1a`) + title 툴팁 "새 버전으로 업데이트 하세요 (vX.Y.Z)", 최신이면 배경 없음 + title "최신 버전입니다". 재확인 중엔 기존 배지 유지한 채 로딩 스피너 추가 표시. 클릭 시 `dialog.showMessageBox`("GitHub 저장소를 여시겠습니까?", `[아니오,네]`) — **재확인 완료를 기다리지 않고 클릭 즉시 표시**, "네" 응답 시 `shell.openExternal`로 릴리스 목록 페이지를 시스템 브라우저에서 열기. 클릭은 캐시 나이와 무관하게 항상 강제 재확인도 함께 트리거(§4, DETAILED_DESIGN.md §10) |
 
-**상태**: `repository: { path: string | null; status: 'idle' | 'validating' | 'valid' | 'invalid'; error?: string }`
+**상태**: `repository: { path: string | null; status: 'idle' | 'validating' | 'valid' | 'invalid'; error?: string }`, `remoteProjectName: string | null`(REQ-018)
+
+**추가 (업데이트 알림, REQ-017/DR-016, 2026-08-12)**: 앱 시작 시 `localStorage`(`gde:lastUpdateCheck`) 캐시가 24시간 지났으면 자동으로 백그라운드 확인. 실패(오프라인 등)해도 조용히 무시하고 직전 상태를 유지 — REQ-010(인터넷 연결 없이 동작 가능)과 충돌하지 않도록 실패가 핵심 기능에 영향을 주지 않는다. 자세한 흐름/상태표는 DETAILED_DESIGN.md §10 참고.
 
 ## 2.3 BranchSearchBar
 
@@ -173,6 +172,8 @@ AppShell
 
 **파일명 검색(좌우 공통, 신규)**: 경로 전체가 아니라 **파일명(경로의 마지막 조각)** 부분 일치로 필터링한다 — §7.3(파일명으로 커밋 검색)과 매칭 기준을 통일했다. 상태 Filter(좌측만 있음) 이후에 적용된다.
 
+**정정 (전체 선택/전체 추가가 검색어를 무시하는 버그 수정 예정, 2026-08-12, 코드 리딩으로 발견)**: 좌측 "전체 선택"은 상태 Filter(드롭다운)만 반영해 다시 계산하고 파일명 검색은 무시했고, 우측 "전체 추가"는 Filter/검색 둘 다 무시하고 항상 `missingDependencies` 전체를 대상으로 했다 — 이 문서 위쪽 표(§2.6 "전체 선택" 행)에 적혀 있던 "필터에 표시된 행 기준"이라는 의도와 실제 동작이 어긋나 있었다. 근본 원인은 필터 로직이 `DeployFilesPanel.tsx`(화면 표시용)와 store(토글 대상 계산용) 두 곳에 중복 구현되어 서로 어긋난 것 — 수정 후에는 **좌우 둘 다 상태 Filter + 파일명 검색이 모두 적용된, 화면에 실제로 보이는 행만** 대상으로 한다(단일 진실 공급원: 화면 표시 목록을 그대로 액션 파라미터로 전달). DETAILED_DESIGN.md §9 표, RISK_ISSUES.md 결정 이력 참고.
+
 **상태 추가**: `missingDependencies: { localPath: string; serverPath: string; status: 'added'; kind: 'interface'|'class' }[]`, `dependencyApplicable: boolean`, `dependencyReason: string | null`, `dependencyAnalyzing: boolean`, `dependencyParseWarnings: { path: string; reason: string }[]`, `deployFilesSearchTerm: string`, `dependencySearchTerm: string`(§3 참고).
 
 **경고 배너 추가**: 기존 "N개 파일이 HEAD에 없어 제외되었습니다"(DR-009) 배너 아래, 의존성 검사 중 파싱에 실패한 파일이 있으면 "N개 파일을 파싱하지 못해 의존성 검사에서 제외했습니다" 배너를 추가로 보여준다(`dependencyParseWarnings`).
@@ -230,6 +231,7 @@ ARCHITECTURE.md §2.2에 상태관리로 Zustand를 채택했다. 단일 스토�
 ```ts
 interface AppState {
   repository: { path: string | null; status: 'idle'|'validating'|'valid'|'invalid'; error?: string };
+  remoteProjectName: string | null; // REQ-018/DR-017, TitleBar 표시용 — git remote origin에서 유도, null이면 폴더명으로 폴백
   branches: string[];
   selectedBranch: string | null;
   startDate: string;   // YYYY-MM-DD, 기본 오늘-7일
@@ -269,12 +271,27 @@ interface AppState {
   exportStatus: 'idle' | 'exporting' | 'done' | 'error';
   exportError: string | null;       // §5 에러 상태("실패 사유를 인라인 배너로 표시")에 대응
   lastExportDir: string | null;     // Export 완료 후 결과 경로 표시용
+
+  // REQ-017/DR-016, §2.2 버전 배지. updateInfo가 null이면 "확인 안 됨/직전 캐시
+  // 없이 실패"로 간주(배경 없음), updateChecking과는 독립적으로 갱신된다 —
+  // 재확인 중에도 직전에 알던 updateInfo를 그대로 보여주며 스피너만 추가한다.
+  // hasUpdate는 "다르다"가 아니라 "latestVersion > 현재 app.getVersion()"(엄격히
+  // 큼) — 로컬이 원격보다 같거나 앞서면 false(DETAILED_DESIGN.md §10.2). 클릭 시
+  // 여는 URL은 항상 고정된 릴리스 인덱스 페이지라 releaseUrl(특정 태그 딥링크)은
+  // 상태로 들고 있지 않는다(§10.5, 안 쓰는 데이터를 만들지 않는다).
+  // 스토어 생성 시점에 localStorage(gde:lastUpdateCheck)로 동기 초기화한다
+  // (splitRatio/columnWidths와 동일한 lazy initializer 패턴) — 마운트 후
+  // 비동기로 채우면 첫 렌더링에 배지가 잠깐 "평시"로 반짝이는 깜빡임이 생긴다.
+  updateInfo: { hasUpdate: boolean; latestVersion: string } | null;
+  updateChecking: boolean;
 }
 ```
 
 **파생 계산 흐름 (정정, 2026-08-04)**: `selectedHashes`/`selectedBranch`/`selectedProfile` 변경은 더 이상 IPC를 트리거하지 않는다 — `[Preview]` 클릭만이 단일 IPC 호출(Commit 분석 엔진 + Mapping Rule 엔진 결과)을 일으키고, 그 결과로 `summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection`이 동시 갱신된다. `isStale = 현재 (selectedHashes, selectedBranch, selectedProfile) ≠ analyzedSelection`으로 파생 계산하며, 세 미리보기 패널(§2.5~2.7)과 `[Export]` 비활성 조건(§2.8)이 모두 이 값을 공유한다. 개별 `included` 토글(DeployFilesPanel)만 예외로 로컬 갱신(재계산도, staleness 판정도 없음 — 이미 계산된 목록 안에서의 선택/해제이기 때문).
 
 **추가 (의존성 검사 체이닝, REQ-013, 2026-08-07)**: `[Preview]`가 성공하면(위 IPC 완료 직후) 곧바로 두 번째 IPC(`analysis:dependencies`)를 자동으로 호출해 `missingDependencies`/`dependencyApplicable`/`dependencyReason`/`dependencyParseWarnings`를 채운다 — 별도 버튼 없음. 이 두 번째 호출이 실패해도 첫 번째 IPC의 결과(`summary`/`deployFiles` 등)는 그대로 유효하다(우측 패널에만 영향). `missingDependencies`의 개별/전체 추가(`toggleDependencyIncluded`/`addAllMissingDependencies`)도 `toggleDeployFileIncluded`와 동일하게 로컬 갱신이며 재계산·staleness 판정을 일으키지 않는다 — 대상이 `deployFiles` 배열에 항목을 추가/제거하는 것뿐이기 때문이다.
+
+**추가 (업데이트 확인, REQ-017/DR-016, 2026-08-12)**: `updateInfo`/`updateChecking`은 다른 파생 계산(§2.5 `isStale` 등)과 무관한 독립 상태다. 앱 시작 시 `localStorage`(`gde:lastUpdateCheck`) 캐시가 24시간 지났으면, 버전 배지 클릭 시엔 캐시 나이와 무관하게 항상, `updateChecking=true`로 두고 Main IPC(`window.api.checkForUpdate`)를 호출한다. 응답이 오면 성공 시 `updateInfo`를 갱신하고 캐시도 새로 쓰지만, 실패 시엔 `updateInfo`를 건드리지 않고(직전 상태 유지) 캐시도 갱신하지 않는다 — 두 경우 모두 `updateChecking`은 false로 되돌린다. 클릭 시 뜨는 `dialog.showMessageBox` 확인창은 이 IPC 호출과 별개로 즉시 트리거되며 응답을 기다리지 않는다(DETAILED_DESIGN.md §10.3).
 
 ---
 
@@ -297,12 +314,16 @@ interface AppState {
 | DeployFilesPanel(좌/우) 파일명 검색 입력 | `deployFilesSearchTerm`/`dependencySearchTerm` 갱신, 즉시 클라이언트 필터링(디바운스 없음) | 없음 (로컬) | REQ-013 |
 | `[Preview]` 클릭 | `analyzing = true` → 완료 시 `summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection` 동시 갱신, 이어서 `dependencyAnalyzing = true` → 완료 시 `missingDependencies` 등 갱신(체이닝) | Commit 분석 + Mapping 엔진 → 의존성 완결성 검사 | REQ-005~008, REQ-013 |
 | DeployFilesPanel(우) 개별 체크박스 토글 | `deployFiles`에 없으면 추가, 있으면 제거 | 없음 (로컬) | REQ-013 |
-| `[전체 추가]` 클릭 (우) | 아직 `deployFiles`에 없는 `missingDependencies` 전부를 `included: true`로 추가 | 없음 (로컬) | REQ-013 |
+| `[전체 추가]` 클릭 (우) | 필터+검색에 표시된 `missingDependencies` 중 아직 `deployFiles`에 없는 것만 `included: true`로 추가 | 없음 (로컬) | REQ-013 |
 | `[변경]` 클릭 (FooterActionBar) | 취소 시 상태 변화 없음. 선택 시 `exportParentDir` 갱신 + `localStorage` 저장 | `dialog.showOpenDialog`(`package:browseExportDir`) | REQ-012 |
 | `[Export]` 클릭 | `exportStatus = 'exporting'` → `'done'`\|`'error'`\|(취소 시)`'idle'` | Package Builder(전체: 파일 복사 + 3종 Export). 대상 폴더에 기존 내용 있으면 먼저 `dialog.showMessageBox` 확인 | REQ-009, REQ-010, DR-013 |
 | SplitPane 경계 드래그(MainGrid/DeployFilesPanel) | 드래그 중 실시간 비율 반영, mouseup 시 `localStorage`에 최종 비율 저장 | 없음 (로컬) | REQ-014 |
+| 앱 시작(캐시 24h 초과 시) | `updateChecking = true` → 완료 시 `updateInfo` 갱신(성공, `hasUpdate`는 원격이 로컬보다 엄격히 클 때만 true) 또는 유지(실패), `updateChecking = false` | `checkForUpdate`(GitHub `releases/latest`) | REQ-017, DR-016 |
+| 버전 배지 클릭 | 캐시 나이 무관하게 `updateChecking = true`(위와 동일 흐름) — **응답을 기다리지 않고 즉시** `dialog.showMessageBox` 확인창도 같이 뜬다. "네" 응답 시에만 `shell.openExternal`(고정 인덱스 URL). **이미 `updateChecking===true`거나 확인창이 이미 열려 있으면** 새 네트워크 호출/확인창을 추가로 띄우지 않는다(연속 클릭 가드) | `checkForUpdate` + (확인 시)`shell.openExternal` | REQ-017, DR-016 |
 
 **정정 (커밋 선택 유지, REQ-015/016, 2026-08-07)**: 위 표에서 "`selectedHashes = {}`"로 표시된 두 트리거(Browse, Branch 변경)만 선택을 지운다 — 나머지 재조회 트리거는 전부 `selectedHashes`를 유지한다. 이전 버전 이 표는 모든 재조회 트리거가 "CommitListPanel 리셋"이라는 이름으로 뭉뚱그려져 있었고, 그 리셋이 `selectedHashes`까지 항상 지운다는 뜻이었다 — 검색 조건을 바꿔가며 관련 커밋을 여러 번 찾아 누적 체크하는 워크플로우가 실사용에서 나오면서, 이 전면 초기화가 워크플로우를 방해한다는 게 확인되어 DR-015로 예외 범위를 좁혔다.
+
+**정정 (전체 선택/전체 추가 필터 무시 버그, 2026-08-12)**: 위 표의 "DeployFilesPanel(좌) 전체 선택 토글"/"`[전체 추가]` 클릭 (우)" 두 행은 이 문서가 원래 의도했던 동작(필터+검색에 표시된 행만 대상)을 그대로 적어둔 것이지만, 실제 구현은 좌측이 상태 Filter만 반영하고 검색어를 무시했고, 우측은 Filter/검색 둘 다 무시하고 있었다 — §2.6, §3 정정 참고. 이 표는 수정 이후(의도한 동작)를 기준으로 작성되어 있다.
 
 **정정 (자동 재계산 완전 제거, `[Preview]`가 유일한 트리거, 2026-08-04)**: 이전 초안(및 그 초안을 최적화하려던 캐싱 계획)은 커밋 체크박스나 Mapping Profile이 바뀔 때마다 디바운스 후 자동으로 재계산하는 것을 전제로 했다. 하지만 이 방식은 "선택은 바뀌었는데 화면·Export 대상은 옛 결과"인 구간(디바운스 대기 중)이 항상 존재해, 그 구간에 `[Export]`를 누르면 방금 바뀐 선택 일부가 반영 안 된 채로 조용히 나갈 수 있는 위험이 있었다(§2.8 "Export 직전 레이스 컨디션 방지" 참고). 자동 재계산 자체를 없애고 `[Preview]`를 유일한 계산 트리거로 확정하면서, 애초에 "자동 재계산을 최적화(캐싱)할지" 논의 자체가 무의미해졌다 — 자동 재계산이 없으니 최적화할 대상도 없다.
 
