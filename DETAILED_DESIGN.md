@@ -463,6 +463,10 @@ pathspec 필터링과 `--skip`/`-n` 페이지네이션이 함께 정상 동작�
 | DeployFilesPanel 필터-무시 버그 | `toggleAllDeployFiles()`/`addAllMissingDependencies()`가 화면에 보이는 필터링된 목록이 아니라 자체적으로 다시 계산한(그마저도 검색어는 반영 안 하는) 대상을 토글 — 검색어로 좁혀놓고 전체선택/전체추가를 누르면 화면에 안 보이는 파일까지 건드림. 근본 수정: 필터 로직을 store에서 다시 계산하지 않고, `DeployFilesPanel.tsx`가 이미 계산한 화면 표시 목록(`includedItems`/`missingItems`)의 경로를 액션 함수 파라미터로 그대로 넘겨 단일 진실 공급원으로 통일 | 필터 로직이 컴포넌트(화면 표시용)와 store(토글 대상 계산용) 두 곳에 중복 구현되어 서로 어긋난 것이 원인 — 코드 리딩으로 발견(RISK_ISSUES.md 결정 이력) | 해결됨 |
 | 업데이트 확인 UI 배지(REQ-017, DR-016) | §10 참고 | GitHub Release 알림 신규 설계 | 해결됨 |
 | 저장소/브랜치 요약 라벨(REQ-018, DR-017) | §11 참고 | 로컬 폴더명 대신 git remote 기반 "진짜" 이름 표시, 별도 행(TitleBar) 대신 RepositoryPanel 경로 왼쪽으로 합침, 앱 이름 접두어 제거 | 해결됨 |
+| 배포 대상 파일 제외 패턴(REQ-019, DR-018) | §12.1 참고 | 검색(포함 필터, 일시적)과 역할이 다른 제외 필터(지속적) 신규 설계. Playwright로 등록/토글/재실행 유지/Export 실제 제외까지 검증 | 해결됨 |
+| DeployFilesPanel 가상 스크롤 중첩 가로 스크롤(300개 초과 시) | §12.2 참고 | react-window 내부 루트가 자체 `overflow-x` 컨텍스트를 갖는 게 원인 — 재현 테스트로 정확히 300개 초과 시에만 발생함을 확인, `style` prop으로 수정 후 재검증 완료 | 해결됨 |
+| 포함된 파일/누락된 의존성 선택 카운터(REQ-020) | §12.3 참고 | "선택 N/전체 N(필터 전 전체 N)" 세 숫자, 55개 fixture로 50개 초과 경고까지 검증 | 해결됨 |
+| 전체 선택 체크박스 위치 이동 + 누락된 의존성 양방향화 | §12.4 참고 | 헤더 영역 → Local Path 컬럼 헤더 행(각 행 체크박스와 동일 x 위치)으로 이동, 우측 "전체 추가"(단방향 버튼)를 좌측과 동일한 "전체 선택"(양방향 체크박스)로 교체 | 해결됨 |
 
 ---
 
@@ -591,3 +595,121 @@ Playwright로 세 상태 전부 실제 fixture 저장소(remote 다름/remote �
 **경로 텍스트 truncation 추가**: 라벨이 새로 붙어 행이 붐빌 수 있어, `.repository-panel__path`에 `overflow:hidden; text-overflow:ellipsis; white-space:nowrap`을 추가했다 — 이전엔 이 규칙이 없어서(형제 요소인 `.footer-action-bar__export-path`엔 이미 있었음, 결정 이력 #19) 좁아지면 줄바꿈되는 잠재 버그가 있었는데 이번에 같이 고쳤다. 동시에 `title={repository.path}`로 hover 시 전체 경로를 보여준다.
 
 Playwright로 최종 배치(라벨+경로가 한 행, TitleBar 요소 자체가 DOM에 없음)와 경로 텍스트의 computed style(`overflow:hidden`/`ellipsis`/`nowrap`)을 재현 검증했다.
+
+---
+
+# 12. DeployFilesPanel 개선 3건 설계 (REQ-019/020, DR-018, 2026-08-12)
+
+기존 기능+신규 3건 전체 UI/UX 회귀 검증(결정 이력 #39) 직후 실사용 중 나온 개선 요구 3건. 전부 DeployFilesPanel(`FileListColumn`) 영역이라 한 섹션에 묶는다.
+
+## 12.1 배포 대상 파일 제외 패턴 (REQ-019, DR-018)
+
+**패턴 문법(DR-018 정정, 2026-08-20 — `*`만 지원, `**` 등은 백로그)**: `.gitignore` 관례를 따르되 지원 범위를 `*`(한 세그먼트 안에서만 매치, 슬래시를 못 넘음) 하나로 한정한다 — `/`가 없는 패턴은 파일명(경로 마지막 조각)에 매치, `/`가 있는 패턴은 경로 전체에 매치. 구현은 각 패턴을 정규식으로 변환해 판정한다(세그먼트 단위로 쪼갠 뒤 `*` → `[^/]*`, 나머지 리터럴 문자는 이스케이프 — 새 의존성 추가 없이 직접 구현). `**`(다중 세그먼트 와일드카드)·`!`(부정 패턴)·트레일링 슬래시 디렉터리 매치는 이번 범위에 넣지 않는다 — RISK_ISSUES.md 결정 이력 #42에 근거와 함께 백로그로 남겨둔다. 대소문자는 항상 구분한다(결정 이력 #8과 일관성).
+
+**저장** (`src/renderer/src/lib/excludePatterns.ts`, `columnWidths.ts`/`updateCheckCache.ts`와 동일 패턴):
+```ts
+interface ExcludePatternEntry {
+  pattern: string
+  enabled: boolean
+}
+// localStorage 키: gde:excludePatterns
+// 전역 공통 — 저장소별 구분 없음(exportPath.ts와 동일 이유)
+```
+
+**적용 위치**: `DeployFilesPanel.tsx`의 `includedItems` `useMemo` 체인에 상태 Filter → 활성 제외 패턴 → 파일명 검색 순서로 한 단계 추가한다(순서 자체는 전부 AND 조건이라 결과에 영향 없음, 계산량이 가장 적은 것부터 앞에 두는 정도의 최적화 여지만 있음).
+
+**파생 계산 원칙 재확인(DR-018)**: `deployFiles[].included`를 직접 고치지 않는다 — Export 시점에 별도로 "활성 제외 패턴에 매치되는가"를 한 번 더 확인해 AND 조건으로 걸러낸다. `runExport()`가 이미 `deployFiles.filter(f => f.included)`로 대상을 추리는 지점에 `&& !matchesAnyActiveExcludePattern(f.localPath)`를 추가하는 정도로 충분하다. 이렇게 하면 패턴을 비활성화했을 때 해당 파일이 다시 보이면서 원래 `included` 값(대개 `true`)이 그대로 유지되어 있어 별도 복원 로직이 필요 없다 — REQ-019/DR-018 문서에서 이미 결정 이력 #33과 비교해 설명한 이유와 동일.
+
+**UI**: 검색(파일명) 입력 아래 새 행 — 텍스트 입력 + `[+추가]` 버튼, 그 아래 이력 패턴들을 칩(chip) 형태로 나열(각 칩 클릭 시 `enabled` 토글, 활성 칩은 강조 표시). 새 패턴 추가 시 기본값 `enabled: true`.
+
+**적용 범위**: "포함된 파일"에만(좌측 `FileListColumn` 인스턴스). "누락된 의존성"은 REQ-013 설계상 항상 `.java`만 나와 이 기능이 무의미하므로 `extraHeaderControl`처럼 이 인스턴스에만 별도 prop으로 내려준다(우측 인스턴스에는 전달하지 않음).
+
+## 12.2 가상 스크롤 중첩 가로 스크롤 수정
+
+**재현(§0.1)**: 롱패스 파일 450개(가상 스크롤 임계값 300 초과) fixture로 재현 — `.deploy-files-panel__body` 안에 react-window가 만드는 내부 루트 DIV가 `overflowX: auto`이면서 `scrollWidth(1199) > clientWidth(582)`로, 바깥 `.deploy-files-panel__scroll`과 별개로 자체 가로 스크롤 컨텍스트를 가짐을 실측 확인. 같은 fixture를 100개(임계값 미만)로 줄이면 이 내부 루트가 아예 생기지 않고 단일 스크롤 컨텍스트로 정상 동작 — 정확히 300개 초과가 트리거 조건임을 확인했다. 원인은 UI_UX_SPEC.md §2.6 "알려진 제약"에 이미 기록되어 있던 것과 같다: react-window가 세로 가상 스크롤을 위해 자기 루트에 `overflow-y:auto`를 설정하면 CSS 스펙상 `overflow-x:visible`과 함께 쓸 수 없어 `overflow-x`도 `auto`로 강제 승격된다.
+
+**수정 방향(검증 완료, §0.1)**: `node_modules/react-window/dist/react-window.js`를 직접 읽어 확인한 결과, `List`가 렌더링하는 루트 요소는 `style: { position:'relative', maxHeight:'100%', flexGrow:1, overflowY:'auto', ...사용자가_넘긴_style }`처럼 사용자 `style` prop을 **마지막에 spread**한다 — 즉 CSS 선택자 우회가 필요 없고, `<List style={{ overflowX: 'hidden' }} ...>`처럼 공개 API로 바로 덮어쓸 수 있음을 코드로 확인했다(`className`도 동일하게 마지막에 적용됨). `FileListColumn.tsx`의 `<List rowComponent={...} ... />` 호출에 `style={{ overflowX: 'hidden' }}`만 추가하면 된다 — 세로 가상화(윈도잉)는 `overflow-y`만으로 이미 충분하므로 `overflow-x`를 react-window가 관여할 이유가 없다.
+
+**수락 기준**: 300개 초과 여부와 무관하게 항상 스크롤바가 하나이고(가로/세로 각 1개), 가로 스크롤 시 헤더 행(`Local Path`)과 목록 행이 항상 같은 위치를 유지한다 — 즉 지금의 "300개 이하" 동작을 파일 개수와 무관하게 항상 재현한다.
+
+## 12.3 선택 카운터 (REQ-020)
+
+**표시 위치**: `FileListColumn`의 `headerTitle` 옆(`.file-list-column__title` 바로 뒤). 좌/우 두 인스턴스 모두 공통으로 표시.
+
+**정정 — 세 숫자 형식으로 확정(2026-08-20, 결정 이력 #42/#44)**: 최초안은 "선택"도 필터된 `items`에서 파생시켰으나, 상태 Filter/검색으로 화면을 좁히면 실제로는 체크돼 있어 Export될 파일이 카운터에서 누락되는 문제(§6.1 케이스 D와 같은 유형의 위험)를 자기 반성 검토에서 발견해 정정했다. 최종 형식: `(선택 N개/전체 N개(필터 전 전체 N개))`.
+
+| 숫자 | 의미 | Filter/검색 영향 | REQ-019 제외 패턴 영향 |
+|---|---|---|---|
+| 선택 | Export될 파일 수(절대값) | 무관 | 받음(매치되면 실제로 Export 안 되므로 제외) |
+| 전체 | 현재 화면에 표시된 개수(기존 확정 유지) | 받음 | 받음 |
+| (필터 전 전체) | 모든 필터 무시한 순수 전체 개수(참고용) | 무관 | 무관 |
+
+**계산**: "전체"는 지금처럼 `items.length`(필터된 배열)로 파생 가능하지만, "선택"과 "(필터 전 전체)"는 필터링 전 원본 배열(`deployFiles`/`missingDependencies`)이 있어야 계산할 수 있다 — `DeployFilesPanel.tsx`가 이 두 값을 새 prop으로 계산해서 내려준다(`FileListColumn` 자신은 여전히 `items`만으로 "전체"를 파생).
+
+```ts
+interface FileListColumnProps {
+  // ...기존 prop 그대로
+  selectedCount: number       // 절대값 — Export될 파일 수
+  totalBeforeFilter: number   // 절대값 — 모든 필터 무시한 전체 개수
+}
+```
+
+좌측(포함된 파일):
+```ts
+const selectedCount = deployFiles.filter(
+  (f) => f.included && !matchesAnyActiveExcludePattern(f.localPath) // §12.1과 동일 predicate 재사용
+).length
+const totalBeforeFilter = deployFiles.length
+```
+
+우측(누락된 의존성) — REQ-019 제외 패턴이 이쪽엔 적용 안 되므로 더 단순하다:
+```ts
+const selectedCount = missingDependencies.filter((d) => includedSet.has(d.localPath)).length
+const totalBeforeFilter = missingDependencies.length
+```
+
+**누락된 의존성 50개 초과 경고(REQ-020 확정, 2026-08-20)**: `FileListColumn`에 선택적 prop `overCountThreshold?: number`를 추가하고, "누락된 의존성" 인스턴스에만 `50`을 넘겨준다("포함된 파일" 인스턴스는 전달하지 않음 → 기본 비활성). 판단 대상은 위 표의 "전체"(=`items.length`, 화면 표시 기준)다 — "선택"·"(필터 전 전체)"는 이 경고와 무관하다.
+
+```ts
+const total = items.length
+const isOverThreshold = overCountThreshold !== undefined && total > overCountThreshold
+// isOverThreshold이면 "전체 {total}개" 부분만 status-text--error로 렌더링 + title="50개를 초과했습니다"
+```
+
+이 세 기능은 서로 독립적이지만 전부 `DeployFilesPanel.tsx`의 같은 계산 범위(items 파생 + 원본 배열 접근)에 관여한다 — 12.1(제외 패턴 predicate)을 12.3의 "선택" 계산이 그대로 재사용하고, 12.2(스크롤 수정)는 이 데이터 흐름과 무관한 순수 렌더링 레이어 수정이다.
+
+---
+
+## 12.4 전체 선택 체크박스 위치 이동 + 누락된 의존성 양방향화 (2026-08-20)
+
+12.1~12.3 구현·검증 완료 직후 사용자 요청으로 추가된 두 가지 변경.
+
+**위치 이동**: "전체 선택" 체크박스가 원래 `.deploy-files-panel__header`(패널 제목·Filter 드롭다운과 같은 줄)에 있었으나, `.deploy-files-panel__columns`(컬럼 헤더 행, `Local Path` 라벨 왼쪽)로 옮겼다 — CSS 그리드가 이미 `grid-template-columns: 24px minmax(...)`로 체크박스 열 폭을 잡아두고 있어서(각 행의 체크박스가 이 24px 열에 들어감), 컬럼 헤더 행의 같은 위치(기존엔 빈 `<span></span>`)에 체크박스를 넣기만 하면 각 행 체크박스와 자동으로 정확히 정렬된다 — 새 CSS 불필요. Playwright로 헤더 체크박스와 첫 행 체크박스의 x 좌표가 일치함을 실측 확인. 텍스트 라벨("전체 선택")은 24px 폭에 들어갈 자리가 없어 빼고, `title` 툴팁("전체 선택"/"전체 해제", 현재 상태에 따라 문구 전환)으로 대체했다.
+
+**누락된 의존성 양방향화**: 우측은 원래 `BulkAction`의 `kind: 'button'` 변형("전체 추가" — 아직 안 추가된 것만 단방향으로 추가, 이미 전부 추가됐으면 비활성화)이었다. 좌측과 동일한 `kind: 'checkbox'` 패턴으로 교체해 양방향 토글(전체 추가 ↔ 전체 제거)을 지원한다.
+
+```ts
+// appStore.ts — addAllMissingDependencies(단방향)를 대체
+toggleAllMissingDependencies: (visibleLocalPaths) => {
+  set((state) => {
+    const visibleSet = new Set(visibleLocalPaths)
+    const existing = new Set(state.deployFiles.map((f) => f.localPath))
+    const visibleMissing = state.missingDependencies.filter((d) => visibleSet.has(d.localPath))
+    const allChecked =
+      visibleMissing.length > 0 && visibleMissing.every((d) => existing.has(d.localPath))
+
+    if (allChecked) {
+      return { deployFiles: state.deployFiles.filter((f) => !visibleSet.has(f.localPath)) }
+    }
+    const toAdd = visibleMissing.filter((d) => !existing.has(d.localPath))
+    if (toAdd.length === 0) return {}
+    return { deployFiles: [...state.deployFiles, ...toAdd.map(/* DependencyCandidate → DeployFileEntry */)] }
+  })
+}
+```
+
+좌측 `toggleAllDeployFiles()`와 정확히 같은 판정 방식(`allChecked` → 전체 해제, 그 외 → 아직 없는 것만 전체 추가)이며, "화면에 실제로 보이는(검색 반영된) 대상만" 원칙(#33/#36)도 동일하게 유지한다 — `visibleLocalPaths`는 `missingItems.map(item => item.localPath)`(검색 적용 후)를 그대로 받는다.
+
+**타입 단순화**: 우측이 checkbox로 통일되면서 `BulkAction`의 `kind: 'button'` 변형을 쓰는 곳이 완전히 없어져, 판별 유니온을 없애고 `BulkSelectAction`(`{ checked, indeterminate, onClick }`) 단일 인터페이스로 정리했다 — 안 쓰는 분기를 남겨두지 않는다는 원칙에 따름.
+
+Playwright로 검증: 헤더 체크박스가 각 행 체크박스와 같은 x 위치에 정렬됨, 좌측 전체 선택/해제 토글 정상 동작(회귀 없음), 우측이 버튼에서 체크박스로 바뀌었고 "전체 추가" 버튼 자체는 DOM에서 사라짐, 클릭 시 전체 추가(선택 카운터도 즉시 반영) → 재클릭 시 전체 해제(양방향)까지 확인.

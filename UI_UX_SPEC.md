@@ -35,7 +35,7 @@ AppShell
 │   └── end: DeployFilesPanel
 │       └── SplitPane
 │           ├── FileListColumn     (좌: 포함된 파일, 개별/전체 선택 + 상태 Filter + 파일명 검색)
-│           └── FileListColumn     (우: 누락된 의존성, 개별 선택 + 전체 추가 + 파일명 검색)
+│           └── FileListColumn     (우: 누락된 의존성, 개별 선택 + 전체 선택(양방향, 2026-08-20) + 파일명 검색)
 ├── DeleteListPanel               (삭제 대상 목록, 읽기 전용)
 ├── FooterActionBar               (Export 경로 선택 + Export)
 └── Credit                        (화면 우측 하단 고정, 제작자 GitHub 링크)
@@ -134,8 +134,10 @@ AppShell
 
 | 요소 | 동작 |
 |---|---|
-| 헤더 "전체 선택" 체크박스 | 현재 **필터에 표시된 행 기준**으로 전체 체크/해제. 필터로 숨겨진 행은 건드리지 않는다. 표시된 행 일부만 체크된 상태면 indeterminate(가로줄) 표시 |
+| "전체 선택" 체크박스(위치 정정, 2026-08-20) | `Local Path` 컬럼 헤더 왼쪽(각 행 체크박스와 동일 x 위치 — CSS 그리드 24px 열을 그대로 공유)에 위치. 좌우 `FileListColumn` 공통(우측도 이 시점부터 체크박스로 통일 — 아래 정정 참고). 현재 **필터에 표시된 행 기준**으로 전체 체크/해제. 필터로 숨겨진 행은 건드리지 않는다. 표시된 행 일부만 체크된 상태면 indeterminate(가로줄) 표시. 텍스트 라벨 없이 `title` 툴팁("전체 선택"/"전체 해제")만 제공(패널 헤더 영역엔 더 이상 렌더링되지 않음) |
+| 헤더 옆 선택 카운터(신규, REQ-020, 2026-08-20 세 숫자로 확정) | `(선택 N개/전체 N개(필터 전 전체 N개))`. **선택**은 Filter/검색과 무관한 절대값(Export될 파일 수 — REQ-019 제외 패턴에 매치되면 실제로 Export 안 되니 이건 반영됨). **전체**는 상태 Filter+검색+제외 패턴이 적용된 뒤 화면에 보이는 개수(기존 확정 유지). **(필터 전 전체)**는 모든 필터를 무시한 참고용 순수 전체 개수. 좌우 `FileListColumn` 공통. 우측(누락된 의존성)만: "전체" 부분의 N이 50 초과면 그 부분만 붉은 글씨(`status-text--error`)로 강조 + `title="50개를 초과했습니다"` 툴팁. 50개 기준은 "전체"(화면 표시 기준)와 동일한 값으로 판단 — 검색으로 좁혀서 50개 이하로 보이면 경고도 사라진다. "선택"·"(필터 전 전체)"는 이 경고와 무관 |
 | Filter dropdown | `all \| added \| modified` (클라이언트 사이드 필터, 재계산 없음. `deleted`는 이 목록 대상이 아니므로 필터 옵션에서 제외. Rename을 별도 감지하지 않으므로 `renamed` 옵션도 없음 — DR-008) |
+| 제외 패턴 입력(신규, REQ-019, 좌측만) | 검색(파일명) 아래 새 행 — 텍스트 입력 + `[+추가]`. `.gitignore` 문법(`*.png`처럼 슬래시 없으면 파일명 매치, `src/test/**`처럼 슬래시 있으면 경로 매치). 등록한 패턴은 칩으로 나열되고 클릭해서 켜고 끌 수 있다(활성 패턴만 실제 적용) — 앱 재실행 후에도 유지(전역 `localStorage`, 저장소 무관) |
 | 각 행 체크박스 | `included` 토글. 해제된 파일은 Export 시 deploy-files.txt와 실제 복사 대상에서 빠진다(REQ-011). Local Path 열의 파일명 텍스트를 클릭해도 동일하게 토글된다(추가, 2026-08-04) |
 | Local Path 열 | `localPath` 표시. 열 헤더 오른쪽 경계를 드래그하면 최소 폭을 조절할 수 있다 |
 
@@ -149,7 +151,9 @@ AppShell
 
 **정정 (헤더-목록 컬럼 폭 불일치 버그 수정, 2026-08-04, 사용자 발견)**: 위 "내용 길이 중 큰 값" 계산을 헤더 행과 각 데이터 행이 서로 별도의 CSS Grid 컨테이너로 구현하다 보니, 각 컨테이너가 `max-content`를 자기 내용(헤더는 "Local Path"라는 라벨 텍스트, 각 행은 그 행 자신의 파일 경로)만 기준으로 독립 계산해 헤더와 목록의 폭이 어긋나는 버그가 있었다. CSS의 `max-content`에 맡기는 대신 JS(`canvas.measureText` + `getComputedStyle`)로 현재 필터링된 전체 행과 헤더 라벨 중 가장 넓은 폭을 실측해 모든 행(가상 스크롤 포함)에 동일한 값을 주입하는 방식으로 바꿔 해소했다.
 
-**알려진 제약**: 위 수정으로 컬럼 **폭 자체**는 필터링된 표시 대상 개수와 무관하게 항상 헤더와 목록이 일치한다. 다만 필터링된 표시 대상이 300개를 넘어 가상 스크롤이 적용되는 경우, react-window가 세로 가상 스크롤을 위해 자기 루트에 `overflow-y:auto`를 설정하는데 CSS 스펙상 이것이 가로축에도 전이되어(visible과 non-visible을 함께 쓸 수 없음) 리스트 자신이 별도의 가로 **스크롤 위치** 컨텍스트가 된다. 그 결과 리스트 내부 스크롤로 긴 경로를 전부 볼 수는 있지만, 사용자가 리스트를 가로로 스크롤하면 헤더 라벨("Local Path")의 스크롤 위치가 그걸 따라가지 않는다(폭 불일치가 아니라 스크롤 위치 동기화 문제). 300개 이하(일반적인 경우)에서는 폭·스크롤 위치 모두 헤더와 완전히 동기화된다.
+**정정 (300개 초과 시 중첩 가로 스크롤 수정 완료, 2026-08-20, 사용자 발견)**: 아래 문단은 발견 당시의 "알려진 제약" 기록이며, 지금은 해결된 과거 상태다. 재현 테스트로 정확한 조건(정확히 300개 초과, 그 미만은 문제 없음)을 확인한 뒤, react-window `List`가 `style` prop을 자기 루트에 마지막에 spread한다는 걸 소스 코드로 확인해(DETAILED_DESIGN.md §12.2) `style={{ overflowX: 'hidden' }}`을 추가하는 것만으로 해결했다 — CSS 선택자 우회 불필요. 450개 fixture로 재검증해 중첩 스크롤 컨텍스트가 사라진 것을 확인했다.
+
+**알려진 제약(해결됨, 아래는 발견 당시 기록)**: 위 수정으로 컬럼 **폭 자체**는 필터링된 표시 대상 개수와 무관하게 항상 헤더와 목록이 일치한다. 다만 필터링된 표시 대상이 300개를 넘어 가상 스크롤이 적용되는 경우, react-window가 세로 가상 스크롤을 위해 자기 루트에 `overflow-y:auto`를 설정하는데 CSS 스펙상 이것이 가로축에도 전이되어(visible과 non-visible을 함께 쓸 수 없음) 리스트 자신이 별도의 가로 **스크롤 위치** 컨텍스트가 된다. 그 결과 리스트 내부 스크롤로 긴 경로를 전부 볼 수는 있지만, 사용자가 리스트를 가로로 스크롤하면 헤더 라벨("Local Path")의 스크롤 위치가 그걸 따라가지 않는다(폭 불일치가 아니라 스크롤 위치 동기화 문제) — `overflowX:'hidden'` 적용 후에는 react-window 내부 루트가 애초에 가로 스크롤 컨텍스트를 갖지 않으므로 이 문제 자체가 사라진다.
 
 **정정 (Server Path 열 삭제, RISK_ISSUES.md §7.1, 2026-08-07)**: FooterActionBar(§2.8)에서 Mapping Profile 드롭다운을 숨기면서, 유일한 프로필인 `default`의 `overrides`가 항상 빈 배열이라는 게 재확인되었다 — 즉 Server Path가 사실상 항상 Local Path와 같은 값이었다. 화면에 항상 동일한 두 열을 나란히 보여줄 이유가 없어 Server Path 열을 삭제하고 Local Path 단일 컬럼으로 바꿨다. 위 세 문단(컬럼 리사이즈/폭 불일치 수정/알려진 제약)에 있던 Server Path 관련 서술은 이번 정정으로 모두 제거됐다.
 
@@ -160,8 +164,8 @@ AppShell
 | 구성 | 설명 |
 |---|---|
 | 패널 제목 | `Deploy Files (HEAD Latest Version)` — 테두리 없는 얇은 부모 영역 상단에 한 번만 표시(양쪽 공통 헤더가 아니라 부모 전체 제목) |
-| 좌: 포함된 파일 (`FileListColumn`) | 기존 `deployFiles` 그대로 — 헤더 "전체 선택" 체크박스(필터에 표시된 행 기준, indeterminate 지원), Filter 드롭다운(`all\|added\|modified`), **파일명 검색 입력(신규, 부분 일치)**, Local Path 단일 컬럼 |
-| 우: 누락된 의존성 (`FileListColumn`) | REQ-013 결과(`missingDependencies`) — 헤더에 체크박스 대신 **`[전체 추가]` 버튼**(아직 추가 안 된 항목이 없으면 비활성화), Filter 드롭다운 없음(상태 개념이 없으므로), 파일명 검색 입력, 경로 옆에 `(인터페이스)`/`(구현체)` 라벨 |
+| 좌: 포함된 파일 (`FileListColumn`) | 기존 `deployFiles` 그대로 — "전체 선택" 체크박스(Local Path 컬럼 헤더에 위치, 필터에 표시된 행 기준, indeterminate 지원), Filter 드롭다운(`all\|added\|modified`), 파일명 검색 입력, 제외 패턴 입력(REQ-019), Local Path 단일 컬럼 |
+| 우: 누락된 의존성 (`FileListColumn`) | REQ-013 결과(`missingDependencies`) — **정정(2026-08-20)**: 원래는 `[전체 추가]` 버튼(단방향, 아직 추가 안 된 것만 추가)이었으나 좌측과 동일한 "전체 선택" 체크박스(양방향, 전체 추가 ↔ 전체 제거)로 교체. Filter 드롭다운 없음(상태 개념이 없으므로), 파일명 검색 입력, 경로 옆에 `(인터페이스)`/`(구현체)` 라벨 |
 | 좌우 경계 | `SplitPane`으로 드래그 조절(§7.4), 기본 50:50, 최소 폭 260px씩 |
 
 **정정 (부모/자식 패널 경계 분리 — 독립 스크롤, 2026-08-07, 사용자 요청)**: 처음 §7.2 구현 시점에는 `DeployFilesPanel` 바깥 div 하나가 `.panel`(테두리+배경+`overflow:auto`)이었고 제목·좌우 `FileListColumn` 전부를 그 안에 담았다 — MainGrid(CommitListPanel/DeploymentPreviewPanel이 각자 독립된 `.panel`이고, 그걸 감싸는 `SplitPane`은 제목도 테두리도 없는 순수 레이아웃 wrapper인 구조)와 다른 패턴이었다. 사용자가 "누락된 의존성 목록과 포함된 파일 목록의 스크롤을 개별적으로 하고 싶다"고 요청하면서 MainGrid와 같은 패턴으로 맞췄다 — `DeployFilesPanel`의 바깥 div는 이제 `.panel` 클래스를 갖지 않는 얇은 제목 전용 컨테이너이고(`main-grid`처럼 세로 flex 크기만 담당), 좌우 `FileListColumn` 각각이 `.panel`(자기 테두리 + 자기 배경)이 되어 그 안의 `.deploy-files-panel__scroll`이 완전히 독립적으로 스크롤된다. Stale 상태(§2.5 `isStale`) 표시도 이 변경에 맞춰 부모 전체를 한 메시지로 대체하던 방식에서, 좌우 각자의 `.panel` 박스 안에서 개별적으로 표시하는 방식으로 바뀌었다(MainGrid에서 CommitListPanel/DeploymentPreviewPanel이 각자 자기 빈/로딩/에러 상태를 보여주는 것과 동일한 패턴).
@@ -172,9 +176,13 @@ AppShell
 
 **파일명 검색(좌우 공통, 신규)**: 경로 전체가 아니라 **파일명(경로의 마지막 조각)** 부분 일치로 필터링한다 — §7.3(파일명으로 커밋 검색)과 매칭 기준을 통일했다. 상태 Filter(좌측만 있음) 이후에 적용된다.
 
-**정정 (전체 선택/전체 추가가 검색어를 무시하는 버그 수정 예정, 2026-08-12, 코드 리딩으로 발견)**: 좌측 "전체 선택"은 상태 Filter(드롭다운)만 반영해 다시 계산하고 파일명 검색은 무시했고, 우측 "전체 추가"는 Filter/검색 둘 다 무시하고 항상 `missingDependencies` 전체를 대상으로 했다 — 이 문서 위쪽 표(§2.6 "전체 선택" 행)에 적혀 있던 "필터에 표시된 행 기준"이라는 의도와 실제 동작이 어긋나 있었다. 근본 원인은 필터 로직이 `DeployFilesPanel.tsx`(화면 표시용)와 store(토글 대상 계산용) 두 곳에 중복 구현되어 서로 어긋난 것 — 수정 후에는 **좌우 둘 다 상태 Filter + 파일명 검색이 모두 적용된, 화면에 실제로 보이는 행만** 대상으로 한다(단일 진실 공급원: 화면 표시 목록을 그대로 액션 파라미터로 전달). DETAILED_DESIGN.md §9 표, RISK_ISSUES.md 결정 이력 참고.
+**추가 (배포 대상 파일 제외 패턴, REQ-019, DR-018, 2026-08-12)**: 좌측(포함된 파일)에만 적용되는 별도 필터. 파일명 검색과 역할이 다르다 — 검색은 "지금 찾고 싶은 것만 보기"(매번 새로 입력, 지워지는 일시적 포함 필터)인 반면, 제외 패턴은 "이 종류는 앞으로도 계속 안 올린다"(한 번 등록하면 재사용하는 지속적 제외 필터). 활성 패턴에 매치되는 파일은 목록에서 완전히 숨겨지고 Export 대상에서도 제외된다(단, `deployFiles[].included`를 직접 고치지 않고 Export 시점에 별도로 한 번 더 걸러내는 파생 계산 방식 — DETAILED_DESIGN.md §12.1). 우측(누락된 의존성)에는 적용하지 않는다 — 그 목록은 항상 `.java` 파일만 나오도록 설계되어 있어(REQ-013) 이 패턴이 사실상 적용될 일이 없다.
 
-**상태 추가**: `missingDependencies: { localPath: string; serverPath: string; status: 'added'; kind: 'interface'|'class' }[]`, `dependencyApplicable: boolean`, `dependencyReason: string | null`, `dependencyAnalyzing: boolean`, `dependencyParseWarnings: { path: string; reason: string }[]`, `deployFilesSearchTerm: string`, `dependencySearchTerm: string`(§3 참고).
+**정정 (전체 선택/전체 추가가 검색어를 무시하는 버그 수정 완료, 2026-08-12, 코드 리딩으로 발견)**: 좌측 "전체 선택"은 상태 Filter(드롭다운)만 반영해 다시 계산하고 파일명 검색은 무시했고, 우측 "전체 추가"는 Filter/검색 둘 다 무시하고 항상 `missingDependencies` 전체를 대상으로 했다 — 이 문서 위쪽 표(§2.6 "전체 선택" 행)에 적혀 있던 "필터에 표시된 행 기준"이라는 의도와 실제 동작이 어긋나 있었다. 근본 원인은 필터 로직이 `DeployFilesPanel.tsx`(화면 표시용)와 store(토글 대상 계산용) 두 곳에 중복 구현되어 서로 어긋난 것 — 수정 후에는 **좌우 둘 다 상태 Filter + 파일명 검색이 모두 적용된, 화면에 실제로 보이는 행만** 대상으로 한다(단일 진실 공급원: 화면 표시 목록을 그대로 액션 파라미터로 전달). DETAILED_DESIGN.md §9 표, RISK_ISSUES.md 결정 이력 참고.
+
+**정정 (우측도 "전체 선택" 체크박스로 통일, 2026-08-20)**: 위 문단의 우측 "전체 추가"는 이후 좌측과 동일한 양방향 "전체 선택" 체크박스로 완전히 교체됐다(DETAILED_DESIGN.md §12.4) — 단방향 add-only 버튼 자체가 없어졌다. "화면에 실제로 보이는 행만 대상"이라는 이 정정의 핵심 원칙은 그대로 유지된다.
+
+**상태 추가**: `missingDependencies: { localPath: string; serverPath: string; status: 'added'; kind: 'interface'|'class' }[]`, `dependencyApplicable: boolean`, `dependencyReason: string | null`, `dependencyAnalyzing: boolean`, `dependencyParseWarnings: { path: string; reason: string }[]`, `deployFilesSearchTerm: string`, `dependencySearchTerm: string`(§3 참고), `excludePatterns: { pattern: string; enabled: boolean }[]`(REQ-019, `localStorage` 전역 저장·복원, §3 참고).
 
 **경고 배너 추가**: 기존 "N개 파일이 HEAD에 없어 제외되었습니다"(DR-009) 배너 아래, 의존성 검사 중 파싱에 실패한 파일이 있으면 "N개 파일을 파싱하지 못해 의존성 검사에서 제외했습니다" 배너를 추가로 보여준다(`dependencyParseWarnings`).
 
@@ -216,7 +224,9 @@ AppShell
 
 | 요소 | 동작 |
 |---|---|
-| 이미지 링크 | 제작자 자작 캐릭터 이미지(50×50, `src/renderer/src/assets/goraeng.png`)를 원본 크기로 표시. 클릭 시 `https://github.com/neisii`를 시스템 기본 브라우저로 연다(`target="_blank"` + `rel="noopener noreferrer"`, Main Process의 `webContents.setWindowOpenHandler`가 새 창 생성을 가로채 `shell.openExternal`로 위임 — 앱 내부 네비게이션 없음). 호버 시 `title="클릭 시 제작자의 Github로 이동합니다."` 툴팁 표시 |
+| 이미지 링크 | 제작자 자작 캐릭터 이미지(50×50, `src/renderer/src/assets/goraeng.png`)를 원본 크기로 표시. 클릭 시 `https://github.com/neisii/git-deploy-extractor`(이 저장소 페이지)를 시스템 기본 브라우저로 연다(`target="_blank"` + `rel="noopener noreferrer"`, Main Process의 `webContents.setWindowOpenHandler`가 새 창 생성을 가로채 `shell.openExternal`로 위임 — 앱 내부 네비게이션 없음). 호버 시 `title="클릭 시 이 저장소의 Github 페이지로 이동합니다."` 툴팁 표시 |
+
+**정정 (링크 대상: 제작자 프로필 → 저장소 페이지, 2026-08-20, 사용자 요청)**: 기존엔 `https://github.com/neisii`(제작자 GitHub 프로필)로 연결했으나, 이 저장소 페이지(`https://github.com/neisii/git-deploy-extractor`)로 바꾼다 — 클릭 시 도착지가 이 앱의 이슈/릴리스/소스코드를 바로 볼 수 있는 곳이 되는 게 더 유용하다는 판단. 툴팁 문구도 그에 맞게 정정.
 
 **상태 없음** — 정적 요소, Zustand 스토어와 무관하다. `position: fixed`로 배치되어 다른 패널의 레이아웃(높이 등)에 영향을 주지 않는다.
 
@@ -252,6 +262,10 @@ interface AppState {
   deployFiles: DeployFileEntry[];
   deployFilesFilter: 'all' | 'added' | 'modified';   // §2.6 Filter dropdown 상태
   deployFilesSearchTerm: string;    // §2.6, REQ-013과 함께 추가 — 좌측 파일명 검색
+  // REQ-019/DR-018 — localStorage(gde:excludePatterns)로 동기 초기화(lazy
+  // initializer, updateInfo/columnWidths와 동일 패턴). enabled인 것만 실제
+  // 적용되고, 비활성 패턴도 이력으로 남아있어 다시 켤 수 있다.
+  excludePatterns: { pattern: string; enabled: boolean }[];
   deleteList: DeleteEntry[];
   warnings: { path: string; reason: string }[];
 
@@ -289,7 +303,7 @@ interface AppState {
 
 **파생 계산 흐름 (정정, 2026-08-04)**: `selectedHashes`/`selectedBranch`/`selectedProfile` 변경은 더 이상 IPC를 트리거하지 않는다 — `[Preview]` 클릭만이 단일 IPC 호출(Commit 분석 엔진 + Mapping Rule 엔진 결과)을 일으키고, 그 결과로 `summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection`이 동시 갱신된다. `isStale = 현재 (selectedHashes, selectedBranch, selectedProfile) ≠ analyzedSelection`으로 파생 계산하며, 세 미리보기 패널(§2.5~2.7)과 `[Export]` 비활성 조건(§2.8)이 모두 이 값을 공유한다. 개별 `included` 토글(DeployFilesPanel)만 예외로 로컬 갱신(재계산도, staleness 판정도 없음 — 이미 계산된 목록 안에서의 선택/해제이기 때문).
 
-**추가 (의존성 검사 체이닝, REQ-013, 2026-08-07)**: `[Preview]`가 성공하면(위 IPC 완료 직후) 곧바로 두 번째 IPC(`analysis:dependencies`)를 자동으로 호출해 `missingDependencies`/`dependencyApplicable`/`dependencyReason`/`dependencyParseWarnings`를 채운다 — 별도 버튼 없음. 이 두 번째 호출이 실패해도 첫 번째 IPC의 결과(`summary`/`deployFiles` 등)는 그대로 유효하다(우측 패널에만 영향). `missingDependencies`의 개별/전체 추가(`toggleDependencyIncluded`/`addAllMissingDependencies`)도 `toggleDeployFileIncluded`와 동일하게 로컬 갱신이며 재계산·staleness 판정을 일으키지 않는다 — 대상이 `deployFiles` 배열에 항목을 추가/제거하는 것뿐이기 때문이다.
+**추가 (의존성 검사 체이닝, REQ-013, 2026-08-07)**: `[Preview]`가 성공하면(위 IPC 완료 직후) 곧바로 두 번째 IPC(`analysis:dependencies`)를 자동으로 호출해 `missingDependencies`/`dependencyApplicable`/`dependencyReason`/`dependencyParseWarnings`를 채운다 — 별도 버튼 없음. 이 두 번째 호출이 실패해도 첫 번째 IPC의 결과(`summary`/`deployFiles` 등)는 그대로 유효하다(우측 패널에만 영향). `missingDependencies`의 개별/전체 추가·제거(`toggleDependencyIncluded`/`toggleAllMissingDependencies`, 2026-08-20 이전 이름은 `addAllMissingDependencies`)도 `toggleDeployFileIncluded`와 동일하게 로컬 갱신이며 재계산·staleness 판정을 일으키지 않는다 — 대상이 `deployFiles` 배열에 항목을 추가/제거하는 것뿐이기 때문이다.
 
 **추가 (업데이트 확인, REQ-017/DR-016, 2026-08-12)**: `updateInfo`/`updateChecking`은 다른 파생 계산(§2.5 `isStale` 등)과 무관한 독립 상태다. 앱 시작 시 `localStorage`(`gde:lastUpdateCheck`) 캐시가 24시간 지났으면, 버전 배지 클릭 시엔 캐시 나이와 무관하게 항상, `updateChecking=true`로 두고 Main IPC(`window.api.checkForUpdate`)를 호출한다. 응답이 오면 성공 시 `updateInfo`를 갱신하고 캐시도 새로 쓰지만, 실패 시엔 `updateInfo`를 건드리지 않고(직전 상태 유지) 캐시도 갱신하지 않는다 — 두 경우 모두 `updateChecking`은 false로 되돌린다. 클릭 시 뜨는 `dialog.showMessageBox` 확인창은 이 IPC 호출과 별개로 즉시 트리거되며 응답을 기다리지 않는다(DETAILED_DESIGN.md §10.3).
 
@@ -314,12 +328,14 @@ interface AppState {
 | DeployFilesPanel(좌/우) 파일명 검색 입력 | `deployFilesSearchTerm`/`dependencySearchTerm` 갱신, 즉시 클라이언트 필터링(디바운스 없음) | 없음 (로컬) | REQ-013 |
 | `[Preview]` 클릭 | `analyzing = true` → 완료 시 `summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection` 동시 갱신, 이어서 `dependencyAnalyzing = true` → 완료 시 `missingDependencies` 등 갱신(체이닝) | Commit 분석 + Mapping 엔진 → 의존성 완결성 검사 | REQ-005~008, REQ-013 |
 | DeployFilesPanel(우) 개별 체크박스 토글 | `deployFiles`에 없으면 추가, 있으면 제거 | 없음 (로컬) | REQ-013 |
-| `[전체 추가]` 클릭 (우) | 필터+검색에 표시된 `missingDependencies` 중 아직 `deployFiles`에 없는 것만 `included: true`로 추가 | 없음 (로컬) | REQ-013 |
+| "전체 선택" 토글 (우, 2026-08-20 체크박스로 통일) | 필터+검색에 표시된 `missingDependencies`가 전부 이미 `deployFiles`에 있으면 그 경로들을 전부 제거(전체 해제), 그 외(일부/전무)면 아직 없는 것만 전체 추가 — 좌측 `toggleAllDeployFiles`와 동일한 양방향 판정 방식 | 없음 (로컬) | REQ-013 |
 | `[변경]` 클릭 (FooterActionBar) | 취소 시 상태 변화 없음. 선택 시 `exportParentDir` 갱신 + `localStorage` 저장 | `dialog.showOpenDialog`(`package:browseExportDir`) | REQ-012 |
-| `[Export]` 클릭 | `exportStatus = 'exporting'` → `'done'`\|`'error'`\|(취소 시)`'idle'` | Package Builder(전체: 파일 복사 + 3종 Export). 대상 폴더에 기존 내용 있으면 먼저 `dialog.showMessageBox` 확인 | REQ-009, REQ-010, DR-013 |
+| `[Export]` 클릭 | `exportStatus = 'exporting'` → `'done'`\|`'error'`\|(취소 시)`'idle'` | Package Builder(전체: 파일 복사 + 3종 Export). 대상 폴더에 기존 내용 있으면 먼저 `dialog.showMessageBox` 확인. 대상 파일은 `included:true`이면서 **활성 제외 패턴에 매치되지 않는** 것만(REQ-019, DR-018) | REQ-009, REQ-010, DR-013 |
 | SplitPane 경계 드래그(MainGrid/DeployFilesPanel) | 드래그 중 실시간 비율 반영, mouseup 시 `localStorage`에 최종 비율 저장 | 없음 (로컬) | REQ-014 |
 | 앱 시작(캐시 24h 초과 시) | `updateChecking = true` → 완료 시 `updateInfo` 갱신(성공, `hasUpdate`는 원격이 로컬보다 엄격히 클 때만 true) 또는 유지(실패), `updateChecking = false` | `checkForUpdate`(GitHub `releases/latest`) | REQ-017, DR-016 |
 | 버전 배지 클릭 | 캐시 나이 무관하게 `updateChecking = true`(위와 동일 흐름) — **응답을 기다리지 않고 즉시** `dialog.showMessageBox` 확인창도 같이 뜬다. "네" 응답 시에만 `shell.openExternal`(고정 인덱스 URL). **이미 `updateChecking===true`거나 확인창이 이미 열려 있으면** 새 네트워크 호출/확인창을 추가로 띄우지 않는다(연속 클릭 가드) | `checkForUpdate` + (확인 시)`shell.openExternal` | REQ-017, DR-016 |
+| 제외 패턴 `[+추가]` 클릭 (좌) | `excludePatterns`에 `{pattern, enabled:true}` 추가, `localStorage` 저장. 즉시 해당 패턴에 매치되는 행이 목록에서 숨겨짐 | 없음 (로컬) | REQ-019, DR-018 |
+| 제외 패턴 칩 클릭 (좌) | 해당 패턴의 `enabled` 토글, `localStorage` 저장. 비활성화하면 그 패턴 때문에 숨겨졌던 행이 즉시 다시 보임(원래 `included` 값 그대로 — 별도 복원 로직 없음) | 없음 (로컬) | REQ-019, DR-018 |
 
 **정정 (커밋 선택 유지, REQ-015/016, 2026-08-07)**: 위 표에서 "`selectedHashes = {}`"로 표시된 두 트리거(Browse, Branch 변경)만 선택을 지운다 — 나머지 재조회 트리거는 전부 `selectedHashes`를 유지한다. 이전 버전 이 표는 모든 재조회 트리거가 "CommitListPanel 리셋"이라는 이름으로 뭉뚱그려져 있었고, 그 리셋이 `selectedHashes`까지 항상 지운다는 뜻이었다 — 검색 조건을 바꿔가며 관련 커밋을 여러 번 찾아 누적 체크하는 워크플로우가 실사용에서 나오면서, 이 전면 초기화가 워크플로우를 방해한다는 게 확인되어 DR-015로 예외 범위를 좁혔다.
 

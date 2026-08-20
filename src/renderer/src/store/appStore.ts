@@ -15,6 +15,9 @@ import {
   saveUpdateCheckCache,
   isUpdateCheckCacheStale
 } from '../lib/updateCheckCache'
+import { loadExcludePatterns, saveExcludePatterns } from '../lib/excludePatterns'
+import type { ExcludePatternEntry } from '../lib/excludePatterns'
+import { matchesAnyActiveExcludePattern } from '../lib/excludePatternMatch'
 
 const PAGE_SIZE = 100
 const SEARCH_DEBOUNCE_MS = 300
@@ -81,6 +84,9 @@ interface AppState {
   deployFiles: DeployFileEntry[]
   deployFilesFilter: DeployFilesFilter
   deployFilesSearchTerm: string // §7.2 point 8 — 좌측 "포함된 파일" 파일명 검색(부분 일치)
+  // REQ-019/DR-018 — "포함된 파일"에만 적용(누락된 의존성은 항상 .java만
+  // 나와 무의미). localStorage(gde:excludePatterns)로 동기 초기화.
+  excludePatterns: ExcludePatternEntry[]
   deleteList: DeleteEntry[]
   warnings: AnalysisWarning[]
 
@@ -130,11 +136,13 @@ interface AppState {
   toggleAllCommits: () => void
   setDeployFilesFilter: (filter: DeployFilesFilter) => void
   setDeployFilesSearchTerm: (term: string) => void
+  addExcludePattern: (pattern: string) => void
+  toggleExcludePattern: (pattern: string) => void
   toggleDeployFileIncluded: (localPath: string) => void
   toggleAllDeployFiles: (visibleLocalPaths: string[]) => void
   setDependencySearchTerm: (term: string) => void
   toggleDependencyIncluded: (localPath: string) => void
-  addAllMissingDependencies: (visibleLocalPaths: string[]) => void
+  toggleAllMissingDependencies: (visibleLocalPaths: string[]) => void
   setProfile: (profileName: string) => void
   runPreview: () => Promise<void>
   runExport: () => Promise<void>
@@ -384,6 +392,7 @@ export const useAppStore = create<AppState>((set, get) => {
     deployFiles: [],
     deployFilesFilter: 'all',
     deployFilesSearchTerm: '',
+    excludePatterns: loadExcludePatterns(),
     deleteList: [],
     warnings: [],
 
@@ -621,6 +630,32 @@ export const useAppStore = create<AppState>((set, get) => {
     setDeployFilesFilter: (filter) => set({ deployFilesFilter: filter }),
     setDeployFilesSearchTerm: (term) => set({ deployFilesSearchTerm: term }),
 
+    // 빈 입력은 무시하고, 이미 있는 패턴이면 새로 추가하지 않고 enabled만
+    // 켠다(중복 방지 — 사용자가 예전에 껐던 패턴을 다시 입력했을 때 자연스럽게
+    // "다시 켜기"로 동작).
+    addExcludePattern: (pattern) => {
+      const trimmed = pattern.trim()
+      if (!trimmed) return
+      set((state) => {
+        const exists = state.excludePatterns.some((p) => p.pattern === trimmed)
+        const next = exists
+          ? state.excludePatterns.map((p) => (p.pattern === trimmed ? { ...p, enabled: true } : p))
+          : [...state.excludePatterns, { pattern: trimmed, enabled: true }]
+        saveExcludePatterns(next)
+        return { excludePatterns: next }
+      })
+    },
+
+    toggleExcludePattern: (pattern) => {
+      set((state) => {
+        const next = state.excludePatterns.map((p) =>
+          p.pattern === pattern ? { ...p, enabled: !p.enabled } : p
+        )
+        saveExcludePatterns(next)
+        return { excludePatterns: next }
+      })
+    },
+
     toggleDeployFileIncluded: (localPath) => {
       set((state) => ({
         deployFiles: state.deployFiles.map((f) =>
@@ -678,16 +713,22 @@ export const useAppStore = create<AppState>((set, get) => {
       })
     },
 
-    // 정정(RISK_ISSUES.md 결정 이력 #33): Filter/검색 둘 다 무시하고 항상
-    // missingDependencies 전체를 대상으로 하던 버그를 고쳤다 — 화면에 실제로
-    // 표시 중인 목록(DeployFilesPanel.tsx의 missingItems)의 경로만 받는다.
-    addAllMissingDependencies: (visibleLocalPaths) => {
+    // "전체 추가"(add-only) 버튼을 "전체 선택"(양방향 토글) 체크박스로
+    // 교체 — 좌측 toggleAllDeployFiles()와 같은 패턴. 받은 경로 중 화면에
+    // 실제로 보이는 missingDependencies가 전부 이미 추가돼 있으면 전체
+    // 제거, 그 외(일부만/전혀 없음)면 아직 없는 것만 전체 추가한다.
+    toggleAllMissingDependencies: (visibleLocalPaths) => {
       set((state) => {
         const visibleSet = new Set(visibleLocalPaths)
         const existing = new Set(state.deployFiles.map((f) => f.localPath))
-        const toAdd = state.missingDependencies.filter(
-          (d) => visibleSet.has(d.localPath) && !existing.has(d.localPath)
-        )
+        const visibleMissing = state.missingDependencies.filter((d) => visibleSet.has(d.localPath))
+        const allChecked =
+          visibleMissing.length > 0 && visibleMissing.every((d) => existing.has(d.localPath))
+
+        if (allChecked) {
+          return { deployFiles: state.deployFiles.filter((f) => !visibleSet.has(f.localPath)) }
+        }
+        const toAdd = visibleMissing.filter((d) => !existing.has(d.localPath))
         if (toAdd.length === 0) return {}
         return {
           deployFiles: [
@@ -720,6 +761,7 @@ export const useAppStore = create<AppState>((set, get) => {
         commits,
         selectedHashes,
         deployFiles,
+        excludePatterns,
         deleteList,
         warnings,
         exportParentDir
@@ -735,8 +777,13 @@ export const useAppStore = create<AppState>((set, get) => {
           branch: selectedBranch,
           mappingProfileName: selectedProfile,
           selectedCommits: commits.filter((c) => selectedHashes.has(c.hash)),
+          // REQ-019/DR-018: included=true인 것 중, 활성 제외 패턴에 매치되지
+          // 않는 것만 Export 대상이다 — deployFiles[].included 자체는 건드리지
+          // 않고(파생 계산), 여기서 최종적으로 한 번 더 걸러낸다.
           files: deployFiles
-            .filter((f) => f.included)
+            .filter(
+              (f) => f.included && !matchesAnyActiveExcludePattern(f.localPath, excludePatterns)
+            )
             .map((f) => ({ localPath: f.localPath, serverPath: f.serverPath, status: f.status })),
           deletedServerPaths: deleteList.map((d) => d.path),
           warnings,

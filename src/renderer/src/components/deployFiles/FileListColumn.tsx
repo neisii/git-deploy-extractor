@@ -4,6 +4,7 @@ import { List } from 'react-window'
 import type { RowComponentProps } from 'react-window'
 import { loadColumnWidths, saveColumnWidths } from '../../lib/columnWidths'
 import type { ColumnWidths } from '../../lib/columnWidths'
+import type { ExcludePatternEntry } from '../../lib/excludePatterns'
 
 // RISK_ISSUES.md §7.2 point 8 — DeployFilesPanel의 좌(포함된 파일)/우(누락된
 // 의존성) 두 목록이 공유하는 단일 컬럼 체크리스트. §7.1에서 Server Path
@@ -25,27 +26,38 @@ export interface FileListItem {
   extraLabel?: string // 예: "(인터페이스)" / "(구현체)" — 우측 패널 전용
 }
 
-export type BulkAction =
-  | {
-      kind: 'checkbox'
-      label: string
-      checked: boolean
-      indeterminate: boolean
-      onClick: () => void
-    }
-  | { kind: 'button'; label: string; onClick: () => void; disabled?: boolean }
+// 좌우 둘 다 같은 체크박스 하나로 통일됐다(우측도 "전체 추가"에서 "전체
+// 선택"으로 바뀌면서 kind:'button' 변형이 더 이상 쓰이지 않게 되어 제거).
+export interface BulkSelectAction {
+  checked: boolean
+  indeterminate: boolean
+  onClick: () => void
+}
 
 interface FileListColumnProps {
   headerTitle: string
-  items: FileListItem[] // 상태 필터 + 검색이 이미 적용된 상태로 전달받는다
+  items: FileListItem[] // 상태 필터 + 검색 + 제외 패턴이 이미 적용된 상태로 전달받는다
   onToggleItem: (localPath: string) => void
   searchTerm: string
   onSearchTermChange: (term: string) => void
-  bulkAction: BulkAction
+  bulkAction: BulkSelectAction
   extraHeaderControl?: ReactNode // 좌측의 Filter 드롭다운 자리(우측엔 없음)
   columnWidthKey: keyof ColumnWidths
   emptyMessage: string
   searchPlaceholder?: string
+  // REQ-020 — "선택"/"(필터 전 전체)"는 Filter/검색과 무관한 절대값이라
+  // items에서 파생할 수 없다. DeployFilesPanel.tsx가 원본 배열 기준으로
+  // 계산해서 내려준다.
+  selectedCount: number
+  totalBeforeFilter: number
+  // REQ-020 — "누락된 의존성"에만 50을 넘겨준다("포함된 파일"은 전달 안 함
+  // → 경고 비활성).
+  overCountThreshold?: number
+  // REQ-019/DR-018 — "포함된 파일"에만 전달한다(누락된 의존성엔 적용 안 함).
+  // 셋 다 없으면 이 UI 자체가 렌더링되지 않는다.
+  excludePatterns?: ExcludePatternEntry[]
+  onAddExcludePattern?: (pattern: string) => void
+  onToggleExcludePattern?: (pattern: string) => void
 }
 
 function displayText(item: FileListItem): string {
@@ -104,14 +116,28 @@ export function FileListColumn({
   extraHeaderControl,
   columnWidthKey,
   emptyMessage,
-  searchPlaceholder
+  searchPlaceholder,
+  selectedCount,
+  totalBeforeFilter,
+  overCountThreshold,
+  excludePatterns,
+  onAddExcludePattern,
+  onToggleExcludePattern
 }: FileListColumnProps): React.JSX.Element {
   const headerCheckboxRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
-    if (headerCheckboxRef.current && bulkAction.kind === 'checkbox') {
+    if (headerCheckboxRef.current) {
       headerCheckboxRef.current.indeterminate = bulkAction.indeterminate
     }
   }, [bulkAction])
+
+  const [newPattern, setNewPattern] = useState('')
+
+  // REQ-020 — "전체"(=items.length, 상태 Filter+검색+제외패턴 적용 후 화면
+  // 표시 개수)만 여기서 파생 계산한다. "선택"/"(필터 전 전체)"는 원본 배열이
+  // 있어야 계산 가능해 DeployFilesPanel.tsx가 prop으로 내려준다(§12.3).
+  const total = items.length
+  const isOverThreshold = overCountThreshold !== undefined && total > overCountThreshold
 
   const [columnWidths, setColumnWidths] = useState<ColumnWidths>(() => loadColumnWidths())
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -192,22 +218,16 @@ export function FileListColumn({
   return (
     <div className="panel file-list-column">
       <div className="deploy-files-panel__header">
-        <span className="file-list-column__title">{headerTitle}</span>
-        {bulkAction.kind === 'checkbox' ? (
-          <label>
-            <input
-              ref={headerCheckboxRef}
-              type="checkbox"
-              checked={bulkAction.checked}
-              onChange={() => bulkAction.onClick()}
-            />
-            {bulkAction.label}
-          </label>
-        ) : (
-          <button onClick={() => bulkAction.onClick()} disabled={bulkAction.disabled}>
-            {bulkAction.label}
-          </button>
-        )}
+        <span className="file-list-column__title">
+          {headerTitle} (선택 {selectedCount}개/
+          <span
+            className={isOverThreshold ? 'status-text--error' : undefined}
+            title={isOverThreshold ? '50개를 초과했습니다' : undefined}
+          >
+            전체 {total}개
+          </span>
+          (필터 전 전체 {totalBeforeFilter}개))
+        </span>
         {extraHeaderControl}
       </div>
       <label className="file-list-column__search">
@@ -219,9 +239,60 @@ export function FileListColumn({
           onChange={(e) => onSearchTermChange(e.target.value)}
         />
       </label>
+      {excludePatterns && onAddExcludePattern && onToggleExcludePattern && (
+        <div className="file-list-column__exclude-patterns">
+          <label>
+            제외 패턴:
+            <input
+              type="text"
+              value={newPattern}
+              placeholder="*.png"
+              onChange={(e) => setNewPattern(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return
+                onAddExcludePattern(newPattern)
+                setNewPattern('')
+              }}
+            />
+          </label>
+          <button
+            onClick={() => {
+              onAddExcludePattern(newPattern)
+              setNewPattern('')
+            }}
+          >
+            +추가
+          </button>
+          {excludePatterns.length > 0 && (
+            <div className="file-list-column__exclude-pattern-chips">
+              {excludePatterns.map((p) => (
+                <button
+                  key={p.pattern}
+                  type="button"
+                  className={
+                    p.enabled
+                      ? 'exclude-pattern-chip exclude-pattern-chip--active'
+                      : 'exclude-pattern-chip'
+                  }
+                  onClick={() => onToggleExcludePattern(p.pattern)}
+                  title={p.enabled ? '클릭하면 이 패턴을 끕니다' : '클릭하면 이 패턴을 켭니다'}
+                >
+                  {p.pattern}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div className="deploy-files-panel__scroll" ref={scrollRef} style={scrollStyle}>
         <div className="deploy-files-grid-row deploy-files-panel__columns">
-          <span></span>
+          <input
+            ref={headerCheckboxRef}
+            type="checkbox"
+            checked={bulkAction.checked}
+            onChange={() => bulkAction.onClick()}
+            title={bulkAction.checked ? '전체 해제' : '전체 선택'}
+          />
           <span data-col="path" className="deploy-files-panel__col-header">
             {HEADER_LABEL}
             <span
@@ -252,7 +323,15 @@ export function FileListColumn({
               rowCount={items.length}
               rowHeight={ROW_HEIGHT}
               rowProps={{ items, onToggle: onToggleItem }}
-              style={{ height: '100%' }}
+              // DETAILED_DESIGN.md §12.2 — react-window List가 세로 가상
+              // 스크롤을 위해 자기 루트에 overflowY:auto를 설정하면 CSS
+              // 스펙상 overflow-x도 auto로 강제 승격되어, 바깥 컨테이너
+              // (.deploy-files-panel__scroll)와 별개로 자체 가로 스크롤
+              // 컨텍스트가 생겼다(300개 초과 시 재현 확인). 이 컴포넌트가
+              // 내부에서 style prop을 마지막에 spread한다는 걸 소스로
+              // 확인해 overflowX:hidden으로 억제 — 가로 스크롤은 항상
+              // 바깥 컨테이너 하나만 담당하게 한다.
+              style={{ height: '100%', overflowX: 'hidden' }}
             />
           ) : (
             items.map((item) => (

@@ -408,6 +408,41 @@ body,
   flex: 1;
 }
 
+/* REQ-019/DR-018 — 제외 패턴 입력 행(검색 아래) + 등록된 패턴 칩 목록.
+   "포함된 파일"에만 렌더링된다(FileListColumn이 관련 prop을 받았을 때만). */
+.file-list-column__exclude-patterns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.file-list-column__exclude-pattern-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: 100%;
+}
+
+.exclude-pattern-chip {
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: transparent;
+  color: var(--ev-c-text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* 활성 패턴만 강조 — 비활성(꺼진) 패턴은 이력에는 남아있지만 흐리게
+   표시해 "지금 적용 안 됨"을 구분한다. */
+.exclude-pattern-chip--active {
+  background: var(--ev-c-gray-3);
+  color: var(--color-text);
+  border-color: var(--ev-c-gray-2);
+}
+
 .deploy-files-panel__header {
   display: flex;
   flex-wrap: wrap;
