@@ -7,6 +7,18 @@ Application.
 요구사항/설계 문서는 저장소 루트의 `REQUIREDMENT.md`, `ARCHITECTURE.md`,
 `DETAILED_DESIGN.md`, `UI_UX_SPEC.md`, `PHASE_PLAN.md`를 참고한다.
 
+## 목차
+
+- [파일 추출 기준](#파일-추출-기준)
+- [Tech Stack](#tech-stack)
+- [Setup](#setup)
+- [Development](#development)
+- [Install](#install)
+  - [방법 1. 빌드된 실행 파일 다운로드](#방법-1-빌드된-실행-파일-다운로드)
+  - [방법 2. 저장소를 clone해 직접 빌드](#방법-2-저장소를-clone해-직접-빌드)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## 파일 추출 기준
 
 1. **대상 범위**: 사용자가 고른 Branch에서, 목록에 표시된 커밋 중 체크박스로
@@ -71,9 +83,32 @@ npm install
 npm run dev
 ```
 
-## Build
+## Install
+
+두 가지 방법 중 하나를 선택한다.
+
+### 방법 1. 빌드된 실행 파일 다운로드
+
+[GitHub Releases](https://github.com/neisii/git-deploy-extractor/releases)에서 OS에 맞는 설치 파일(Windows: `.exe`, macOS: `.dmg`)을 받아 실행한다.
+
+> [!WARNING]
+> 이 프로젝트는 유료 코드 서명 인증서를 사용하지 않는다 — 설치 파일 실행 시 아래 보안 경고가 뜰 수 있지만, 악성코드가 아니라 서명 평판이 없어서 뜨는 정상적인 경고다.
+>
+> - **Windows**: "Windows에서 PC를 보호했습니다" 창이 뜨면 **추가 정보 → 실행**을 누른다.
+> - **macOS**: "손상되었으므로 열 수 없습니다" 메시지가 뜨면 앱을 휴지통으로 보내지 말고, **시스템 설정 → 개인정보 보호 및 보안**에서 아래로 스크롤해 **확인 없이 열기**를 누르거나 터미널에서 다음을 실행한다:
+>   ```bash
+>   xattr -cr "/Applications/Git Deploy Extractor.app"
+>   ```
+>
+> 이 경고는 인터넷에서 다운로드한 파일에만 Windows(Zone.Identifier)/macOS(quarantine)가 출처 표시를 붙여서 뜬다 — 아래 방법 2(직접 빌드)처럼 다운로드 과정 없이 로컬에서 바로 실행하면 뜨지 않는다. 로컬 빌드와 CI 빌드는 서명 상태가 동일하므로 workflow 자체의 한계는 아니다.
+
+### 방법 2. 저장소를 clone해 직접 빌드
 
 ```bash
+git clone https://github.com/neisii/git-deploy-extractor.git
+cd git-deploy-extractor
+npm install
+
 # Windows
 npm run build:win
 
