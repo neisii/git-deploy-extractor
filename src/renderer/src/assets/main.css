@@ -374,6 +374,9 @@ body,
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  /* REQ-021/DR-019 — 수동 추가 팝업(.manual-add-backdrop)이 좌우 두 컬럼을
+     감싸는 이 영역 중앙에 뜨도록 하는 위치 기준점. */
+  position: relative;
 }
 
 .deploy-files-panel__title {
@@ -450,6 +453,91 @@ body,
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+/* REQ-021/DR-019 — 배포 대상 파일 수동 추가 팝업. 정정(2026-08-22): 원래는
+   "포함된 파일" 목록을 안 가리는 위치/높이를 실측해서 띄웠으나, 목록을
+   가려도 상관없다는 결정으로 부모(.deploy-files-panel, 좌우 두 컬럼을
+   감싸는 영역) 중앙에 고정 크기 모달로 단순화됐다. 배경(backdrop) 클릭
+   또는 팝업 안 클릭 이벤트 버블링 차단(stopPropagation)으로 닫기/유지를
+   구분한다. */
+.manual-add-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.manual-add-popup {
+  width: 480px;
+  max-height: 60vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--color-background-soft, var(--ev-c-gray-3));
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.manual-add-popup input {
+  width: 100%;
+}
+
+.manual-add-popup__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+}
+
+.manual-add-popup__results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.manual-add-popup__results li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.manual-add-popup__result-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.manual-add-popup__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* 강조색 — 목록이 팝업에 가려 안 보일 수 있으므로, "지금까지 뭘
+   추가했는지"를 이 칩 색으로 바로 알아볼 수 있게 exclude-pattern-chip의
+   무채색 톤 대신 확실히 눈에 띄는 강조 스타일을 쓴다. 새 색을 만들지 않고
+   REQ-017 버전 배지의 강조색(--available)을 그대로 재사용한다 — 이 앱에서
+   이미 "주목할 것"의 의미로 쓰이는 색이라 일관성이 맞는다. */
+.manual-add-popup__chip {
+  border: 1px solid #d4ff00;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #d4ff00;
+  color: #1a1a1a;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 /* 가로+세로 스크롤을 이 컨테이너 하나가 전담한다. body에 overflow-y:auto를

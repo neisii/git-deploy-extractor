@@ -58,6 +58,12 @@ interface FileListColumnProps {
   excludePatterns?: ExcludePatternEntry[]
   onAddExcludePattern?: (pattern: string) => void
   onToggleExcludePattern?: (pattern: string) => void
+  // REQ-021/DR-019 — "포함된 파일"에만 전달한다. 팝업 자체는 DeployFilesPanel이
+  // 부모(두 컬럼을 감싸는 .deploy-files-panel) 중앙에 고정 크기로 띄운다 —
+  // 이 컬럼은 트리거 버튼만 갖고, 클릭하면 부모에게 열어달라고 알린다
+  // (2026-08-22 정정: 원래는 이 컬럼 안에서 목록을 안 가리는 위치로 직접
+  // 띄웠으나, "목록을 가려도 상관없다"는 사용자 결정으로 훨씬 단순화됨).
+  onOpenManualAdd?: () => void
 }
 
 function displayText(item: FileListItem): string {
@@ -122,7 +128,8 @@ export function FileListColumn({
   overCountThreshold,
   excludePatterns,
   onAddExcludePattern,
-  onToggleExcludePattern
+  onToggleExcludePattern,
+  onOpenManualAdd
 }: FileListColumnProps): React.JSX.Element {
   const headerCheckboxRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
@@ -229,6 +236,15 @@ export function FileListColumn({
           (필터 전 전체 {totalBeforeFilter}개))
         </span>
         {extraHeaderControl}
+        {onOpenManualAdd && (
+          <button
+            type="button"
+            onClick={onOpenManualAdd}
+            title="HEAD 트리의 임의 파일을 배포 대상에 직접 추가합니다"
+          >
+            + 파일 추가
+          </button>
+        )}
       </div>
       <label className="file-list-column__search">
         검색(파일명):

@@ -9,8 +9,10 @@ import type {
   DeployPlan,
   ListCommitsParams,
   ListCommitsResult,
+  ManualFileEntry,
   PreviewRequest,
-  RepositoryValidation
+  RepositoryValidation,
+  ResolveManualFileRequest
 } from '../shared/types'
 
 // Custom APIs for renderer
@@ -29,7 +31,9 @@ const api = {
     listCommits: (params: ListCommitsParams): Promise<ListCommitsResult> =>
       ipcRenderer.invoke('git:listCommits', params),
     getRemoteProjectName: (repoPath: string): Promise<string | null> =>
-      ipcRenderer.invoke('git:getRemoteProjectName', repoPath)
+      ipcRenderer.invoke('git:getRemoteProjectName', repoPath),
+    listTrackedFiles: (repoPath: string, branch: string): Promise<string[]> =>
+      ipcRenderer.invoke('git:listTrackedFiles', repoPath, branch)
   },
   mapping: {
     listProfiles: (): Promise<string[]> => ipcRenderer.invoke('mapping:listProfiles')
@@ -38,7 +42,9 @@ const api = {
     preview: (req: PreviewRequest): Promise<DeployPlan> =>
       ipcRenderer.invoke('analysis:preview', req),
     dependencies: (req: DependencyAnalysisRequest): Promise<DependencyAnalysisResult> =>
-      ipcRenderer.invoke('analysis:dependencies', req)
+      ipcRenderer.invoke('analysis:dependencies', req),
+    resolveManualFile: (req: ResolveManualFileRequest): Promise<ManualFileEntry> =>
+      ipcRenderer.invoke('analysis:resolveManualFile', req)
   },
   package: {
     browseExportDir: (): Promise<string | null> => ipcRenderer.invoke('package:browseExportDir'),

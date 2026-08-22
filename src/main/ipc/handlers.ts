@@ -2,7 +2,9 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
 import { validateRepository, listBranches, getRemoteProjectName } from '../git/repository'
 import { listCommits } from '../git/commits'
+import { listTrackedFiles } from '../git/lsTree'
 import { listProfileNames, loadProfile } from '../mapping/profileStore'
+import { resolveServerPath } from '../mapping/resolveServerPath'
 import { computeDeployPlan } from '../analysis/computeDeployPlan'
 import { analyzeDependencies } from '../analysis/dependencyAnalysis'
 import { buildPackage, getDeployDir, deployDirHasContent } from '../package/buildPackage'
@@ -13,7 +15,9 @@ import type {
   CheckUpdateResult,
   DependencyAnalysisRequest,
   ListCommitsParams,
-  PreviewRequest
+  ManualFileEntry,
+  PreviewRequest,
+  ResolveManualFileRequest
 } from '../../shared/types'
 
 // REQ-017: 클릭 시 항상 이 고정 인덱스 URL만 연다 — 특정 릴리스 태그로
@@ -52,6 +56,13 @@ export function registerIpcHandlers(): void {
   // RepositoryPanel 라벨 표시용 — remote가 없거나 파싱 실패하면
   // null(getRemoteProjectName 자체가 절대 throw하지 않는다). Renderer가
   // null이면 폴더명으로 폴백한다.
+  // REQ-021: 배포 대상 파일 수동 추가 팝업의 자동완성 후보 풀 — 선택된
+  // Branch의 HEAD 트리 전체 파일 목록. §7.2(dependencyAnalysis.ts)가 이미
+  // 쓰는 것과 같은 함수를 pathPrefix 없이 호출한다(Java 한정 아님).
+  ipcMain.handle('git:listTrackedFiles', (_event, repoPath: string, branch: string) => {
+    return listTrackedFiles(repoPath, branch)
+  })
+
   ipcMain.handle('git:getRemoteProjectName', (_event, repoPath: string) => {
     return getRemoteProjectName(repoPath)
   })
@@ -75,6 +86,22 @@ export function registerIpcHandlers(): void {
     const profile = await loadProfile(getProfilesDir(), req.profileName)
     return analyzeDependencies(req.repoPath, req.branch, req.includedLocalPaths, profile)
   })
+
+  // REQ-021/DR-019: 팝업에서 후보 하나를 선택했을 때 Server Path를 계산한다
+  // (§7.2 의존성 후보와 동일하게 Mapping Rule 엔진을 그대로 재사용). status는
+  // 항상 'added'로 고정 — 사용자가 지정한 경로라 diff 기반 Added/Modified
+  // 구분 개념이 없다(DETAILED_DESIGN.md §13.4).
+  ipcMain.handle(
+    'analysis:resolveManualFile',
+    async (_event, req: ResolveManualFileRequest): Promise<ManualFileEntry> => {
+      const profile = await loadProfile(getProfilesDir(), req.profileName)
+      return {
+        localPath: req.localPath,
+        serverPath: resolveServerPath(req.localPath, profile),
+        status: 'added'
+      }
+    }
+  )
 
   // RISK_ISSUES.md §7.1: Export 결과물을 저장할 부모 디렉터리 선택.
   // repository:browse와 동일한 방식(OS 네이티브 폴더 다이얼로그)이지만

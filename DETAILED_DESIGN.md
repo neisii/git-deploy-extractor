@@ -713,3 +713,63 @@ toggleAllMissingDependencies: (visibleLocalPaths) => {
 **타입 단순화**: 우측이 checkbox로 통일되면서 `BulkAction`의 `kind: 'button'` 변형을 쓰는 곳이 완전히 없어져, 판별 유니온을 없애고 `BulkSelectAction`(`{ checked, indeterminate, onClick }`) 단일 인터페이스로 정리했다 — 안 쓰는 분기를 남겨두지 않는다는 원칙에 따름.
 
 Playwright로 검증: 헤더 체크박스가 각 행 체크박스와 같은 x 위치에 정렬됨, 좌측 전체 선택/해제 토글 정상 동작(회귀 없음), 우측이 버튼에서 체크박스로 바뀌었고 "전체 추가" 버튼 자체는 DOM에서 사라짐, 클릭 시 전체 추가(선택 카운터도 즉시 반영) → 재클릭 시 전체 해제(양방향)까지 확인.
+
+---
+
+# 13. 배포 대상 파일 수동 추가 설계 (REQ-021, DR-019, 2026-08-22)
+
+## 13.1 배경과 §6(REQ-013)과의 관계
+
+실사용 중 나온 사고 사례(팀원이 GDE로 추출한 파일을 배포했는데, 그 파일이 참조하는 다른 클래스가 이전 배포 회차에서 누락되어 있어 Spring 빈 생성이 실패)를 계기로 논의를 시작했다. 처음엔 §6(REQ-013)의 import/DI 참조 그래프 탐색을 더 정교하게(예: 빌드 도구 레벨 의존성 추적까지) 확장하는 방향을 검토했으나, 다음 두 가지를 확인하고 방향을 바꿨다.
+
+1. **참조 그래프로 이미 잡히는 범위는 이미 충분하다** — §6.5의 BFS는 깊이 제한 없이 전이적 폐쇄까지 추적하므로(A→B→C), 직접 import가 아니라 여러 단계를 거쳐 간접 참조되는 파일도 이미 후보로 잡는다. 여기서 더 정교화할 실익이 없다.
+2. **참조 그래프로 원리적으로 못 잡는 범위가 진짜 문제였다** — 사고 사례처럼 "이번 Export 대상과 코드 참조 관계가 전혀 없는, 예전 커밋에서 그냥 누락된 파일"은 애초에 BFS 시작점(이번 Export의 포함 파일)과 그래프상 연결이 없어 아무리 깊이 탐색해도 못 찾는다. 이건 코드 의존성 분석의 한계가 아니라 애초에 "코드 참조"와 무관한 문제(리비전 추적/배포 이력의 문제)다 — RISK_ISSUES.md 결정 이력 #48 참고.
+
+리비전 추적 자체(내부망에 마지막으로 뭐가 반영됐는지 GDE가 아는 것)는 망분리 특성상 GDE가 관측할 수 없는 이벤트(팀장 경유 메신저 전달)에 의존하고, 팀 전체가 참여하는 공유된 진실의 원천이 없으면 한 사람이 아무리 잘 기록해도 재발한다는 결론에 도달해 이 방향은 채택하지 않았다. 대신 탐지를 포기하고, 사용자가 의심되는 파일을 직접 지정해 추출 큐에 얹는 "최후의 보루"로 범위를 좁혔다.
+
+## 13.2 입력: HEAD 트리 자동완성
+
+§6.3의 프로젝트 인덱스와 달리 Java 파일로 제한하지 않는다 — 이 기능은 Java/Spring 여부와 무관하게 임의의 파일을 대상으로 한다. `listTrackedFiles(repoPath, branch)`(§6와 동일 소스, `src/main/git/lsTree.ts`)로 얻은 선택된 Branch의 HEAD 트리 전체 파일 경로 목록을 후보 풀로 삼아, 입력값에 대한 부분 일치로 실시간 필터링한다.
+
+사용자가 후보 목록에서 항목을 클릭(또는 키보드로 선택)해야만 추가되며, 목록에 없는 임의 텍스트를 그대로 제출하는 경로는 제공하지 않는다 — 오타로 무효 경로가 추가될 여지를 UI 레벨에서 차단한다.
+
+## 13.3 UI: 중앙 모달 팝업 (2026-08-22 정정)
+
+**최초 설계(폐기)**: 팝업이 트리거 버튼(좌측 "포함된 파일" 헤더) 아래 고정 위치에 뜨고, "포함된 파일" 목록의 첫 행 y좌표를 넘지 않도록 `max-height`를 실측해서 제한하는 형태였다(`useLayoutEffect`로 트리거~목록 시작 사이 여유 공간을 매번 측정). 목록을 절대 가리면 안 된다는 제약이 강한 전제였다.
+
+**최종 설계**: 사용자가 이 제약 자체를 철회했다 — "포함된 파일"/"누락된 의존성" 둘 다 가려도 상관없고, 어차피 추가한 파일이 뭔지는 팝업 안 칩 이력으로 확인되니 목록이 안 보여도 문제 없다는 판단(RISK_ISSUES.md 결정 이력 참고). 그래서 팝업을 트리거 버튼에 앵커링된 좁은 flyout이 아니라, 좌우 두 `FileListColumn`을 감싸는 부모(`DeployFilesPanel`의 `.deploy-files-panel`) **중앙에 고정 크기로 뜨는 모달**로 단순화했다:
+
+- 위치: `.deploy-files-panel`에 `position: relative`를 주고, 반투명 backdrop(`.manual-add-backdrop`, `position:absolute; inset:0`)이 그 위를 덮은 뒤 `display:flex; align-items:center; justify-content:center`로 팝업을 중앙 정렬한다. 목록 상단까지 거리를 재는 `useLayoutEffect`는 완전히 제거했다 — CSS만으로 끝난다.
+- 크기: `width: 480px; max-height: 60vh` 고정값(뷰포트 대비 상한만 둬서 아주 작은 창에서도 넘치지 않게 함). 사용자 드래그 리사이즈는 없음 — "고정 크기 단순 팝업"으로 명시적으로 확정.
+- 닫기: backdrop 클릭(팝업 안 클릭은 `stopPropagation`으로 무시) 또는 팝업 안 `×` 버튼.
+- 구조 변경: 팝업 렌더링을 `FileListColumn`에서 걷어내 새 컴포넌트 `ManualAddPopup.tsx`로 분리하고, `DeployFilesPanel.tsx`가 소유·렌더링한다(부모 중앙에 뜨려면 두 컬럼과 같은 레벨에서 열림 상태를 가져야 하므로). `FileListColumn`은 트리거 버튼만 남고 `onOpenManualAdd` 콜백 prop 하나로 단순화됐다.
+- 목록이 가려지는 것에 대한 보완: 팝업 안 "수동 추가 이력" 칩을 REQ-019 제외 패턴 칩(무채색)과 다르게, REQ-017 버전 배지의 강조색(`#d4ff00`)을 재사용해 눈에 띄게 렌더링한다 — 목록이 안 보여도 "지금까지 뭘 추가했는지"는 팝업 안에서 바로 확인 가능하다.
+
+## 13.4 추가 동작: §6.6/§12.4와 동일한 패턴 재사용
+
+새 상태나 새 액션 유형을 만들지 않는다. §12.4의 `toggleAllMissingDependencies`가 하는 것과 동일하게, 선택한 경로 하나를 `deployFiles`에 바로 push하는 것뿐이다 — HEAD 기준 파일 내용 조회(`getHeadFileContent`, §6에서 이미 쓰는 것과 동일 함수)로 원본 바이트를 그대로 복사하고, Server Path는 기존 Mapping Rule(`resolveServerPath`)을 동일하게 거친다.
+
+```ts
+// appStore.ts (신설) — 팝업에서 후보 하나를 선택했을 때
+addManualFile: (localPath: string) =>
+  set((state) => {
+    if (state.deployFiles.some((f) => f.localPath === localPath)) return {}
+    // getHeadFileContent + resolveServerPath로 DeployFileEntry 구성 (§6과 동일 유틸 재사용)
+    return {
+      deployFiles: [...state.deployFiles, /* 새 DeployFileEntry, status는 'added'로 고정 */],
+      manuallyAddedPaths: [...state.manuallyAddedPaths, localPath] // 칩 이력 표시 전용, §13.5
+    }
+  })
+```
+
+**시각적 구분을 두지 않는 이유**: `DeployFileEntry`엔 지금 출처(provenance) 필드가 없다 — diff-derived든 §6의 의존성 후보든 전부 동일한 배열에 동일한 타입으로 섞여 있다. 이번 기능을 위해 3-way 색상 구분(기본/의존성 후보/수동 추가)을 검토했으나, (a) §6 의존성 후보는 지금까지 구분 요구가 없었던 기존 기능이라 소급 확장은 이번 작업 범위를 벗어나고, (b) 출처 정보는 Export 결과물(`deploy-files.txt`)에 실리지 않아 이번 GDE 세션 안에서만 의미 있는 정보이며, (c) 그 용도(추가 직후 확인)는 아래 13.5의 칩 이력만으로 충분히 커버된다 — 근거로 기각했다(RISK_ISSUES.md 결정 이력 #48).
+
+## 13.5 생명주기: 별도 영속 상태 없음
+
+`manuallyAddedPaths`(칩 이력 표시 전용 배열)는 `localStorage`에 저장하지 않는다 — REQ-019 제외 패턴(영구 저장, 앱 재실행 후에도 유지)과 성격이 다르다. `[Preview]`가 재실행되어 `deployFiles`가 새 Preview 결과로 전체 교체될 때 `manuallyAddedPaths`도 함께 빈 배열로 초기화한다 — 파일은 목록에서 빠졌는데 칩만 "추가됨"으로 남아있으면 실제 상태와 어긋난 표시가 되기 때문이다(결정 이력 #33과 같은 유형의 함정 회피).
+
+**검토했으나 기각한 대안(Preview 재실행 후에도 유지)**: 수동 추가는 커밋/분석과 무관한 고정된 사용자 의도이므로, §6 의존성 후보(재계산 후 유효성이 보장 안 되는 파생 결과)와 달리 이론적으로는 재실행 후에도 살아남아야 더 정확하다. 하지만 이러려면 `manuallyAddedPaths`를 Preview 재실행 후 별도로 재보정(HEAD 기준으로 다시 조회해 `deployFiles`에 재삽입)하는 로직과, Repository/Branch 전환 시 이 배열을 지우는 규칙(DR-015와 동일 트리거)이 새로 필요하다. 논의 끝에 §6과 동일한 단순한 생명주기로 통일하는 쪽을 택했다 — 구현 단순성과 기존 패턴 일관성을 정확성보다 우선한 의도적 트레이드오프(RISK_ISSUES.md 결정 이력 #48).
+
+## 13.6 제외 패턴(REQ-019)과의 관계
+
+예외를 두지 않는다. `DeployFilesPanel.tsx`의 `includedItems` 파생 계산은 출처를 구분하지 않고 `deployFiles` 전체에 동일하게 적용되므로, 수동 추가한 파일이 활성 제외 패턴에 매치되면 다른 파일과 똑같이 목록에서 숨겨지고 Export에서 제외된다 — 구현을 위해 새로 분기할 것이 없다.

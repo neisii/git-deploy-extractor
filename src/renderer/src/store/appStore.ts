@@ -87,6 +87,13 @@ interface AppState {
   // REQ-019/DR-018 — "포함된 파일"에만 적용(누락된 의존성은 항상 .java만
   // 나와 무의미). localStorage(gde:excludePatterns)로 동기 초기화.
   excludePatterns: ExcludePatternEntry[]
+  // REQ-021/DR-019 — 배포 대상 파일 수동 추가. headTreeFiles는 팝업
+  // 자동완성 후보 풀(선택된 Branch의 HEAD 트리 전체, Preview 성공 시
+  // best-effort로 갱신), manuallyAddedPaths는 팝업 안 칩 이력 표시 전용이다.
+  // 둘 다 localStorage에 저장하지 않는다 — `[Preview]` 재실행 시(deployFiles
+  // 전체 교체와 같은 시점) 함께 초기화된다(DR-019 "생명주기").
+  headTreeFiles: string[]
+  manuallyAddedPaths: string[]
   deleteList: DeleteEntry[]
   warnings: AnalysisWarning[]
 
@@ -138,6 +145,8 @@ interface AppState {
   setDeployFilesSearchTerm: (term: string) => void
   addExcludePattern: (pattern: string) => void
   toggleExcludePattern: (pattern: string) => void
+  addManualFile: (localPath: string) => Promise<void>
+  removeManualFile: (localPath: string) => void
   toggleDeployFileIncluded: (localPath: string) => void
   toggleAllDeployFiles: (visibleLocalPaths: string[]) => void
   setDependencySearchTerm: (term: string) => void
@@ -194,6 +203,15 @@ const emptyDependencyState = {
   dependencyParseWarnings: [] as AnalysisWarning[]
 }
 
+// REQ-021/DR-019 — deployFiles가 통째로 교체/초기화되는 지점(새 Preview
+// 결과 반영, 선택 비움 등)마다 같이 초기화한다. 별도 영속 상태를 두지
+// 않기로 한 결정(DETAILED_DESIGN.md §13.5)에 따라 emptyDependencyState와
+// 동일한 성격의 리셋 묶음이다.
+const emptyManualAddState = {
+  headTreeFiles: [] as string[],
+  manuallyAddedPaths: [] as string[]
+}
+
 export const useAppStore = create<AppState>((set, get) => {
   // RISK_ISSUES.md §6.1 — 재조회 시 selectedHashes를 지울지 유지할지는
   // 호출자가 결정한다(케이스 A/B: Repository 전환·Branch 전환은 지움 —
@@ -217,7 +235,8 @@ export const useAppStore = create<AppState>((set, get) => {
       warnings: [],
       analyzedSelection: null,
       analysisError: null,
-      ...emptyDependencyState
+      ...emptyDependencyState,
+      ...emptyManualAddState
     })
 
     try {
@@ -259,7 +278,8 @@ export const useAppStore = create<AppState>((set, get) => {
         warnings: [],
         analysisError: null,
         analyzedSelection: null,
-        ...emptyDependencyState
+        ...emptyDependencyState,
+        ...emptyManualAddState
       })
       return
     }
@@ -296,8 +316,21 @@ export const useAppStore = create<AppState>((set, get) => {
         deployFiles: plan.files.map((f) => ({ ...f, included: true })),
         deleteList: plan.deletedServerPaths.map((path) => ({ path })),
         warnings: plan.warnings,
-        analyzedSelection: requestSelection
+        analyzedSelection: requestSelection,
+        manuallyAddedPaths: []
       })
+
+      // REQ-021/DR-019: 파일 수동 추가 팝업의 자동완성 후보 풀을 새로
+      // 가져온다. 의존성 체이닝과 같은 성격의 best-effort 후속 단계 —
+      // 실패해도 팝업 후보가 비어 보일 뿐 나머지 Preview 결과엔 영향 없다.
+      try {
+        const headTreeFiles = await window.api.git.listTrackedFiles(repository.path, selectedBranch)
+        if (selectionMatches(requestSelection, get())) {
+          set({ headTreeFiles })
+        }
+      } catch {
+        // 무시 — §7.2 의존성 분석 실패 처리와 동일한 정책
+      }
 
       // §7.2: Preview 완료 직후 자동으로 체이닝 호출한다(별도 트리거 버튼
       // 없음). 실패해도 위에서 이미 반영된 summary/deployFiles 등은 그대로
@@ -397,6 +430,7 @@ export const useAppStore = create<AppState>((set, get) => {
     warnings: [],
 
     ...emptyDependencyState,
+    ...emptyManualAddState,
     dependencySearchTerm: '',
 
     profiles: [],
@@ -591,7 +625,8 @@ export const useAppStore = create<AppState>((set, get) => {
           warnings: [],
           analysisError: null,
           analyzedSelection: null,
-          ...emptyDependencyState
+          ...emptyDependencyState,
+          ...emptyManualAddState
         })
       }
       // 선택이 비어있지 않은 채로 바뀌었을 때는 아무 계산도 트리거하지
@@ -622,7 +657,8 @@ export const useAppStore = create<AppState>((set, get) => {
           warnings: [],
           analysisError: null,
           analyzedSelection: null,
-          ...emptyDependencyState
+          ...emptyDependencyState,
+          ...emptyManualAddState
         })
       }
     },
@@ -654,6 +690,42 @@ export const useAppStore = create<AppState>((set, get) => {
         saveExcludePatterns(next)
         return { excludePatterns: next }
       })
+    },
+
+    // REQ-021/DR-019: 팝업에서 자동완성 후보를 선택했을 때. Server Path는
+    // §7.2 의존성 후보와 동일하게 Main에서 Mapping Rule로 계산한다(Renderer는
+    // MappingProfile 전체를 갖고 있지 않다). 이미 deployFiles에 있으면(다른
+    // 경로로 이미 들어와 있거나 중복 클릭) 아무 것도 하지 않는다.
+    addManualFile: async (localPath) => {
+      const { repository, selectedBranch, selectedProfile, deployFiles } = get()
+      if (!repository.path || !selectedBranch) return
+      if (deployFiles.some((f) => f.localPath === localPath)) return
+
+      const entry = await window.api.analysis.resolveManualFile({
+        repoPath: repository.path,
+        branch: selectedBranch,
+        profileName: selectedProfile,
+        localPath
+      })
+
+      set((state) => {
+        // IPC 왕복 중 이미 추가됐을 수 있다(연속 클릭) — 다시 한번 확인.
+        if (state.deployFiles.some((f) => f.localPath === localPath)) return {}
+        return {
+          deployFiles: [...state.deployFiles, { ...entry, included: true }],
+          manuallyAddedPaths: [...state.manuallyAddedPaths, localPath]
+        }
+      })
+    },
+
+    // 팝업 칩의 × — 제외 패턴 칩과 달리 토글이 아니라 철회다(이력성 데이터가
+    // 아니라 그 자리에서 추가/철회하는 1회성 액션 — RISK_ISSUES.md 결정
+    // 이력 #48).
+    removeManualFile: (localPath) => {
+      set((state) => ({
+        deployFiles: state.deployFiles.filter((f) => f.localPath !== localPath),
+        manuallyAddedPaths: state.manuallyAddedPaths.filter((p) => p !== localPath)
+      }))
     },
 
     toggleDeployFileIncluded: (localPath) => {

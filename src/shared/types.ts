@@ -140,6 +140,23 @@ export interface DependencyAnalysisRequest {
   profileName: string // Server Path 계산에 Mapping Rule 엔진을 재사용하기 위함
 }
 
+// REQ-021/DR-019 — 배포 대상 파일 수동 추가. DependencyCandidate와 같은
+// 모양(localPath/serverPath/status)이지만 kind가 없다 — 알고리즘 추천이
+// 아니라 사용자가 직접 지정한 경로라 "인터페이스/구현체" 같은 분류 개념이
+// 없다. status는 항상 'added'로 고정한다(DETAILED_DESIGN.md §13.4).
+export interface ManualFileEntry {
+  localPath: string
+  serverPath: string
+  status: DeployFileStatus
+}
+
+export interface ResolveManualFileRequest {
+  repoPath: string
+  branch: string
+  profileName: string
+  localPath: string
+}
+
 // REQ-017/DR-016 — html_url(특정 태그 딥링크)은 담지 않는다. 클릭 시 항상
 // 고정된 릴리스 인덱스 URL만 열도록 확정되어 있어 필요 없다
 // (DETAILED_DESIGN.md §10.5, RISK_ISSUES.md 결정 이력 #35).

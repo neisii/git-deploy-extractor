@@ -1,8 +1,9 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useAppStore, selectIsAnalysisStale } from '../store/appStore'
 import type { DeployFilesFilter } from '../store/appStore'
 import { FileListColumn } from './deployFiles/FileListColumn'
 import type { FileListItem } from './deployFiles/FileListColumn'
+import { ManualAddPopup } from './deployFiles/ManualAddPopup'
 import { SplitPane } from './SplitPane'
 import { matchesAnyActiveExcludePattern } from '../lib/excludePatternMatch'
 
@@ -30,6 +31,16 @@ export function DeployFilesPanel(): React.JSX.Element {
   const warnings = useAppStore((s) => s.warnings)
   const toggleIncluded = useAppStore((s) => s.toggleDeployFileIncluded)
   const toggleAll = useAppStore((s) => s.toggleAllDeployFiles)
+
+  // REQ-021/DR-019 — 배포 대상 파일 수동 추가
+  const headTreeFiles = useAppStore((s) => s.headTreeFiles)
+  const manuallyAddedPaths = useAppStore((s) => s.manuallyAddedPaths)
+  const addManualFile = useAppStore((s) => s.addManualFile)
+  const removeManualFile = useAppStore((s) => s.removeManualFile)
+  // 팝업 열림 상태는 store에 둘 이유가 없는 순수 UI 상태다 — 부모
+  // (.deploy-files-panel) 중앙에 띄우려면 좌우 두 컬럼과 같은 레벨(여기)에서
+  // 소유해야 한다(2026-08-22 정정 — 원래는 FileListColumn 로컬 상태였음).
+  const [manualAddOpen, setManualAddOpen] = useState(false)
 
   const dependencyAnalyzing = useAppStore((s) => s.dependencyAnalyzing)
   const dependencyApplicable = useAppStore((s) => s.dependencyApplicable)
@@ -69,6 +80,14 @@ export function DeployFilesPanel(): React.JSX.Element {
   )
 
   const includedSet = useMemo(() => new Set(deployFiles.map((f) => f.localPath)), [deployFiles])
+
+  // REQ-021/DR-019 — 이미 deployFiles에 있는 경로는 후보에서 미리 제외한다
+  // (선택해도 무의미한 no-op이 되는 걸 방지 — 팝업 쪽은 순수 문자열 필터만
+  // 하면 되도록 여기서 미리 정리해서 내려준다).
+  const manualAddCandidates = useMemo(
+    () => headTreeFiles.filter((path) => !includedSet.has(path)),
+    [headTreeFiles, includedSet]
+  )
 
   const missingItems = useMemo((): FileListItem[] => {
     return missingDependencies
@@ -134,6 +153,7 @@ export function DeployFilesPanel(): React.JSX.Element {
       excludePatterns={excludePatterns}
       onAddExcludePattern={addExcludePattern}
       onToggleExcludePattern={toggleExcludePattern}
+      onOpenManualAdd={() => setManualAddOpen(true)}
     />
   )
 
@@ -200,6 +220,15 @@ export function DeployFilesPanel(): React.JSX.Element {
         start={leftContent}
         end={rightContent}
       />
+      {manualAddOpen && (
+        <ManualAddPopup
+          candidates={manualAddCandidates}
+          addedPaths={manuallyAddedPaths}
+          onAdd={addManualFile}
+          onRemove={removeManualFile}
+          onClose={() => setManualAddOpen(false)}
+        />
+      )}
     </div>
   )
 }

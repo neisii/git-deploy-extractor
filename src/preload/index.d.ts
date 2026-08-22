@@ -8,8 +8,10 @@ import type {
   DeployPlan,
   ListCommitsParams,
   ListCommitsResult,
+  ManualFileEntry,
   PreviewRequest,
-  RepositoryValidation
+  RepositoryValidation,
+  ResolveManualFileRequest
 } from '../shared/types'
 
 export interface Api {
@@ -24,6 +26,7 @@ export interface Api {
     listBranches: (repoPath: string) => Promise<string[]>
     listCommits: (params: ListCommitsParams) => Promise<ListCommitsResult>
     getRemoteProjectName: (repoPath: string) => Promise<string | null>
+    listTrackedFiles: (repoPath: string, branch: string) => Promise<string[]>
   }
   mapping: {
     listProfiles: () => Promise<string[]>
@@ -31,6 +34,7 @@ export interface Api {
   analysis: {
     preview: (req: PreviewRequest) => Promise<DeployPlan>
     dependencies: (req: DependencyAnalysisRequest) => Promise<DependencyAnalysisResult>
+    resolveManualFile: (req: ResolveManualFileRequest) => Promise<ManualFileEntry>
   }
   package: {
     browseExportDir: () => Promise<string | null>

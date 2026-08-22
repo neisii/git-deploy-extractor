@@ -33,9 +33,10 @@ AppShell
 │   │   ├── CommitListPanel        (좌: 커밋 목록, 다중 선택 + 전체 선택 + Preview 트리거)
 │   │   └── DeploymentPreviewPanel (우: 집계 미리보기, 읽기 전용)
 │   └── end: DeployFilesPanel
-│       └── SplitPane
-│           ├── FileListColumn     (좌: 포함된 파일, 개별/전체 선택 + 상태 Filter + 파일명 검색)
-│           └── FileListColumn     (우: 누락된 의존성, 개별 선택 + 전체 선택(양방향, 2026-08-20) + 파일명 검색)
+│       ├── SplitPane
+│       │   ├── FileListColumn     (좌: 포함된 파일, 개별/전체 선택 + 상태 Filter + 파일명 검색 + 파일 수동 추가 트리거, REQ-021)
+│       │   └── FileListColumn     (우: 누락된 의존성, 개별 선택 + 전체 선택(양방향, 2026-08-20) + 파일명 검색)
+│       └── ManualAddPopup         (부모 중앙 모달, REQ-021 — 열렸을 때만 렌더링, 좌우 목록 위를 가릴 수 있음)
 ├── DeleteListPanel               (삭제 대상 목록, 읽기 전용)
 ├── FooterActionBar               (Export 경로 선택 + Export)
 └── Credit                        (화면 우측 하단 고정, 제작자 GitHub 링크)
@@ -186,6 +187,14 @@ AppShell
 
 **경고 배너 추가**: 기존 "N개 파일이 HEAD에 없어 제외되었습니다"(DR-009) 배너 아래, 의존성 검사 중 파싱에 실패한 파일이 있으면 "N개 파일을 파싱하지 못해 의존성 검사에서 제외했습니다" 배너를 추가로 보여준다(`dependencyParseWarnings`).
 
+**추가 (배포 대상 파일 수동 추가, REQ-021/DR-019, 2026-08-22)**: 좌측(포함된 파일) 패널 헤더에 `+ 파일 추가` 트리거 버튼을 추가한다. 클릭하면 팝업이 뜨는데, 안에는 (1) 선택된 Branch의 HEAD 트리 파일 전체를 대상으로 한 자동완성 검색 입력, (2) 입력값에 매치되는 후보 목록(클릭해야 추가되며, 후보에 없는 자유 텍스트는 추가 불가), (3) 이번 Preview 결과에 수동으로 추가한 파일의 칩 이력이 들어간다.
+
+**정정 (팝업 위치·크기, 2026-08-22)**: 최초엔 팝업이 트리거 버튼 아래 "포함된 파일" 목록을 안 가리는 위치까지만 확장되는 형태였으나, 목록을 가려도 상관없다는 사용자 결정으로 좌우 두 컬럼을 감싸는 부모(`DeployFilesPanel`) 중앙에 고정 크기(480px, 최대 뷰포트의 60%)로 뜨는 모달로 바뀌었다. 배경을 반투명 backdrop으로 덮고, backdrop 클릭이나 `×`로 닫는다. 목록(좌/우 둘 다) 위를 그대로 덮을 수 있는 대신, 팝업 안 "수동 추가 이력" 칩을 REQ-017 버전 배지와 같은 강조색(연두색)으로 눈에 띄게 표시해 — 목록이 안 보여도 지금까지 뭘 추가했는지는 팝업 안에서 바로 확인된다.
+
+추가한 파일은 diff로 들어온 파일·REQ-013 의존성 후보로 추가된 파일과 목록 안에서 시각적으로 구분되지 않는다(동일한 `deployFiles` 항목으로 취급 — REQ-019 제외 패턴도 예외 없이 동일 적용). 구분이 필요한 시점(추가 직후 확인)은 팝업 안 강조색 칩 이력이 담당한다.
+
+**생명주기**: `[Preview]`를 다시 실행해 `deployFiles`가 새 결과로 전체 교체되면, 수동으로 추가했던 파일과 팝업 안 칩 이력이 함께 초기화된다(REQ-013 의존성 후보와 동일한 생명주기 — DR-019에 트레이드오프 근거 기록).
+
 ## 2.7 DeleteListPanel
 
 **책임**: DR-007. 읽기 전용.
@@ -266,6 +275,10 @@ interface AppState {
   // initializer, updateInfo/columnWidths와 동일 패턴). enabled인 것만 실제
   // 적용되고, 비활성 패턴도 이력으로 남아있어 다시 켤 수 있다.
   excludePatterns: { pattern: string; enabled: boolean }[];
+  // REQ-021/DR-019 — 팝업 안 칩 이력 표시 전용. localStorage에 저장하지
+  // 않는다(제외 패턴과 달리 영속시킬 이유가 없음). Preview 재실행 시
+  // deployFiles와 함께 초기화된다(§2.6 "생명주기" 참고).
+  manuallyAddedPaths: string[];
   deleteList: DeleteEntry[];
   warnings: { path: string; reason: string }[];
 
@@ -326,7 +339,7 @@ interface AppState {
 | DeployFilesPanel(좌) 체크박스 토글 | 해당 항목 `included` 반전 | 없음 (로컬) | REQ-011 |
 | DeployFilesPanel(좌) 전체 선택 토글 | 필터+검색에 표시된 행 전체 `included` 일괄 반전 | 없음 (로컬) | REQ-011 |
 | DeployFilesPanel(좌/우) 파일명 검색 입력 | `deployFilesSearchTerm`/`dependencySearchTerm` 갱신, 즉시 클라이언트 필터링(디바운스 없음) | 없음 (로컬) | REQ-013 |
-| `[Preview]` 클릭 | `analyzing = true` → 완료 시 `summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection` 동시 갱신, 이어서 `dependencyAnalyzing = true` → 완료 시 `missingDependencies` 등 갱신(체이닝) | Commit 분석 + Mapping 엔진 → 의존성 완결성 검사 | REQ-005~008, REQ-013 |
+| `[Preview]` 클릭 | `analyzing = true` → 완료 시 `summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection` 동시 갱신(`manuallyAddedPaths`도 함께 초기화 — REQ-021), 이어서 `dependencyAnalyzing = true` → 완료 시 `missingDependencies` 등 갱신(체이닝) | Commit 분석 + Mapping 엔진 → 의존성 완결성 검사 | REQ-005~008, REQ-013, REQ-021 |
 | DeployFilesPanel(우) 개별 체크박스 토글 | `deployFiles`에 없으면 추가, 있으면 제거 | 없음 (로컬) | REQ-013 |
 | "전체 선택" 토글 (우, 2026-08-20 체크박스로 통일) | 필터+검색에 표시된 `missingDependencies`가 전부 이미 `deployFiles`에 있으면 그 경로들을 전부 제거(전체 해제), 그 외(일부/전무)면 아직 없는 것만 전체 추가 — 좌측 `toggleAllDeployFiles`와 동일한 양방향 판정 방식 | 없음 (로컬) | REQ-013 |
 | `[변경]` 클릭 (FooterActionBar) | 취소 시 상태 변화 없음. 선택 시 `exportParentDir` 갱신 + `localStorage` 저장 | `dialog.showOpenDialog`(`package:browseExportDir`) | REQ-012 |
@@ -336,6 +349,11 @@ interface AppState {
 | 버전 배지 클릭 | 캐시 나이 무관하게 `updateChecking = true`(위와 동일 흐름) — **응답을 기다리지 않고 즉시** `dialog.showMessageBox` 확인창도 같이 뜬다. "네" 응답 시에만 `shell.openExternal`(고정 인덱스 URL). **이미 `updateChecking===true`거나 확인창이 이미 열려 있으면** 새 네트워크 호출/확인창을 추가로 띄우지 않는다(연속 클릭 가드) | `checkForUpdate` + (확인 시)`shell.openExternal` | REQ-017, DR-016 |
 | 제외 패턴 `[+추가]` 클릭 (좌) | `excludePatterns`에 `{pattern, enabled:true}` 추가, `localStorage` 저장. 즉시 해당 패턴에 매치되는 행이 목록에서 숨겨짐 | 없음 (로컬) | REQ-019, DR-018 |
 | 제외 패턴 칩 클릭 (좌) | 해당 패턴의 `enabled` 토글, `localStorage` 저장. 비활성화하면 그 패턴 때문에 숨겨졌던 행이 즉시 다시 보임(원래 `included` 값 그대로 — 별도 복원 로직 없음) | 없음 (로컬) | REQ-019, DR-018 |
+| `+ 파일 추가` 클릭 (좌) | `DeployFilesPanel`의 `manualAddOpen = true` — 부모(`.deploy-files-panel`) 중앙에 모달 팝업이 뜬다 | 없음 (로컬) | REQ-021, DR-019 |
+| 팝업 검색 입력 (자동완성) | 없음 (표시용 후보 필터링만, 디바운스 없음) | 없음 (로컬) | REQ-021, DR-019 |
+| 팝업 후보 클릭 | `deployFiles`에 없으면 추가 + `manuallyAddedPaths`에 경로 push(강조색 칩으로 표시). 이미 있으면 무시 | 없음 (로컬, HEAD 파일 내용은 이미 §6 경로로 조회된 값 재사용) | REQ-021, DR-019 |
+| 팝업 칩 `×` 클릭 | `deployFiles`에서 해당 경로 제거, `manuallyAddedPaths`에서도 제거(제외 패턴 칩과 달리 토글이 아니라 철회) | 없음 (로컬) | REQ-021, DR-019 |
+| 팝업 backdrop 클릭 또는 `[×]` | `manualAddOpen = false` — 팝업만 닫힘, 이미 추가된 파일은 그대로 유지 | 없음 (로컬) | REQ-021, DR-019 |
 
 **정정 (커밋 선택 유지, REQ-015/016, 2026-08-07)**: 위 표에서 "`selectedHashes = {}`"로 표시된 두 트리거(Browse, Branch 변경)만 선택을 지운다 — 나머지 재조회 트리거는 전부 `selectedHashes`를 유지한다. 이전 버전 이 표는 모든 재조회 트리거가 "CommitListPanel 리셋"이라는 이름으로 뭉뚱그려져 있었고, 그 리셋이 `selectedHashes`까지 항상 지운다는 뜻이었다 — 검색 조건을 바꿔가며 관련 커밋을 여러 번 찾아 누적 체크하는 워크플로우가 실사용에서 나오면서, 이 전면 초기화가 워크플로우를 방해한다는 게 확인되어 DR-015로 예외 범위를 좁혔다.
 
