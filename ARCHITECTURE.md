@@ -179,7 +179,7 @@ REQUIREDMENT.md 섹션 8 와이어프레임(및 RISK_ISSUES.md §7.5 TO-BE 와�
 - Repository 선택 / Branch 선택 / Commit 검색(메시지·파일명 토글 — REQ-016)
 - Commit List (가상 스크롤, 다중 선택 체크박스, 재조회 시 선택 유지 — REQ-015/DR-015)
 - Deployment Preview (Files/Added/Modified/Deleted 집계, Rename 미감지 — DR-008)
-- Deploy Files 목록 — 포함된 파일(Mapping 결과 미리보기, 개별/전체 선택 — REQ-011) / 누락된 의존성(REQ-013) 좌우 분할
+- Deploy Files 목록 — 포함된 파일(Mapping 결과 미리보기, 개별/전체 선택 — REQ-011) / 누락된 의존성(REQ-013) 좌우 분할, 파일 수동 추가 모달(REQ-021)
 - Delete List
 - Export 경로 선택 + Export 액션 (2버튼 — UI_UX_SPEC.md §0-3. Mapping Profile 선택 UI는 REQ-012로 숨김)
 - 분할 영역 드래그 리사이즈 (REQ-014)
@@ -196,6 +196,14 @@ Main process는 상태를 갖지 않는다(stateless) — 캐시(마지막 확�
 실패(오프라인, 타임아웃, GitHub API 오류, 응답에서 기대한 필드를 못 찾거나 버전 형식이 `vX.Y.Z`가 아닌 경우 포함)는 예외를 던지지 않고 `{ ok: false }` 형태로 Renderer에 그대로 전달한다 — REQ-010(인터넷 연결 없이 동작 가능)과 공존해야 하므로, 이 모듈의 실패가 앱의 다른 어떤 기능에도 영향을 줘서는 안 된다. 5초 타임아웃이 있어 이 IPC 호출은 항상 유한 시간 내 응답한다.
 
 출력: `{ ok: true; hasUpdate: boolean; latestVersion: string } | { ok: false }` — 특정 릴리스 태그로의 딥링크(`html_url`)는 담지 않는다(클릭 시 항상 고정된 릴리스 인덱스 URL만 열도록 확정되어 필요 없음). `hasUpdate` 판정(원격이 로컬보다 엄격히 큰지)까지 이 모듈이 끝내서 반환한다 — `app.getVersion()`이 이미 Main에 있어 Renderer에 따로 노출할 이유가 없기 때문(구현 시점 단순화, DETAILED_DESIGN.md §10.1 참고). 배지에 항상 표시할 현재 버전 텍스트는 이 IPC와 별도로 `app:getVersion`을 통해 가져온다(캐시가 신선하면 `checkForUpdate` 자체가 호출 안 될 수 있어서). 자세한 흐름/캐시 규칙/"엄격히 크다" 비교 기준은 DETAILED_DESIGN.md §10 참고.
+
+## 4.8 파일 수동 추가 (REQ-021, DR-019, 2026-08-23 추가)
+
+**책임**: 커밋 diff나 §4.5 의존성 완결성 검사와 무관하게, 선택된 Branch의 HEAD 트리에 있는 임의 파일을 사용자가 직접 검색해 배포 대상에 추가. 새 엔진을 두지 않고 기존 모듈을 재사용하는 얇은 조합이다 — §4.2가 이미 쓰는 `git ls-tree`(파일 목록)와 §4.3 Mapping Rule 엔진의 Server Path 계산을 그대로 가져다 쓴다.
+
+IPC 채널 2개만 추가된다: `git:listTrackedFiles`(자동완성 후보 풀 — HEAD 트리 전체 파일 경로, Java 한정 아님)와 `analysis:resolveManualFile`(선택한 경로 하나의 Server Path 계산, `status`는 항상 `'added'`로 고정). 둘 다 상태를 갖지 않는다 — Renderer(Zustand store)가 `headTreeFiles`/`manuallyAddedPaths`로 결과를 들고 있다가 `deployFiles`에 직접 병합한다.
+
+리비전 싱크 문제(내부망에 실제로 뭐가 반영됐는지)는 이 모듈이 풀지 않는다 — 망분리 환경에서 GDE는 그 상태를 원리적으로 관측할 수 없어(RISK_ISSUES.md 결정 이력 #48), 탐지 대신 사용자 판단에 맡기는 것이 이 모듈의 설계 전제다. 구현은 `src/main/git/lsTree.ts`(재사용), `src/main/ipc/handlers.ts`, `src/renderer/src/components/deployFiles/ManualAddPopup.tsx`. 자세한 UI/생명주기는 DETAILED_DESIGN.md §13 참고.
 
 ---
 
