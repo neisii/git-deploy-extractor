@@ -82,7 +82,7 @@ interface AppState {
   searchTerm: string
   searchMode: CommitSearchMode // RISK_ISSUES.md §7.3 — 메시지/파일명 토글, 기본 'message'
   authorFilter: string // REQ-022 — 작성자명 부분 일치, searchTerm과 독립적으로 AND 결합
-  excludeMerges: boolean // REQ-022 — Merge 커밋 제외, 기본 false(포함)
+  excludeMerges: boolean // REQ-022 — Merge 커밋 제외, 기본 true(제외) — 2026-09-14 사용자 요청으로 기본값 변경
   hashFilterText: string // REQ-023 — 원본 텍스트(줄바꿈/쉼표 구분). 값이 있으면 다른 모든 조회 조건을 무시
 
   commits: CommitEntry[]
@@ -444,7 +444,7 @@ export const useAppStore = create<AppState>((set, get) => {
     searchTerm: '',
     searchMode: 'message',
     authorFilter: '',
-    excludeMerges: false,
+    excludeMerges: true,
     hashFilterText: '',
 
     commits: [],
