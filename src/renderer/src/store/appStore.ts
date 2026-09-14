@@ -22,6 +22,16 @@ import { matchesAnyActiveExcludePattern } from '../lib/excludePatternMatch'
 const PAGE_SIZE = 100
 const SEARCH_DEBOUNCE_MS = 300
 
+// REQ-023 — 쉼표/공백/줄바꿈 어느 것으로 구분해 붙여넣어도 동일하게
+// 처리한다. 빈 입력이면 빈 배열(호출부에서 undefined로 변환해 hashFilter
+// 없는 일반 조회로 취급).
+function parseHashFilter(text: string): string[] {
+  return text
+    .split(/[\s,]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0)
+}
+
 export interface DeployFileEntry {
   localPath: string
   serverPath: string
@@ -73,6 +83,7 @@ interface AppState {
   searchMode: CommitSearchMode // RISK_ISSUES.md §7.3 — 메시지/파일명 토글, 기본 'message'
   authorFilter: string // REQ-022 — 작성자명 부분 일치, searchTerm과 독립적으로 AND 결합
   excludeMerges: boolean // REQ-022 — Merge 커밋 제외, 기본 false(포함)
+  hashFilterText: string // REQ-023 — 원본 텍스트(줄바꿈/쉼표 구분). 값이 있으면 다른 모든 조회 조건을 무시
 
   commits: CommitEntry[]
   selectedHashes: Set<string>
@@ -139,6 +150,7 @@ interface AppState {
   setSearchMode: (mode: CommitSearchMode) => Promise<void>
   setAuthorFilter: (author: string) => void
   setExcludeMerges: (excludeMerges: boolean) => Promise<void>
+  setHashFilterText: (text: string) => void
   triggerSearch: () => Promise<void>
   setDateRange: (startDate: string, endDate: string) => Promise<void>
   setMaxCount: (maxCount: number) => Promise<void>
@@ -233,9 +245,11 @@ export const useAppStore = create<AppState>((set, get) => {
       searchTerm,
       searchMode,
       authorFilter,
-      excludeMerges
+      excludeMerges,
+      hashFilterText
     } = get()
     if (repository.status !== 'valid' || !selectedBranch || !repository.path) return
+    const hashFilter = parseHashFilter(hashFilterText)
 
     set({
       commits: [],
@@ -264,7 +278,8 @@ export const useAppStore = create<AppState>((set, get) => {
         searchTerm: searchTerm || undefined,
         searchMode,
         author: authorFilter || undefined,
-        excludeMerges
+        excludeMerges,
+        hashFilter: hashFilter.length > 0 ? hashFilter : undefined
       })
       set({
         commits: result.commits,
@@ -429,6 +444,7 @@ export const useAppStore = create<AppState>((set, get) => {
     searchMode: 'message',
     authorFilter: '',
     excludeMerges: false,
+    hashFilterText: '',
 
     commits: [],
     selectedHashes: new Set(),
@@ -585,6 +601,17 @@ export const useAppStore = create<AppState>((set, get) => {
       await loadCommitsFirstPage(true)
     },
 
+    // REQ-023 — searchTerm/authorFilter와 동일한 디바운스 패턴. 파싱(공백/쉼표
+    // 분리)은 loadCommitsFirstPage/loadNextPage 호출 시점에 한다 — 여기선
+    // 원본 텍스트만 그대로 들고 있는다.
+    setHashFilterText: (text) => {
+      set({ hashFilterText: text })
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+      searchDebounceTimer = setTimeout(() => {
+        void loadCommitsFirstPage(true)
+      }, SEARCH_DEBOUNCE_MS)
+    },
+
     triggerSearch: async () => {
       if (searchDebounceTimer) {
         clearTimeout(searchDebounceTimer)
@@ -614,11 +641,13 @@ export const useAppStore = create<AppState>((set, get) => {
         searchMode,
         authorFilter,
         excludeMerges,
+        hashFilterText,
         commits,
         commitPagination
       } = get()
       if (!repository.path || !selectedBranch) return
       if (!commitPagination.hasMore || commitPagination.loading) return
+      const hashFilter = parseHashFilter(hashFilterText)
 
       set({ commitPagination: { ...commitPagination, loading: true } })
       try {
@@ -633,7 +662,8 @@ export const useAppStore = create<AppState>((set, get) => {
           searchTerm: searchTerm || undefined,
           searchMode,
           author: authorFilter || undefined,
-          excludeMerges
+          excludeMerges,
+          hashFilter: hashFilter.length > 0 ? hashFilter : undefined
         })
         set({
           commits: [...commits, ...result.commits],

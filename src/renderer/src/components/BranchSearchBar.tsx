@@ -19,6 +19,8 @@ export function BranchSearchBar(): React.JSX.Element {
   const setAuthorFilter = useAppStore((s) => s.setAuthorFilter)
   const excludeMerges = useAppStore((s) => s.excludeMerges)
   const setExcludeMerges = useAppStore((s) => s.setExcludeMerges)
+  const hashFilterText = useAppStore((s) => s.hashFilterText)
+  const setHashFilterText = useAppStore((s) => s.setHashFilterText)
 
   return (
     <section className="panel branch-search-bar">
@@ -111,6 +113,17 @@ export function BranchSearchBar(): React.JSX.Element {
             onChange={(e) => void setExcludeMerges(e.target.checked)}
           />
           Merge 커밋 제외
+        </label>
+      </div>
+
+      <div className="branch-search-bar__row">
+        <label className="branch-search-bar__hash-filter">
+          해시 필터 (쉼표/공백/줄바꿈 구분, 입력 시 다른 조건 무시) :
+          <textarea
+            rows={2}
+            value={hashFilterText}
+            onChange={(e) => setHashFilterText(e.target.value)}
+          />
         </label>
       </div>
     </section>

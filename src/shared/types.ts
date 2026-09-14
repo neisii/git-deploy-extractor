@@ -73,6 +73,10 @@ export interface ListCommitsParams {
   author?: string
   // REQ-022 — Merge 커밋 제외 (git --no-merges와 동일). 기본 false(포함).
   excludeMerges?: boolean
+  // REQ-023 — 값이 있으면 branch/기간/검색어/author/excludeMerges 등 다른
+  // 모든 조건을 무시하고, 이 해시 목록과 정확히 일치하는 커밋만 반환한다
+  // (git이 인정하는 축약 해시 포함).
+  hashFilter?: string[]
 }
 
 export interface ListCommitsResult {

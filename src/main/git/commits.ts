@@ -28,6 +28,54 @@ function matchesFileName(path: string, term: string): boolean {
   return fileName.toLowerCase().includes(term.toLowerCase())
 }
 
+// REQ-023 — 붙여넣은 해시 목록과 정확히 일치(git이 인정하는 축약 해시 포함)
+// 하는 커밋만 조회한다. branch/기간 등 다른 모든 조건을 무시하는 별도
+// 경로다 — `--no-walk`로 각 해시가 가리키는 커밋 자체만 가져오고(조상까지
+// 안 훑음), 페이지네이션은 git이 아니라 이 함수가 결과 배열을 슬라이스해서
+// 처리한다(해시 개수가 보통 적어 git 쪽 --skip/-n을 쓸 이유가 없음).
+async function listCommitsByHash(
+  repoPath: string,
+  hashes: string[],
+  skip: number,
+  pageSize: number,
+  maxCount: number
+): Promise<ListCommitsResult> {
+  if (skip >= maxCount) {
+    return { commits: [], hasMore: false }
+  }
+
+  const unique = Array.from(new Set(hashes))
+  const pretty = `--pretty=format:%H${FIELD_SEP}%an${FIELD_SEP}%ad${FIELD_SEP}%s${RECORD_SEP}`
+  const baseArgs = ['log', '--no-walk', '--encoding=UTF-8', '--date=iso-strict', pretty]
+
+  let result = await runGit(repoPath, [...baseArgs, ...unique])
+  if (result.exitCode !== 0) {
+    // 목록 중 일부(또는 전부)가 잘못된 해시일 수 있다 — 하나씩 존재 여부를
+    // 확인해 유효한 것만 걸러 재시도한다. 오타 하나 때문에 전체가 실패해
+    // "붙여넣은 나머지는 다 맞는데 결과가 0건"이 되는 걸 피하기 위함이다.
+    const checks = await Promise.all(
+      unique.map(async (hash) => {
+        const check = await runGit(repoPath, ['cat-file', '-e', `${hash}^{commit}`])
+        return check.exitCode === 0 ? hash : null
+      })
+    )
+    const valid = checks.filter((hash): hash is string => hash !== null)
+    if (valid.length === 0) {
+      return { commits: [], hasMore: false }
+    }
+    result = await runGit(repoPath, [...baseArgs, ...valid])
+    if (result.exitCode !== 0) {
+      throw new Error(`Commit 목록 조회 실패: ${result.stderr.trim()}`)
+    }
+  }
+
+  const all = parseCommitRecords(result.stdout)
+  const limit = Math.min(pageSize, maxCount - skip)
+  const commits = all.slice(skip, skip + limit)
+  const hasMore = skip + commits.length < Math.min(all.length, maxCount)
+  return { commits, hasMore }
+}
+
 export async function listCommits(params: ListCommitsParams): Promise<ListCommitsResult> {
   const {
     repoPath,
@@ -39,9 +87,14 @@ export async function listCommits(params: ListCommitsParams): Promise<ListCommit
     pageSize,
     searchTerm,
     author,
-    excludeMerges
+    excludeMerges,
+    hashFilter
   } = params
   const searchMode = params.searchMode ?? 'message'
+
+  if (hashFilter && hashFilter.length > 0) {
+    return listCommitsByHash(repoPath, hashFilter, skip, pageSize, maxCount)
+  }
 
   if (skip >= maxCount) {
     return { commits: [], hasMore: false }
