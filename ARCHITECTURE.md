@@ -110,7 +110,7 @@ Git 프로세스 실행, 파일시스템 쓰기(Deploy Package 생성)는 전부
 |---|---|---|
 | Repository 유효성 검사 | `git rev-parse --is-inside-work-tree` | REQ-001 |
 | Branch 목록 조회 | `git branch --list` / `git for-each-ref` | REQ-002 |
-| Commit 목록 조회 | `git log --pretty=format:...` (lazy load, `--skip`/`-n` 페이지네이션). `searchMode`에 따라 `--grep`(메시지) 또는 pathspec(파일명, REQ-016) 분기 | REQ-003, REQ-016 |
+| Commit 목록 조회 | `git log --pretty=format:...` (lazy load, `--skip`/`-n` 페이지네이션). `searchMode`에 따라 `--grep`(메시지) 또는 pathspec(파일명, REQ-016) 분기. `--author=<값> -i`(작성자 부분 일치)/`--no-merges`(Merge 제외, REQ-022)는 조건부로 추가 결합 | REQ-003, REQ-016, REQ-022 |
 | Commit 상세 diff | `git diff-tree` / `git show --name-status` | REQ-005 |
 | HEAD 파일 조회 | `git show <branch>:<path>` | REQ-007, DR-003 |
 | 경로 접두사 하위 파일 목록 | `git ls-tree -r <branch> --name-only -- <prefix>`(접두사 생략 시 전체 트리 — REQ-016은 접두사 없이 호출) | REQ-013, REQ-016 |
@@ -176,7 +176,7 @@ Rename을 별도 상태로 분류하지 않는다(DR-008) — Delete+Add를 각�
 
 REQUIREDMENT.md 섹션 8 와이어프레임(및 RISK_ISSUES.md §7.5 TO-BE 와이어프레임) 기준. 담당 화면 요소:
 
-- Repository 선택 / Branch 선택 / Commit 검색(메시지·파일명 토글 — REQ-016)
+- Repository 선택 / Branch 선택 / Commit 검색(메시지·파일명 토글 — REQ-016, 작성자·Merge 제외 필터 — REQ-022)
 - Commit List (가상 스크롤, 다중 선택 체크박스, 재조회 시 선택 유지 — REQ-015/DR-015)
 - Deployment Preview (Files/Added/Modified/Deleted 집계, Rename 미감지 — DR-008)
 - Deploy Files 목록 — 포함된 파일(Mapping 결과 미리보기, 개별/전체 선택 — REQ-011) / 누락된 의존성(REQ-013) 좌우 분할, 파일 수동 추가 모달(REQ-021)

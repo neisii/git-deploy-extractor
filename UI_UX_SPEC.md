@@ -76,7 +76,7 @@ AppShell
 
 ## 2.3 BranchSearchBar
 
-**책임**: REQ-002, REQ-003(Search + 조회 범위), REQ-015(선택 유지), REQ-016(파일명 검색).
+**책임**: REQ-002, REQ-003(Search + 조회 범위), REQ-015(선택 유지), REQ-016(파일명 검색), REQ-022(작성자/Merge 커밋 제외).
 
 | 요소 | 동작 |
 |---|---|
@@ -86,10 +86,12 @@ AppShell
 | `[Search]` 버튼 | 디바운스를 기다리지 않고 즉시 검색 트리거 (보조 수단) |
 | "조회 기간 : [시작일] ~ [종료일]" 날짜 선택 | `startDate`/`endDate` 갱신. 변경 시 CommitListPanel 리셋 후 재조회(REQ-003, 기본값 오늘-7일 ~ 오늘) |
 | "최대 [N] 개" 입력 | `maxCount` 갱신. 변경 시 CommitListPanel 리셋 후 재조회(REQ-003, 기본값 100). 이 값이 무한 스크롤의 상한선 — 스크롤이 `maxCount`에 도달하면 더 이상 다음 페이지를 요청하지 않는다 |
+| "작성자 :" 입력 (REQ-022) | 로컬 텍스트 상태. Search 입력과 동일하게 300ms 디바운스 후 자동 검색 트리거 — `git log --author=<값> -i`로 부분 일치(대소문자 무관). `searchTerm`/`searchMode`와 독립적으로 AND 결합 |
+| "Merge 커밋 제외" 체크박스 (REQ-022) | `excludeMerges` 갱신, 디바운스 없이 즉시 재조회 — `git log --no-merges`. 기본값 `false`(포함) |
 
-**정정 (선택 유지, REQ-015, 2026-08-07)**: 검색 대상 토글/Search/조회 기간/최대 개수 — 이 네 가지로 인한 재조회는 전부 `selectedHashes`를 **유지**한다(Branch 변경만 예외로 초기화, 위 표 참고). 이전에는 "CommitListPanel 리셋"이 `commits`와 `selectedHashes` 둘 다를 항상 지우는 의미였지만, 이제는 `commits`만 항상 지우고 `selectedHashes`는 재조회 경로에 따라 다르다 — 자세한 규칙은 REQUIREDMENT.md DR-015, DETAILED_DESIGN.md §8.1 참고.
+**정정 (선택 유지, REQ-015, 2026-08-07)**: 검색 대상 토글/Search/조회 기간/최대 개수 — 이 네 가지로 인한 재조회는 전부 `selectedHashes`를 **유지**한다(Branch 변경만 예외로 초기화, 위 표 참고). 이전에는 "CommitListPanel 리셋"이 `commits`와 `selectedHashes` 둘 다를 항상 지우는 의미였지만, 이제는 `commits`만 항상 지우고 `selectedHashes`는 재조회 경로에 따라 다르다 — 자세한 규칙은 REQUIREDMENT.md DR-015, DETAILED_DESIGN.md §8.1 참고. **작성자/Merge 제외(REQ-022)도 동일하게 `selectedHashes`를 유지한다** — 검색 조건 계열에 새로 추가된 두 필터일 뿐, 별도 예외를 두지 않았다.
 
-**상태**: `branches: string[]`, `selectedBranch: string | null`, `searchTerm: string`, `searchMode: 'message'|'filename'`(기본 `'message'`), `startDate: string`(기본 오늘-7일, `YYYY-MM-DD`), `endDate: string`(기본 오늘), `maxCount: number`(기본 100)
+**상태**: `branches: string[]`, `selectedBranch: string | null`, `searchTerm: string`, `searchMode: 'message'|'filename'`(기본 `'message'`), `startDate: string`(기본 오늘-7일, `YYYY-MM-DD`), `endDate: string`(기본 오늘), `maxCount: number`(기본 100), `authorFilter: string`(기본 `''`, REQ-022), `excludeMerges: boolean`(기본 `false`, REQ-022)
 
 **정정 (2줄 레이아웃 고정, 2026-08-07, 사용자 요청)**: REQUIREDMENT.md §8 원본 와이어프레임은 "Branch/Search"를 1줄, "조회 기간/최대"를 2줄로 그렸지만, 구현은 단일 `flex-wrap` 컨테이너 하나에 네 그룹을 전부 넣어 창 폭에 따라 우연히만 2줄로 보였다(넓은 창에서는 네 그룹이 한 줄에 다 들어감). 항상 와이어프레임대로 2줄로 고정되도록 `branch-search-bar__row` 두 개(Branch+Search+버튼 / 조회기간+최대)로 분리했다 — 바깥 컨테이너는 세로 flex, 각 줄 내부에서만 flex-wrap이 적용된다(좁은 창에서 한 줄 내부 항목이 넘치는 경우의 안전망은 유지).
 
@@ -258,6 +260,8 @@ interface AppState {
   maxCount: number;    // 기본 100
   searchTerm: string;
   searchMode: 'message' | 'filename';   // REQ-016, 기본 'message'
+  authorFilter: string;   // REQ-022, 기본 '' — 작성자명 부분 일치, searchTerm과 독립적으로 AND 결합
+  excludeMerges: boolean; // REQ-022, 기본 false(포함) — Merge 커밋 제외
 
   commits: CommitEntry[];
   selectedHashes: Set<string>;
@@ -331,8 +335,10 @@ interface AppState {
 | Branch 변경 | `commits = []`, **`selectedHashes = {}`**(DR-015 예외), `commitPagination.loading = true` | `git log --since --max-count` 첫 페이지 | REQ-002, DR-015 |
 | Repository Reload | `commits = []`, `selectedHashes`는 **유지**, `commitPagination.loading = true` | `git log --since --max-count` 첫 페이지 | REQ-015, DR-015 |
 | `startDate`/`endDate`/`maxCount`/`searchMode` 변경, Search 트리거 | `commits = []`, `selectedHashes`는 **유지**, `commitPagination.loading = true` | `git log --since --until`(+`--grep` 또는 파일명 pathspec) 첫 페이지 | REQ-003, REQ-015, REQ-016 |
-| 커밋 목록 스크롤 하단 도달 | `commitPagination.loading = true`. 이미 `maxCount`만큼 로드했으면 요청하지 않음(`hasMore = false`) | `git log --skip` 다음 페이지(현재 `searchMode` 유지) | REQ-003 |
+| 커밋 목록 스크롤 하단 도달 | `commitPagination.loading = true`. 이미 `maxCount`만큼 로드했으면 요청하지 않음(`hasMore = false`) | `git log --skip` 다음 페이지(현재 `searchMode`/`authorFilter`/`excludeMerges` 유지) | REQ-003 |
 | Search 입력 (디바운스) | 없음 (요청 중 표시만) | `searchMode`에 따라 `git log --grep` 또는 파일명 pathspec | REQ-003, REQ-016 |
+| 작성자 입력 (디바운스) | `commits = []`, `selectedHashes`는 **유지**, `commitPagination.loading = true` | `git log --author=<값> -i` 추가 | REQ-022 |
+| "Merge 커밋 제외" 체크박스 토글 | `commits = []`, `selectedHashes`는 **유지**, `commitPagination.loading = true`, 디바운스 없이 즉시 | `git log --no-merges` 추가/제거 | REQ-022 |
 | 검색 대상 라디오 토글 | `searchMode` 갱신, 즉시 재조회(디바운스 없음) | `searchMode`에 따라 `git log --grep` 또는 파일명 pathspec | REQ-016 |
 | 커밋 체크박스 토글 | `selectedHashes` add/remove. IPC도, 어떤 계산도 트리거하지 않는다 — `isStale`이 즉시 파생 계산으로 true가 된다 | 없음 | REQ-004~008 |
 | Mapping Profile 변경 | `selectedProfile` 갱신. 마찬가지로 계산을 트리거하지 않는다 | 없음 | REQ-008 |
