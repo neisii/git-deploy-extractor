@@ -182,10 +182,29 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
   provider 설정이라 "never"를 존재하지 않는 provider로 오인함). v0.2.1은 이
   파이프라인이 실제 태그 push로도 끝까지 동작하는지 검증하려고 만든
   릴리스이며, 그 자체는 앱 기능 변경이 없습니다.
+- v0.6.0 릴리스 직후(2026-09-14), `release.yml`의 액션 4개(`actions/checkout`,
+  `actions/setup-node`, `actions/upload-artifact`, `softprops/action-gh-release`)를
+  v4/v4/v4/v2 → v7/v7/v7/v3로 올렸습니다(결정 이력 #60·#61) — v0.6.0 태그
+  빌드 로그에 "Node.js 20 is deprecated" 경고가 떠서 계기가 됐습니다. 웹
+  검색 결과가 setup-node 버전을 v5/v6/v7로 서로 다르게 말해 신뢰할 수 없었던
+  탓에, `gh api repos/<owner>/<repo>/releases/latest`로 각 액션의 실제 최신
+  태그를 직접 조회해 확정했고, 각 저장소 CHANGELOG를 v4~v7(gh-release는
+  v2~v3) 구간까지 훑어 이 워크플로우가 쓰는 입력에 영향을 주는 breaking
+  change가 없음을 확인한 뒤 반영했습니다. `gh workflow run`으로
+  `workflow_dispatch`를 직접 실행해 재검증 — 1차 시도에서 macOS/Windows 둘
+  다 `npm run build:mac`/`build:win` 단계에서 504 Gateway Timeout으로
+  실패했지만, electron-builder가 빌드 리소스(dmgbuild-bundle,
+  nsis-resources)를 받아오다 겪은 일시적 네트워크 문제이지 액션 버전과
+  무관함을 로그로 확인했고, `gh run rerun --failed`로 재시도해 최종 전부
+  성공했습니다 — 다음에 이 워크플로우에서 빌드 실패를 마주치면 먼저 로그의
+  실패 지점이 액션 단계인지 `npm run build:*` 내부(주로 electron-builder
+  리소스 다운로드)인지부터 구분하세요.
 
 먼저 이 순서로 읽어주세요 (짐작하지 말고 실제로 읽어야 합니다):
 
-1. REQUIREDMENT.md — 요구사항 원문. REQ-001~016, DR-001~015가 전부 확정 사항.
+1. REQUIREDMENT.md — 요구사항 원문. REQ-001~025, DR-001~019가 전부 확정 사항
+   (이 번호 범위는 v0.6.0 기준 — 릴리스가 더 진행됐다면 문서에서 실제
+   마지막 번호를 직접 확인하세요, 이 숫자를 갱신 없이 그대로 믿지 마세요).
    새 기능이 이 문서의 기존 요구와 상충하는지부터 확인하세요.
 2. RISK_ISSUES.md — §4(결정 이력 로그)에 지금까지의 모든 설계/UI 결정이 시간순으로
    정리돼 있습니다. 여기 있는 결정을 모르고 "개선"을 시도하면 이미 한 번 정정됐던
