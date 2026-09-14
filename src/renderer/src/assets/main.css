@@ -71,18 +71,19 @@ body,
   gap: 10px;
 }
 
-/* REQ-023 — textarea는 다른 필드보다 키가 커서 row의 align-items:center를
-   그대로 쓰면 라벨 텍스트가 세로 중앙에 어중간하게 걸린다. 이 라벨만
-   위쪽 정렬로 바꾸고, textarea 폭을 넉넉히 잡아 여러 해시를 붙여넣기
-   편하게 한다. */
-.branch-search-bar__hash-filter {
+/* REQ-023(해시 필터)에서 처음 도입, 2026-09-14부터 REQ-022 작성자
+   필터도 재사용 — textarea는 다른 필드보다 키가 커서 row의
+   align-items:center를 그대로 쓰면 라벨 텍스트가 세로 중앙에 어중간하게
+   걸린다. 이 라벨만 위쪽 정렬로 바꾸고, textarea 폭을 넉넉히 잡아 여러
+   줄 붙여넣기 편하게 한다. */
+.branch-search-bar__multiline-field {
   display: flex;
   align-items: flex-start;
   gap: 6px;
   flex: 1 1 100%;
 }
 
-.branch-search-bar__hash-filter textarea {
+.branch-search-bar__multiline-field textarea {
   flex: 1;
   min-width: 240px;
   font-family: inherit;

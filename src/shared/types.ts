@@ -68,12 +68,13 @@ export interface ListCommitsParams {
   pageSize: number
   searchTerm?: string
   searchMode?: CommitSearchMode // 기본 'message'
-  // REQ-022 — 작성자명 부분 일치(대소문자 무관). searchTerm/searchMode와
-  // 독립적으로 AND 결합된다.
-  author?: string
+  // REQ-022 — 작성자명 부분 일치(대소문자 무관). 여러 개면 OR(하나라도
+  // 일치하면 포함) — searchTerm/searchMode와는 독립적으로 AND 결합된다.
+  // 2026-09-14부터 REQ-023 해시 필터와 동일하게 여러 줄 입력을 지원한다.
+  authors?: string[]
   // REQ-022 — Merge 커밋 제외 (git --no-merges와 동일). 기본 false(포함).
   excludeMerges?: boolean
-  // REQ-023 — 값이 있으면 branch/기간/검색어/author/excludeMerges 등 다른
+  // REQ-023 — 값이 있으면 branch/기간/검색어/authors/excludeMerges 등 다른
   // 모든 조건을 무시하고, 이 해시 목록과 정확히 일치하는 커밋만 반환한다
   // (git이 인정하는 축약 해시 포함).
   hashFilter?: string[]

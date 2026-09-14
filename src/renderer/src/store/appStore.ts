@@ -22,10 +22,11 @@ import { matchesAnyActiveExcludePattern } from '../lib/excludePatternMatch'
 const PAGE_SIZE = 100
 const SEARCH_DEBOUNCE_MS = 300
 
-// REQ-023 — 쉼표/공백/줄바꿈 어느 것으로 구분해 붙여넣어도 동일하게
-// 처리한다. 빈 입력이면 빈 배열(호출부에서 undefined로 변환해 hashFilter
-// 없는 일반 조회로 취급).
-function parseHashFilter(text: string): string[] {
+// REQ-023(해시 필터)에서 처음 도입, 2026-09-14부터 REQ-022 작성자
+// 필터도 재사용한다 — 쉼표/공백/줄바꿈 어느 것으로 구분해 붙여넣어도
+// 동일하게 처리한다. 빈 입력이면 빈 배열(호출부에서 undefined로 변환해
+// 해당 필터 없는 일반 조회로 취급).
+function parseMultiValueFilter(text: string): string[] {
   return text
     .split(/[\s,]+/)
     .map((token) => token.trim())
@@ -81,7 +82,7 @@ interface AppState {
   maxCount: number
   searchTerm: string
   searchMode: CommitSearchMode // RISK_ISSUES.md §7.3 — 메시지/파일명 토글, 기본 'message'
-  authorFilter: string // REQ-022 — 작성자명 부분 일치, searchTerm과 독립적으로 AND 결합
+  authorFilter: string // REQ-022 — 원본 텍스트(줄바꿈/쉼표 구분, 2026-09-14부터 여러 작성자 지원). searchTerm과 독립적으로 AND 결합
   excludeMerges: boolean // REQ-022 — Merge 커밋 제외, 기본 true(제외) — 2026-09-14 사용자 요청으로 기본값 변경
   hashFilterText: string // REQ-023 — 원본 텍스트(줄바꿈/쉼표 구분). 값이 있으면 다른 모든 조회 조건을 무시
 
@@ -250,7 +251,8 @@ export const useAppStore = create<AppState>((set, get) => {
       hashFilterText
     } = get()
     if (repository.status !== 'valid' || !selectedBranch || !repository.path) return
-    const hashFilter = parseHashFilter(hashFilterText)
+    const hashFilter = parseMultiValueFilter(hashFilterText)
+    const authors = parseMultiValueFilter(authorFilter)
 
     set({
       commits: [],
@@ -278,7 +280,7 @@ export const useAppStore = create<AppState>((set, get) => {
         pageSize: PAGE_SIZE,
         searchTerm: searchTerm || undefined,
         searchMode,
-        author: authorFilter || undefined,
+        authors: authors.length > 0 ? authors : undefined,
         excludeMerges,
         hashFilter: hashFilter.length > 0 ? hashFilter : undefined
       })
@@ -648,7 +650,8 @@ export const useAppStore = create<AppState>((set, get) => {
       } = get()
       if (!repository.path || !selectedBranch) return
       if (!commitPagination.hasMore || commitPagination.loading) return
-      const hashFilter = parseHashFilter(hashFilterText)
+      const hashFilter = parseMultiValueFilter(hashFilterText)
+      const authors = parseMultiValueFilter(authorFilter)
 
       set({ commitPagination: { ...commitPagination, loading: true } })
       try {
@@ -662,7 +665,7 @@ export const useAppStore = create<AppState>((set, get) => {
           pageSize: PAGE_SIZE,
           searchTerm: searchTerm || undefined,
           searchMode,
-          author: authorFilter || undefined,
+          authors: authors.length > 0 ? authors : undefined,
           excludeMerges,
           hashFilter: hashFilter.length > 0 ? hashFilter : undefined
         })

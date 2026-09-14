@@ -98,15 +98,6 @@ export function BranchSearchBar(): React.JSX.Element {
         </label>
 
         <label>
-          작성자 :
-          <input
-            type="text"
-            value={authorFilter}
-            onChange={(e) => setAuthorFilter(e.target.value)}
-          />
-        </label>
-
-        <label>
           <input
             type="checkbox"
             checked={excludeMerges}
@@ -117,7 +108,18 @@ export function BranchSearchBar(): React.JSX.Element {
       </div>
 
       <div className="branch-search-bar__row">
-        <label className="branch-search-bar__hash-filter">
+        <label className="branch-search-bar__multiline-field">
+          작성자 (쉼표/공백/줄바꿈 구분, 여러 명이면 하나라도 일치 시 포함) :
+          <textarea
+            rows={2}
+            value={authorFilter}
+            onChange={(e) => setAuthorFilter(e.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="branch-search-bar__row">
+        <label className="branch-search-bar__multiline-field">
           해시 필터 (쉼표/공백/줄바꿈 구분, 입력 시 다른 조건 무시) :
           <textarea
             rows={2}
