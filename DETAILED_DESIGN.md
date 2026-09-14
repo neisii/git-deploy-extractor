@@ -469,6 +469,8 @@ pathspec 필터링과 `--skip`/`-n` 페이지네이션이 함께 정상 동작�
 | 전체 선택 체크박스 위치 이동 + 누락된 의존성 양방향화 | §12.4 참고 | 헤더 영역 → Local Path 컬럼 헤더 행(각 행 체크박스와 동일 x 위치)으로 이동, 우측 "전체 추가"(단방향 버튼)를 좌측과 동일한 "전체 선택"(양방향 체크박스)로 교체 | 해결됨 |
 | 커밋 이력 필터링 조건 추가(REQ-022) | §14 참고 | 작성자(`--author -i`)/Merge 커밋 제외(`--no-merges`) 두 조건을 기존 검색과 AND 결합, 기본값은 필터 없음 | 해결됨 |
 | 해시로 커밋 필터링(REQ-023) | §15 참고 | `git log --no-walk`로 붙여넣은 해시와 정확히 일치하는 커밋만 조회, 값이 있으면 다른 모든 조건 무시. 일부 해시 오류 시 `cat-file -e`로 개별 검증 후 유효한 것만 재시도 | 해결됨 |
+| 제외 패턴 삭제(REQ-024) | §16 참고 | 칩을 토글용 버튼 + 삭제용 `×` 버튼 두 개로 분리(button 중첩 불가 제약), 삭제는 이력에서 완전히 제거 | 해결됨 |
+| Merge 커밋 제외 기본값 변경 | §14.4 참고 | `excludeMerges` 렌더러 초기값을 `false`→`true`로 변경(사용자 요청) | 해결됨 |
 
 ---
 
@@ -807,7 +809,7 @@ if (excludeMerges) {
 
 ## 14.4 기본값과 하위 호환
 
-`authorFilter=''`, `excludeMerges=false`가 기본값이며, `listCommits()`는 두 값이 없거나 falsy면 해당 git 플래그를 아예 추가하지 않는다 — 기존 사용자의 조회 결과는 동작 변화 없이 그대로 유지된다.
+`authorFilter=''`가 기본값이며, `listCommits()`는 이 값이 없거나 falsy면 `--author` 플래그를 아예 추가하지 않는다. `excludeMerges`는 IPC 레벨에서는 여전히 falsy면 `--no-merges`를 안 붙이는 동일한 규칙이지만, **정정(2026-09-14, 사용자 요청)**: 렌더러 쪽 초기 state가 `false`에서 `true`로 바뀌어, 별도로 끄지 않는 한 기본적으로 Merge 커밋이 제외된 상태로 조회된다 — 배포 대상 파일 추출 목적상 Merge 커밋은 대개 노이즈라는 판단에 따른 것으로, "기존 사용자에게 동작 변화를 주지 않는다"는 애초 설계 의도와는 의도적으로 어긋나는 변경이다.
 
 ---
 
@@ -845,3 +847,35 @@ if (excludeMerges) {
 ## 15.5 검증
 
 실제 이 저장소의 커밋 해시로 스크립트를 작성해 `listCommits()`를 직접 호출·확인했다: (1) 정상 해시(전체 길이) + 축약 해시(7자리) + 존재하지 않는 해시를 섞으면 유효한 2개만 반환, (2) 전부 존재하지 않는 해시면 빈 배열, (3) `skip`/`pageSize`가 함수 내부 슬라이스로 정확히 동작(2개 중 skip=1, pageSize=1로 두 번째 것만 반환).
+
+---
+
+# 16. 제외 패턴 삭제 설계 (REQ-024, 2026-09-14)
+
+## 16.1 배경
+
+REQ-019 제외 패턴은 처음부터 "한 번 입력하면 지우지 않는 한 이력(칩)에 남는다"는 전제로 설계됐다(`excludePatterns.ts` 주석에도 이미 이렇게 적혀 있었다) — 다만 그 "지운다"에 해당하는 기능은 실제로 구현된 적이 없었다. 실사용 중 칩이 쌓여 목록이 지저분해지는 문제가 나오면서 이 gap이 드러났다.
+
+## 16.2 마크업 제약: button 안에 button을 넣을 수 없다
+
+기존 칩은 통째로 `<button onClick={toggle}>`이었다 — 클릭 영역 전체가 토글이었다. 여기에 별도 삭제 버튼을 추가하려면 `<button>` 안에 `<button>`을 중첩해야 하는데 이는 유효한 HTML이 아니다(브라우저가 파싱 단계에서 바깥 button을 강제로 닫아버려 예측 불가능한 DOM이 만들어진다). 그래서 칩을 `<span className="exclude-pattern-chip">`(모양만 담당하는 순수 래퍼)로 바꾸고, 그 안에 `<button className="exclude-pattern-chip__label">`(토글, 기존 클릭 동작 그대로)과 `<button className="exclude-pattern-chip__remove">×</button>`(삭제, REQ-024 신규) 두 형제 버튼을 나란히 뒀다. `ManualAddPopup.tsx`의 칩(REQ-021)은 애초에 토글 개념이 없어 칩 전체가 단일 삭제 버튼이었으므로 이 제약에 걸리지 않았다 — REQ-019 칩만 "토글 + 삭제" 두 동작을 한 칩에 담아야 해서 이 구조 변경이 필요했다.
+
+## 16.3 구현: `removeExcludePattern`
+
+`toggleExcludePattern`과 형태가 거의 같다 — `excludePatterns` 배열에서 해당 패턴을 찾아 갱신하는 대신 아예 필터링해서 제거하고, `localStorage`에 다시 저장한다(`appStore.ts`).
+
+```ts
+removeExcludePattern: (pattern) => {
+  set((state) => {
+    const next = state.excludePatterns.filter((p) => p.pattern !== pattern)
+    saveExcludePatterns(next)
+    return { excludePatterns: next }
+  })
+},
+```
+
+활성(enabled) 패턴을 삭제하면 배열에서 아예 빠지므로, `matchesAnyActiveExcludePattern`이 다음 렌더에서 더 이상 그 패턴을 매치하지 않는다 — 별도의 "삭제 시 재계산" 로직 없이 기존 파생 계산 체인(§12.1)이 자연히 반영한다.
+
+## 16.4 확인 다이얼로그를 넣지 않은 이유
+
+이 앱의 다른 유사 액션(REQ-019 토글, REQ-021 팝업 칩 `×`)이 전부 확인창 없이 즉시 처리되는 관례를 따랐다 — 여기만 확인창을 넣으면 일관성이 깨지고, 삭제된 패턴은 다시 타이핑하면 되살릴 수 있는 가벼운 문자열이라 되돌릴 수 없는 파괴적 작업에 준하는 수준의 안전장치가 필요하다고 보지 않았다.

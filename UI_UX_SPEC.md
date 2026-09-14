@@ -87,12 +87,12 @@ AppShell
 | "조회 기간 : [시작일] ~ [종료일]" 날짜 선택 | `startDate`/`endDate` 갱신. 변경 시 CommitListPanel 리셋 후 재조회(REQ-003, 기본값 오늘-7일 ~ 오늘) |
 | "최대 [N] 개" 입력 | `maxCount` 갱신. 변경 시 CommitListPanel 리셋 후 재조회(REQ-003, 기본값 100). 이 값이 무한 스크롤의 상한선 — 스크롤이 `maxCount`에 도달하면 더 이상 다음 페이지를 요청하지 않는다 |
 | "작성자 :" 입력 (REQ-022) | 로컬 텍스트 상태. Search 입력과 동일하게 300ms 디바운스 후 자동 검색 트리거 — `git log --author=<값> -i`로 부분 일치(대소문자 무관). `searchTerm`/`searchMode`와 독립적으로 AND 결합 |
-| "Merge 커밋 제외" 체크박스 (REQ-022) | `excludeMerges` 갱신, 디바운스 없이 즉시 재조회 — `git log --no-merges`. 기본값 `false`(포함) |
+| "Merge 커밋 제외" 체크박스 (REQ-022) | `excludeMerges` 갱신, 디바운스 없이 즉시 재조회 — `git log --no-merges`. 기본값 **`true`(제외, 2026-09-14 정정 — 원래 `false`였으나 Merge 커밋은 대개 노이즈라는 사용자 판단으로 변경)** |
 | "해시 필터 (쉼표/공백/줄바꿈 구분, 입력 시 다른 조건 무시)" textarea (REQ-023) | 로컬 텍스트 상태. Search 입력과 동일하게 300ms 디바운스 후 자동 검색 트리거. 값을 파싱(공백/쉼표로 분리)해 `git log --no-walk`로 그 해시와 정확히 일치하는 커밋만 조회 — 값이 있으면 branch/기간/검색어/작성자/Merge 제외를 **전부 무시**한다 |
 
 **정정 (선택 유지, REQ-015, 2026-08-07)**: 검색 대상 토글/Search/조회 기간/최대 개수 — 이 네 가지로 인한 재조회는 전부 `selectedHashes`를 **유지**한다(Branch 변경만 예외로 초기화, 위 표 참고). 이전에는 "CommitListPanel 리셋"이 `commits`와 `selectedHashes` 둘 다를 항상 지우는 의미였지만, 이제는 `commits`만 항상 지우고 `selectedHashes`는 재조회 경로에 따라 다르다 — 자세한 규칙은 REQUIREDMENT.md DR-015, DETAILED_DESIGN.md §8.1 참고. **작성자/Merge 제외(REQ-022)·해시 필터(REQ-023)도 동일하게 `selectedHashes`를 유지한다** — 검색 조건 계열에 새로 추가된 필터일 뿐, 별도 예외를 두지 않았다.
 
-**상태**: `branches: string[]`, `selectedBranch: string | null`, `searchTerm: string`, `searchMode: 'message'|'filename'`(기본 `'message'`), `startDate: string`(기본 오늘-7일, `YYYY-MM-DD`), `endDate: string`(기본 오늘), `maxCount: number`(기본 100), `authorFilter: string`(기본 `''`, REQ-022), `excludeMerges: boolean`(기본 `false`, REQ-022), `hashFilterText: string`(기본 `''`, REQ-023 — 값이 있으면 다른 모든 조회 조건 무시)
+**상태**: `branches: string[]`, `selectedBranch: string | null`, `searchTerm: string`, `searchMode: 'message'|'filename'`(기본 `'message'`), `startDate: string`(기본 오늘-7일, `YYYY-MM-DD`), `endDate: string`(기본 오늘), `maxCount: number`(기본 100), `authorFilter: string`(기본 `''`, REQ-022), `excludeMerges: boolean`(기본 `true`, REQ-022 — 2026-09-14 정정), `hashFilterText: string`(기본 `''`, REQ-023 — 값이 있으면 다른 모든 조회 조건 무시)
 
 **정정 (2줄 레이아웃 고정, 2026-08-07, 사용자 요청)**: REQUIREDMENT.md §8 원본 와이어프레임은 "Branch/Search"를 1줄, "조회 기간/최대"를 2줄로 그렸지만, 구현은 단일 `flex-wrap` 컨테이너 하나에 네 그룹을 전부 넣어 창 폭에 따라 우연히만 2줄로 보였다(넓은 창에서는 네 그룹이 한 줄에 다 들어감). 항상 와이어프레임대로 2줄로 고정되도록 `branch-search-bar__row` 두 개(Branch+Search+버튼 / 조회기간+최대)로 분리했다 — 바깥 컨테이너는 세로 flex, 각 줄 내부에서만 flex-wrap이 적용된다(좁은 창에서 한 줄 내부 항목이 넘치는 경우의 안전망은 유지).
 
@@ -141,7 +141,7 @@ AppShell
 | "전체 선택" 체크박스(위치 정정, 2026-08-20) | `Local Path` 컬럼 헤더 왼쪽(각 행 체크박스와 동일 x 위치 — CSS 그리드 24px 열을 그대로 공유)에 위치. 좌우 `FileListColumn` 공통(우측도 이 시점부터 체크박스로 통일 — 아래 정정 참고). 현재 **필터에 표시된 행 기준**으로 전체 체크/해제. 필터로 숨겨진 행은 건드리지 않는다. 표시된 행 일부만 체크된 상태면 indeterminate(가로줄) 표시. 텍스트 라벨 없이 `title` 툴팁("전체 선택"/"전체 해제")만 제공(패널 헤더 영역엔 더 이상 렌더링되지 않음) |
 | 헤더 옆 선택 카운터(신규, REQ-020, 2026-08-20 세 숫자로 확정) | `(선택 N개/전체 N개(필터 전 전체 N개))`. **선택**은 Filter/검색과 무관한 절대값(Export될 파일 수 — REQ-019 제외 패턴에 매치되면 실제로 Export 안 되니 이건 반영됨). **전체**는 상태 Filter+검색+제외 패턴이 적용된 뒤 화면에 보이는 개수(기존 확정 유지). **(필터 전 전체)**는 모든 필터를 무시한 참고용 순수 전체 개수. 좌우 `FileListColumn` 공통. 우측(누락된 의존성)만: "전체" 부분의 N이 50 초과면 그 부분만 붉은 글씨(`status-text--error`)로 강조 + `title="50개를 초과했습니다"` 툴팁. 50개 기준은 "전체"(화면 표시 기준)와 동일한 값으로 판단 — 검색으로 좁혀서 50개 이하로 보이면 경고도 사라진다. "선택"·"(필터 전 전체)"는 이 경고와 무관 |
 | Filter dropdown | `all \| added \| modified` (클라이언트 사이드 필터, 재계산 없음. `deleted`는 이 목록 대상이 아니므로 필터 옵션에서 제외. Rename을 별도 감지하지 않으므로 `renamed` 옵션도 없음 — DR-008) |
-| 제외 패턴 입력(신규, REQ-019, 좌측만) | 검색(파일명) 아래 새 행 — 텍스트 입력 + `[+추가]`. `.gitignore` 문법(`*.png`처럼 슬래시 없으면 파일명 매치, `src/test/**`처럼 슬래시 있으면 경로 매치). 등록한 패턴은 칩으로 나열되고 클릭해서 켜고 끌 수 있다(활성 패턴만 실제 적용) — 앱 재실행 후에도 유지(전역 `localStorage`, 저장소 무관) |
+| 제외 패턴 입력(신규, REQ-019, 좌측만) | 검색(파일명) 아래 새 행 — 텍스트 입력 + `[+추가]`. `.gitignore` 문법(`*.png`처럼 슬래시 없으면 파일명 매치, `src/test/**`처럼 슬래시 있으면 경로 매치). 등록한 패턴은 칩으로 나열되고 클릭해서 켜고 끌 수 있다(활성 패턴만 실제 적용) — 앱 재실행 후에도 유지(전역 `localStorage`, 저장소 무관). 칩 우측 `×`(REQ-024)를 누르면 토글과 별개로 이력에서 완전히 삭제된다 |
 | 각 행 체크박스 | `included` 토글. 해제된 파일은 Export 시 deploy-files.txt와 실제 복사 대상에서 빠진다(REQ-011). Local Path 열의 파일명 텍스트를 클릭해도 동일하게 토글된다(추가, 2026-08-04) |
 | Local Path 열 | `localPath` 표시. 열 헤더 오른쪽 경계를 드래그하면 최소 폭을 조절할 수 있다 |
 
@@ -181,6 +181,8 @@ AppShell
 **파일명 검색(좌우 공통, 신규)**: 경로 전체가 아니라 **파일명(경로의 마지막 조각)** 부분 일치로 필터링한다 — §7.3(파일명으로 커밋 검색)과 매칭 기준을 통일했다. 상태 Filter(좌측만 있음) 이후에 적용된다.
 
 **추가 (배포 대상 파일 제외 패턴, REQ-019, DR-018, 2026-08-12)**: 좌측(포함된 파일)에만 적용되는 별도 필터. 파일명 검색과 역할이 다르다 — 검색은 "지금 찾고 싶은 것만 보기"(매번 새로 입력, 지워지는 일시적 포함 필터)인 반면, 제외 패턴은 "이 종류는 앞으로도 계속 안 올린다"(한 번 등록하면 재사용하는 지속적 제외 필터). 활성 패턴에 매치되는 파일은 목록에서 완전히 숨겨지고 Export 대상에서도 제외된다(단, `deployFiles[].included`를 직접 고치지 않고 Export 시점에 별도로 한 번 더 걸러내는 파생 계산 방식 — DETAILED_DESIGN.md §12.1). 우측(누락된 의존성)에는 적용하지 않는다 — 그 목록은 항상 `.java` 파일만 나오도록 설계되어 있어(REQ-013) 이 패턴이 사실상 적용될 일이 없다.
+
+**추가 (제외 패턴 삭제, REQ-024, 2026-09-14)**: 칩이 너무 많이 쌓여 목록이 지저분해지는 문제를 해결하기 위해, 각 칩 텍스트 우측에 `×` 버튼을 추가했다. 토글(켜기/끄기)은 "지금 적용 여부"만 바꾸고 이력엔 그대로 남지만, `×`는 이력 자체에서 완전히 제거한다(다시 쓰려면 처음부터 재입력). 구현상 칩 자체가 `<button>`이라 그 안에 삭제 버튼을 중첩할 수 없어(HTML 제약), `<span>` 래퍼 안에 토글용 버튼과 삭제용 버튼 두 개를 나란히 두는 구조로 바뀌었다. 삭제는 확인 다이얼로그 없이 즉시 처리된다 — REQ-021 팝업 칩 `×`(철회)/REQ-019 토글과 동일한 관례.
 
 **정정 (전체 선택/전체 추가가 검색어를 무시하는 버그 수정 완료, 2026-08-12, 코드 리딩으로 발견)**: 좌측 "전체 선택"은 상태 Filter(드롭다운)만 반영해 다시 계산하고 파일명 검색은 무시했고, 우측 "전체 추가"는 Filter/검색 둘 다 무시하고 항상 `missingDependencies` 전체를 대상으로 했다 — 이 문서 위쪽 표(§2.6 "전체 선택" 행)에 적혀 있던 "필터에 표시된 행 기준"이라는 의도와 실제 동작이 어긋나 있었다. 근본 원인은 필터 로직이 `DeployFilesPanel.tsx`(화면 표시용)와 store(토글 대상 계산용) 두 곳에 중복 구현되어 서로 어긋난 것 — 수정 후에는 **좌우 둘 다 상태 Filter + 파일명 검색이 모두 적용된, 화면에 실제로 보이는 행만** 대상으로 한다(단일 진실 공급원: 화면 표시 목록을 그대로 액션 파라미터로 전달). DETAILED_DESIGN.md §9 표, RISK_ISSUES.md 결정 이력 참고.
 
@@ -262,7 +264,7 @@ interface AppState {
   searchTerm: string;
   searchMode: 'message' | 'filename';   // REQ-016, 기본 'message'
   authorFilter: string;   // REQ-022, 기본 '' — 작성자명 부분 일치, searchTerm과 독립적으로 AND 결합
-  excludeMerges: boolean; // REQ-022, 기본 false(포함) — Merge 커밋 제외
+  excludeMerges: boolean; // REQ-022, 기본 true(제외, 2026-09-14 정정 — 원래 false였음)
   hashFilterText: string; // REQ-023, 기본 '' — 값이 있으면 branch/기간/검색어/author/excludeMerges 전부 무시
 
   commits: CommitEntry[];
@@ -358,6 +360,7 @@ interface AppState {
 | 버전 배지 클릭 | 캐시 나이 무관하게 `updateChecking = true`(위와 동일 흐름) — **응답을 기다리지 않고 즉시** `dialog.showMessageBox` 확인창도 같이 뜬다. "네" 응답 시에만 `shell.openExternal`(고정 인덱스 URL). **이미 `updateChecking===true`거나 확인창이 이미 열려 있으면** 새 네트워크 호출/확인창을 추가로 띄우지 않는다(연속 클릭 가드) | `checkForUpdate` + (확인 시)`shell.openExternal` | REQ-017, DR-016 |
 | 제외 패턴 `[+추가]` 클릭 (좌) | `excludePatterns`에 `{pattern, enabled:true}` 추가, `localStorage` 저장. 즉시 해당 패턴에 매치되는 행이 목록에서 숨겨짐 | 없음 (로컬) | REQ-019, DR-018 |
 | 제외 패턴 칩 클릭 (좌) | 해당 패턴의 `enabled` 토글, `localStorage` 저장. 비활성화하면 그 패턴 때문에 숨겨졌던 행이 즉시 다시 보임(원래 `included` 값 그대로 — 별도 복원 로직 없음) | 없음 (로컬) | REQ-019, DR-018 |
+| 제외 패턴 칩 `×` 클릭 (좌) | `excludePatterns`에서 해당 패턴 완전히 제거, `localStorage` 저장. 활성 상태였다면 그 패턴 때문에 숨겨졌던 행도 즉시 다시 보임 | 없음 (로컬) | REQ-024 |
 | `+ 파일 추가` 클릭 (좌) | `DeployFilesPanel`의 `manualAddOpen = true` — 부모(`.deploy-files-panel`) 중앙에 모달 팝업이 뜬다 | 없음 (로컬) | REQ-021, DR-019 |
 | 팝업 검색 입력 (자동완성) | 없음 (표시용 후보 필터링만, 디바운스 없음) | 없음 (로컬) | REQ-021, DR-019 |
 | 팝업 후보 클릭 | `deployFiles`에 없으면 추가 + `manuallyAddedPaths`에 경로 push(강조색 칩으로 표시). 이미 있으면 무시 | 없음 (로컬, HEAD 파일 내용은 이미 §6 경로로 조회된 값 재사용) | REQ-021, DR-019 |
