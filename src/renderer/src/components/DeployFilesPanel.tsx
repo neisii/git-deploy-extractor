@@ -28,6 +28,7 @@ export function DeployFilesPanel(): React.JSX.Element {
   const excludePatterns = useAppStore((s) => s.excludePatterns)
   const addExcludePattern = useAppStore((s) => s.addExcludePattern)
   const toggleExcludePattern = useAppStore((s) => s.toggleExcludePattern)
+  const removeExcludePattern = useAppStore((s) => s.removeExcludePattern)
   const warnings = useAppStore((s) => s.warnings)
   const toggleIncluded = useAppStore((s) => s.toggleDeployFileIncluded)
   const toggleAll = useAppStore((s) => s.toggleAllDeployFiles)
@@ -153,6 +154,7 @@ export function DeployFilesPanel(): React.JSX.Element {
       excludePatterns={excludePatterns}
       onAddExcludePattern={addExcludePattern}
       onToggleExcludePattern={toggleExcludePattern}
+      onRemoveExcludePattern={removeExcludePattern}
       onOpenManualAdd={() => setManualAddOpen(true)}
     />
   )

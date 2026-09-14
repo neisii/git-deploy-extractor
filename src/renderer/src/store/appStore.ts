@@ -161,6 +161,7 @@ interface AppState {
   setDeployFilesSearchTerm: (term: string) => void
   addExcludePattern: (pattern: string) => void
   toggleExcludePattern: (pattern: string) => void
+  removeExcludePattern: (pattern: string) => void
   addManualFile: (localPath: string) => Promise<void>
   removeManualFile: (localPath: string) => void
   toggleDeployFileIncluded: (localPath: string) => void
@@ -757,6 +758,16 @@ export const useAppStore = create<AppState>((set, get) => {
         const next = state.excludePatterns.map((p) =>
           p.pattern === pattern ? { ...p, enabled: !p.enabled } : p
         )
+        saveExcludePatterns(next)
+        return { excludePatterns: next }
+      })
+    },
+
+    // REQ-024 — 토글과 달리 이력 자체에서 빠진다(확인 다이얼로그 없이 즉시
+    // 처리 — 토글/removeManualFile과 동일한 관례).
+    removeExcludePattern: (pattern) => {
+      set((state) => {
+        const next = state.excludePatterns.filter((p) => p.pattern !== pattern)
         saveExcludePatterns(next)
         return { excludePatterns: next }
       })

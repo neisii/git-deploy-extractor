@@ -58,6 +58,8 @@ interface FileListColumnProps {
   excludePatterns?: ExcludePatternEntry[]
   onAddExcludePattern?: (pattern: string) => void
   onToggleExcludePattern?: (pattern: string) => void
+  // REQ-024 — 토글(켜기/끄기)과 별개로 이력 자체에서 삭제한다.
+  onRemoveExcludePattern?: (pattern: string) => void
   // REQ-021/DR-019 — "포함된 파일"에만 전달한다. 팝업 자체는 DeployFilesPanel이
   // 부모(두 컬럼을 감싸는 .deploy-files-panel) 중앙에 고정 크기로 띄운다 —
   // 이 컬럼은 트리거 버튼만 갖고, 클릭하면 부모에게 열어달라고 알린다
@@ -129,6 +131,7 @@ export function FileListColumn({
   excludePatterns,
   onAddExcludePattern,
   onToggleExcludePattern,
+  onRemoveExcludePattern,
   onOpenManualAdd
 }: FileListColumnProps): React.JSX.Element {
   const headerCheckboxRef = useRef<HTMLInputElement>(null)
@@ -282,19 +285,33 @@ export function FileListColumn({
           {excludePatterns.length > 0 && (
             <div className="file-list-column__exclude-pattern-chips">
               {excludePatterns.map((p) => (
-                <button
+                <span
                   key={p.pattern}
-                  type="button"
                   className={
                     p.enabled
                       ? 'exclude-pattern-chip exclude-pattern-chip--active'
                       : 'exclude-pattern-chip'
                   }
-                  onClick={() => onToggleExcludePattern(p.pattern)}
-                  title={p.enabled ? '클릭하면 이 패턴을 끕니다' : '클릭하면 이 패턴을 켭니다'}
                 >
-                  {p.pattern}
-                </button>
+                  <button
+                    type="button"
+                    className="exclude-pattern-chip__label"
+                    onClick={() => onToggleExcludePattern(p.pattern)}
+                    title={p.enabled ? '클릭하면 이 패턴을 끕니다' : '클릭하면 이 패턴을 켭니다'}
+                  >
+                    {p.pattern}
+                  </button>
+                  {onRemoveExcludePattern && (
+                    <button
+                      type="button"
+                      className="exclude-pattern-chip__remove"
+                      onClick={() => onRemoveExcludePattern(p.pattern)}
+                      title="이 패턴을 이력에서 삭제합니다"
+                    >
+                      ×
+                    </button>
+                  )}
+                </span>
               ))}
             </div>
           )}

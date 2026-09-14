@@ -446,14 +446,19 @@ body,
   width: 100%;
 }
 
+/* REQ-024 — 토글용 버튼(패턴 텍스트)과 삭제용 버튼(×) 두 개를 나란히
+   담는 래퍼로 바뀌었다(button 안에 button을 중첩할 수 없어 칩 자체는
+   더 이상 button이 아니다). 테두리/배경/모양은 이 래퍼가 갖고, 안쪽 두
+   button은 그 모양을 상속만 받도록 투명하게 만든다. */
 .exclude-pattern-chip {
+  display: inline-flex;
+  align-items: center;
   border: 1px solid var(--ev-c-gray-3);
   border-radius: 999px;
-  padding: 2px 8px;
+  padding: 2px 4px 2px 8px;
   background: transparent;
   color: var(--ev-c-text-2);
   font-size: 12px;
-  cursor: pointer;
 }
 
 /* 활성 패턴만 강조 — 비활성(꺼진) 패턴은 이력에는 남아있지만 흐리게
@@ -462,6 +467,30 @@ body,
   background: var(--ev-c-gray-3);
   color: var(--color-text);
   border-color: var(--ev-c-gray-2);
+}
+
+.exclude-pattern-chip__label {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+.exclude-pattern-chip__remove {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  opacity: 0.6;
+  padding: 0 0 0 4px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.exclude-pattern-chip__remove:hover {
+  opacity: 1;
 }
 
 .deploy-files-panel__header {
