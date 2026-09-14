@@ -110,7 +110,7 @@ Git 프로세스 실행, 파일시스템 쓰기(Deploy Package 생성)는 전부
 |---|---|---|
 | Repository 유효성 검사 | `git rev-parse --is-inside-work-tree` | REQ-001 |
 | Branch 목록 조회 | `git branch --list` / `git for-each-ref` | REQ-002 |
-| Commit 목록 조회 | `git log --pretty=format:...` (lazy load, `--skip`/`-n` 페이지네이션). `searchMode`에 따라 `--grep`(메시지) 또는 pathspec(파일명, REQ-016) 분기. `--author=<값> -i`(작성자 부분 일치)/`--no-merges`(Merge 제외, REQ-022)는 조건부로 추가 결합. 해시 필터(REQ-023)가 있으면 위 조건을 전부 무시하고 `git log --no-walk <hash...>`로 완전히 분리된 경로로 조회 | REQ-003, REQ-016, REQ-022, REQ-023 |
+| Commit 목록 조회 | `git log --pretty=format:...` (lazy load, `--skip`/`-n` 페이지네이션). `searchMode`에 따라 `--grep`(메시지) 또는 pathspec(파일명, REQ-016) 분기. `--author=<값> -i`(작성자 부분 일치, 2026-09-14부터 여러 값을 반복 push해 git 기본 OR로 결합)/`--no-merges`(Merge 제외, REQ-022)는 조건부로 추가 결합. 해시 필터(REQ-023)가 있으면 위 조건을 전부 무시하고 `git log --no-walk <hash...>`로 완전히 분리된 경로로 조회 | REQ-003, REQ-016, REQ-022, REQ-023 |
 | Commit 상세 diff | `git diff-tree` / `git show --name-status` | REQ-005 |
 | HEAD 파일 조회 | `git show <branch>:<path>` | REQ-007, DR-003 |
 | 경로 접두사 하위 파일 목록 | `git ls-tree -r <branch> --name-only -- <prefix>`(접두사 생략 시 전체 트리 — REQ-016은 접두사 없이 호출) | REQ-013, REQ-016 |

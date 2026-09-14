@@ -86,9 +86,9 @@ AppShell
 | `[Search]` 버튼 | 디바운스를 기다리지 않고 즉시 검색 트리거 (보조 수단) |
 | "조회 기간 : [시작일] ~ [종료일]" 날짜 선택 | `startDate`/`endDate` 갱신. 변경 시 CommitListPanel 리셋 후 재조회(REQ-003, 기본값 오늘-7일 ~ 오늘) |
 | "최대 [N] 개" 입력 | `maxCount` 갱신. 변경 시 CommitListPanel 리셋 후 재조회(REQ-003, 기본값 100). 이 값이 무한 스크롤의 상한선 — 스크롤이 `maxCount`에 도달하면 더 이상 다음 페이지를 요청하지 않는다 |
-| "작성자 :" 입력 (REQ-022) | 로컬 텍스트 상태. Search 입력과 동일하게 300ms 디바운스 후 자동 검색 트리거 — `git log --author=<값> -i`로 부분 일치(대소문자 무관). `searchTerm`/`searchMode`와 독립적으로 AND 결합 |
+| "작성자 :" textarea (REQ-022) | 로컬 텍스트 상태. Search 입력과 동일하게 300ms 디바운스 후 자동 검색 트리거. **정정(2026-09-14)**: `<input>`에서 `<textarea>`로 바뀌어 REQ-023 해시 필터처럼 쉼표/공백/줄바꿈으로 구분된 여러 작성자를 붙여넣을 수 있다 — `git log --author=<값> -i`를 값마다 반복 추가(git 기본 동작으로 OR 결합, 하나라도 일치하면 포함). `searchTerm`/`searchMode`와는 독립적으로 AND 결합. 설명 문구는 라벨이 아니라 `placeholder`로 표시. 해시 필터와 한 행에 좌우 반반(`flex: 1 1 320px`) 배치 |
 | "Merge 커밋 제외" 체크박스 (REQ-022) | `excludeMerges` 갱신, 디바운스 없이 즉시 재조회 — `git log --no-merges`. 기본값 **`true`(제외, 2026-09-14 정정 — 원래 `false`였으나 Merge 커밋은 대개 노이즈라는 사용자 판단으로 변경)** |
-| "해시 필터 (쉼표/공백/줄바꿈 구분, 입력 시 다른 조건 무시)" textarea (REQ-023) | 로컬 텍스트 상태. Search 입력과 동일하게 300ms 디바운스 후 자동 검색 트리거. 값을 파싱(공백/쉼표로 분리)해 `git log --no-walk`로 그 해시와 정확히 일치하는 커밋만 조회 — 값이 있으면 branch/기간/검색어/작성자/Merge 제외를 **전부 무시**한다 |
+| "해시 필터" textarea (REQ-023) | 로컬 텍스트 상태. Search 입력과 동일하게 300ms 디바운스 후 자동 검색 트리거. 값을 파싱(공백/쉼표/줄바꿈으로 분리)해 `git log --no-walk`로 그 해시와 정확히 일치하는 커밋만 조회 — 값이 있으면 branch/기간/검색어/작성자/Merge 제외를 **전부 무시**한다. 설명 문구는 `placeholder`로 표시, 작성자 필터와 한 행에 좌우 반반 배치(2026-09-14) |
 
 **정정 (선택 유지, REQ-015, 2026-08-07)**: 검색 대상 토글/Search/조회 기간/최대 개수 — 이 네 가지로 인한 재조회는 전부 `selectedHashes`를 **유지**한다(Branch 변경만 예외로 초기화, 위 표 참고). 이전에는 "CommitListPanel 리셋"이 `commits`와 `selectedHashes` 둘 다를 항상 지우는 의미였지만, 이제는 `commits`만 항상 지우고 `selectedHashes`는 재조회 경로에 따라 다르다 — 자세한 규칙은 REQUIREDMENT.md DR-015, DETAILED_DESIGN.md §8.1 참고. **작성자/Merge 제외(REQ-022)·해시 필터(REQ-023)도 동일하게 `selectedHashes`를 유지한다** — 검색 조건 계열에 새로 추가된 필터일 뿐, 별도 예외를 두지 않았다.
 
@@ -132,7 +132,7 @@ AppShell
 
 ## 2.6 DeployFilesPanel
 
-**책임**: REQ-007, REQ-008, REQ-011. 배포 대상 파일 목록(HEAD 최신본, Mapping Rule 적용 결과) + 개별/전체 파일 수동 제외.
+**책임**: REQ-007, REQ-008, REQ-011. 배포 대상 파일 목록(HEAD 최신본, Mapping Rule 적용 결과) + 개별/전체 파일 수동 제외. 파일명 검색 와일드카드는 REQ-025.
 
 최소 높이가 MainGrid(위쪽 CommitListPanel/DeploymentPreviewPanel 행)와 동일하게 맞춰져 있다 — §1 참고.
 
@@ -179,6 +179,8 @@ AppShell
 **우측 항목의 체크 시맨틱**: 체크(추가)해도 목록에서 사라지지 않는다 — 좌측 `included`처럼 "이미 `deployFiles`에 들어갔는가"를 계속 보여준다(체크 해제하면 `deployFiles`에서 다시 빠진다). 경로 텍스트 클릭도 체크박스와 동일하게 토글된다(좌측과 동일한 상호작용 재사용).
 
 **파일명 검색(좌우 공통, 신규)**: 경로 전체가 아니라 **파일명(경로의 마지막 조각)** 부분 일치로 필터링한다 — §7.3(파일명으로 커밋 검색)과 매칭 기준을 통일했다. 상태 Filter(좌측만 있음) 이후에 적용된다.
+
+**추가 (와일드카드 검색, REQ-025, 2026-09-14)**: 검색어에 `*`가 있으면 REQ-019 제외 패턴과 같은 문법(슬래시를 못 넘는 단일 세그먼트 와일드카드)으로 파일명 전체와 매치한다(`*.html`, `*List.html`처럼 사용). `*`가 없으면 기존 부분 일치 그대로(하위 호환). REQ-019(영속 규칙, 대소문자 구분)와 달리 이 검색은 일시적 조건이라 대소문자는 항상 무관하게 비교한다. 경로 전체 검색으로는 확장하지 않았다(§7.2 매칭 기준 유지, 별도 제안이 있었으나 이번 범위에서 보류). §7.3(커밋 파일명 검색)에는 아직 적용하지 않아 이 지점부터 좌우 매칭 기준 통일 원칙이 커밋 검색과는 갈라진다 — DETAILED_DESIGN.md §17.4 참고.
 
 **추가 (배포 대상 파일 제외 패턴, REQ-019, DR-018, 2026-08-12)**: 좌측(포함된 파일)에만 적용되는 별도 필터. 파일명 검색과 역할이 다르다 — 검색은 "지금 찾고 싶은 것만 보기"(매번 새로 입력, 지워지는 일시적 포함 필터)인 반면, 제외 패턴은 "이 종류는 앞으로도 계속 안 올린다"(한 번 등록하면 재사용하는 지속적 제외 필터). 활성 패턴에 매치되는 파일은 목록에서 완전히 숨겨지고 Export 대상에서도 제외된다(단, `deployFiles[].included`를 직접 고치지 않고 Export 시점에 별도로 한 번 더 걸러내는 파생 계산 방식 — DETAILED_DESIGN.md §12.1). 우측(누락된 의존성)에는 적용하지 않는다 — 그 목록은 항상 `.java` 파일만 나오도록 설계되어 있어(REQ-013) 이 패턴이 사실상 적용될 일이 없다.
 
@@ -263,7 +265,7 @@ interface AppState {
   maxCount: number;    // 기본 100
   searchTerm: string;
   searchMode: 'message' | 'filename';   // REQ-016, 기본 'message'
-  authorFilter: string;   // REQ-022, 기본 '' — 작성자명 부분 일치, searchTerm과 독립적으로 AND 결합
+  authorFilter: string;   // REQ-022, 기본 '' — 원본 텍스트(줄바꿈/쉼표 구분, 2026-09-14부터 여러 작성자 OR 지원), searchTerm과 독립적으로 AND 결합
   excludeMerges: boolean; // REQ-022, 기본 true(제외, 2026-09-14 정정 — 원래 false였음)
   hashFilterText: string; // REQ-023, 기본 '' — 값이 있으면 branch/기간/검색어/author/excludeMerges 전부 무시
 
@@ -341,7 +343,7 @@ interface AppState {
 | `startDate`/`endDate`/`maxCount`/`searchMode` 변경, Search 트리거 | `commits = []`, `selectedHashes`는 **유지**, `commitPagination.loading = true` | `git log --since --until`(+`--grep` 또는 파일명 pathspec) 첫 페이지 | REQ-003, REQ-015, REQ-016 |
 | 커밋 목록 스크롤 하단 도달 | `commitPagination.loading = true`. 이미 `maxCount`만큼 로드했으면 요청하지 않음(`hasMore = false`) | `git log --skip` 다음 페이지(현재 `searchMode`/`authorFilter`/`excludeMerges`/`hashFilterText` 유지) | REQ-003 |
 | Search 입력 (디바운스) | 없음 (요청 중 표시만) | `searchMode`에 따라 `git log --grep` 또는 파일명 pathspec | REQ-003, REQ-016 |
-| 작성자 입력 (디바운스) | `commits = []`, `selectedHashes`는 **유지**, `commitPagination.loading = true` | `git log --author=<값> -i` 추가 | REQ-022 |
+| 작성자 입력 (디바운스) | `commits = []`, `selectedHashes`는 **유지**, `commitPagination.loading = true` | `git log --author=<값> -i` 값마다 반복 추가(OR 결합, 2026-09-14) | REQ-022 |
 | "Merge 커밋 제외" 체크박스 토글 | `commits = []`, `selectedHashes`는 **유지**, `commitPagination.loading = true`, 디바운스 없이 즉시 | `git log --no-merges` 추가/제거 | REQ-022 |
 | 해시 필터 입력 (디바운스) | `commits = []`, `selectedHashes`는 **유지**, `commitPagination.loading = true`. 값이 있으면 branch/기간/검색어/author/excludeMerges 무시 | `git log --no-walk <hash1> <hash2> ...`(일부 오류 시 `cat-file -e`로 개별 검증 후 재시도) | REQ-023 |
 | 검색 대상 라디오 토글 | `searchMode` 갱신, 즉시 재조회(디바운스 없음) | `searchMode`에 따라 `git log --grep` 또는 파일명 pathspec | REQ-016 |
@@ -349,7 +351,7 @@ interface AppState {
 | Mapping Profile 변경 | `selectedProfile` 갱신. 마찬가지로 계산을 트리거하지 않는다 | 없음 | REQ-008 |
 | DeployFilesPanel(좌) 체크박스 토글 | 해당 항목 `included` 반전 | 없음 (로컬) | REQ-011 |
 | DeployFilesPanel(좌) 전체 선택 토글 | 필터+검색에 표시된 행 전체 `included` 일괄 반전 | 없음 (로컬) | REQ-011 |
-| DeployFilesPanel(좌/우) 파일명 검색 입력 | `deployFilesSearchTerm`/`dependencySearchTerm` 갱신, 즉시 클라이언트 필터링(디바운스 없음) | 없음 (로컬) | REQ-013 |
+| DeployFilesPanel(좌/우) 파일명 검색 입력 | `deployFilesSearchTerm`/`dependencySearchTerm` 갱신, 즉시 클라이언트 필터링(디바운스 없음). `*` 포함 시 와일드카드 매치, 없으면 부분 일치(REQ-025, 2026-09-14) | 없음 (로컬) | REQ-013, REQ-025 |
 | `[Preview]` 클릭 | `analyzing = true` → 완료 시 `summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection` 동시 갱신(`manuallyAddedPaths`도 함께 초기화 — REQ-021), 이어서 `dependencyAnalyzing = true` → 완료 시 `missingDependencies` 등 갱신(체이닝) | Commit 분석 + Mapping 엔진 → 의존성 완결성 검사 | REQ-005~008, REQ-013, REQ-021 |
 | DeployFilesPanel(우) 개별 체크박스 토글 | `deployFiles`에 없으면 추가, 있으면 제거 | 없음 (로컬) | REQ-013 |
 | "전체 선택" 토글 (우, 2026-08-20 체크박스로 통일) | 필터+검색에 표시된 `missingDependencies`가 전부 이미 `deployFiles`에 있으면 그 경로들을 전부 제거(전체 해제), 그 외(일부/전무)면 아직 없는 것만 전체 추가 — 좌측 `toggleAllDeployFiles`와 동일한 양방향 판정 방식 | 없음 (로컬) | REQ-013 |

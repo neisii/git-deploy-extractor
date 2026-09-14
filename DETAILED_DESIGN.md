@@ -471,6 +471,9 @@ pathspec 필터링과 `--skip`/`-n` 페이지네이션이 함께 정상 동작�
 | 해시로 커밋 필터링(REQ-023) | §15 참고 | `git log --no-walk`로 붙여넣은 해시와 정확히 일치하는 커밋만 조회, 값이 있으면 다른 모든 조건 무시. 일부 해시 오류 시 `cat-file -e`로 개별 검증 후 유효한 것만 재시도 | 해결됨 |
 | 제외 패턴 삭제(REQ-024) | §16 참고 | 칩을 토글용 버튼 + 삭제용 `×` 버튼 두 개로 분리(button 중첩 불가 제약), 삭제는 이력에서 완전히 제거 | 해결됨 |
 | Merge 커밋 제외 기본값 변경 | §14.4 참고 | `excludeMerges` 렌더러 초기값을 `false`→`true`로 변경(사용자 요청) | 해결됨 |
+| 작성자 필터 여러 명 지원 | §14.2/§14.3 참고 | `authors: string[]`로 변경, `--author` 반복 push로 git 기본 OR 활용. 해시 필터와 파싱 함수(`parseMultiValueFilter`) 공유 | 해결됨 |
+| 작성자/해시 필터 UI 다듬기 | §14.5 참고 | 좌우 반반 배치(`flex: 1 1 320px`), 라벨 설명 문구를 placeholder로 이동 | 해결됨 |
+| 포함된 파일 검색 와일드카드(REQ-025) | §17 참고 | `*`가 있으면 REQ-019와 같은 문법(단일 세그먼트)으로 파일명 전체 매치(대소문자 무관), 없으면 기존 부분 일치 유지 | 해결됨 |
 
 ---
 
@@ -791,8 +794,11 @@ addManualFile: (localPath: string) =>
 `src/main/git/commits.ts`의 `args` 배열에 기존 `--since`/`--until`/`--grep` 등과 동일한 자리에서 조건부로 추가한다 — 새 명령 경로나 2단계 조회(§8.3의 pathspec처럼)가 필요 없다.
 
 ```ts
-if (author) {
-  args.push(`--author=${author}`, '-i')
+if (authors && authors.length > 0) {
+  for (const a of authors) {
+    args.push(`--author=${a}`)
+  }
+  args.push('-i')
 }
 if (excludeMerges) {
   args.push('--no-merges')
@@ -801,15 +807,25 @@ if (excludeMerges) {
 
 `--author`는 git 정규식 매칭이지만 특수문자를 이스케이프하지 않고 그대로 넘긴다 — §8.3의 `--grep=<searchTerm>`과 동일한 기존 관례를 따른 것으로, 사용자 이름에 정규식 메타문자가 흔하지 않아 실용적으로 충분하다고 판단했다. `-i`(대소문자 무관)는 `--grep`에 붙는 `-i`와 별개로 `--author`에도 각각 붙이므로, 메시지 검색과 작성자 필터를 동시에 쓰면 `-i`가 인자 목록에 중복 등장한다 — git이 동일 플래그 중복을 그대로 허용해 동작에 영향은 없다.
 
+**정정(2026-09-14, 사용자 요청) — 여러 작성자 지원**: `authorFilter`가 단일 문자열에서 여러 줄 텍스트로 바뀌면서 IPC 파라미터도 `author?: string`에서 `authors?: string[]`로 바뀌었다. `--author`를 여러 번 주면 git이 기본적으로(즉 `--all-match`를 안 준 경우) OR로 묶는 것을 그대로 활용해 "여러 작성자 중 하나라도 일치하면 포함"을 새 로직 없이 얻는다 — 로컬 fixture 저장소(작성자 3명)로 단일/2인 OR/필터 없음 3가지 케이스를 직접 실행해 이 OR 동작을 확인했다.
+
 ## 14.3 상태 관리: `searchTerm`과 동일한 디바운스 패턴 재사용
 
 `authorFilter`(텍스트 입력)는 `setSearchTerm`과 동일하게 300ms 디바운스 후 `loadCommitsFirstPage(true)`를 호출한다. `excludeMerges`(체크박스)는 `setSearchMode`와 동일하게 디바운스 없이 즉시 재조회한다 — 텍스트 입력은 타이핑 중 매 keystroke마다 조회하면 낭비지만, 체크박스 토글은 클릭당 한 번의 명확한 의도라 디바운스가 오히려 체감 지연만 늘린다는 기존 판단(§8.1)을 그대로 따랐다.
 
-`loadCommitsFirstPage`/`loadNextPage` 양쪽에 `author`/`excludeMerges`를 `listCommits` 파라미터로 전달하며, `keepSelection` 인자는 항상 `true`로 호출한다 — REQ-015가 이미 확립한 "검색 조건 변경은 선택을 지우지 않는다" 원칙에 새 조건 두 개를 추가한 것뿐, 별도 예외를 두지 않았다.
+`loadCommitsFirstPage`/`loadNextPage` 양쪽에 `authors`/`excludeMerges`를 `listCommits` 파라미터로 전달하며, `keepSelection` 인자는 항상 `true`로 호출한다 — REQ-015가 이미 확립한 "검색 조건 변경은 선택을 지우지 않는다" 원칙에 새 조건 두 개를 추가한 것뿐, 별도 예외를 두지 않았다.
+
+**정정(2026-09-14) — 파싱 함수 공유**: REQ-023 해시 필터에서 처음 만든 `parseHashFilter`(쉼표/공백/줄바꿈 분리)를 `parseMultiValueFilter`로 일반화해 작성자 필터도 재사용한다 — 두 필드가 정확히 같은 붙여넣기 파싱 규칙을 쓰므로 별도 함수를 새로 만들 이유가 없었다.
 
 ## 14.4 기본값과 하위 호환
 
 `authorFilter=''`가 기본값이며, `listCommits()`는 이 값이 없거나 falsy면 `--author` 플래그를 아예 추가하지 않는다. `excludeMerges`는 IPC 레벨에서는 여전히 falsy면 `--no-merges`를 안 붙이는 동일한 규칙이지만, **정정(2026-09-14, 사용자 요청)**: 렌더러 쪽 초기 state가 `false`에서 `true`로 바뀌어, 별도로 끄지 않는 한 기본적으로 Merge 커밋이 제외된 상태로 조회된다 — 배포 대상 파일 추출 목적상 Merge 커밋은 대개 노이즈라는 판단에 따른 것으로, "기존 사용자에게 동작 변화를 주지 않는다"는 애초 설계 의도와는 의도적으로 어긋나는 변경이다.
+
+## 14.5 UI 다듬기 (2026-09-14, 사용자 요청 2건)
+
+**좌우 반반 배치**: 작성자/해시 필터 textarea가 각자 독립된 행에서 `flex: 1 1 100%`로 전체 폭을 차지해 "너무 좌우로 길다"는 피드백을 받았다. DeployFilesPanel의 포함된 파일/누락된 의존성 50:50 분할과 같은 감각을 원했지만, 두 필드는 항상 같은 비율이면 충분해 드래그 리사이즈 가능한 `SplitPane`까지는 쓰지 않고 한 행(`branch-search-bar__row--split`)에 `flex: 1 1 320px`로 나란히 뒀다 — 창이 넓으면 절반씩, 640px보다 좁아지면(각 320px 미만) `flex-wrap`만으로 자동 세로 스택된다(미디어 쿼리 없음).
+
+**라벨 → placeholder 이동**: "작성자 (쉼표/공백/줄바꿈 구분, 여러 명이면 하나라도 일치 시 포함) :"처럼 라벨에 붙어 있던 설명 문구를 라벨은 "작성자 :"로 줄이고 `<textarea placeholder="...">`로 옮겼다 — 라벨이 매번 화면에 그대로 노출돼 좁은 화면에서 줄바꿈을 유발하던 것을, 포커스 전까지는 안 보이는 placeholder로 옮겨 공간을 아꼈다.
 
 ---
 
@@ -879,3 +895,43 @@ removeExcludePattern: (pattern) => {
 ## 16.4 확인 다이얼로그를 넣지 않은 이유
 
 이 앱의 다른 유사 액션(REQ-019 토글, REQ-021 팝업 칩 `×`)이 전부 확인창 없이 즉시 처리되는 관례를 따랐다 — 여기만 확인창을 넣으면 일관성이 깨지고, 삭제된 패턴은 다시 타이핑하면 되살릴 수 있는 가벼운 문자열이라 되돌릴 수 없는 파괴적 작업에 준하는 수준의 안전장치가 필요하다고 보지 않았다.
+
+---
+
+# 17. 포함된 파일 검색 와일드카드 설계 (REQ-025, 2026-09-14)
+
+## 17.1 배경
+
+"포함된 파일" 파일명 검색은 지금까지 대소문자 무관 부분 일치(`includes`)만 지원했다. `*.html`, `*List.html`처럼 접미사/패턴 기반으로 좁혀보고 싶다는 요청이 있었다 — 경로 전체가 아니라 파일명까지만(§7.2 매칭 기준 유지).
+
+## 17.2 구현: `*` 유무로 분기, REQ-019 문법 재사용
+
+`DeployFilesPanel.tsx`의 `matchesFileName()`을 확장했다 — 새 매칭 엔진을 만들지 않고 REQ-019 제외 패턴(`excludePatternMatch.ts`)이 이미 쓰는 글롭→정규식 변환(`*` → `[^/]*`, 특수문자 이스케이프, 전체 앵커 `^...$`)과 동일한 문법을 재사용한다.
+
+```ts
+function matchesFileName(path: string, term: string): boolean {
+  if (!term) return true
+  const fileName = path.slice(path.lastIndexOf('/') + 1)
+  if (!term.includes('*')) {
+    return fileName.toLowerCase().includes(term.toLowerCase())
+  }
+  const escaped = term.replace(GLOB_SPECIAL_CHARS, '\\$&').replace(/\*/g, '[^/]*')
+  return new RegExp(`^${escaped}$`, 'i').test(fileName)
+}
+```
+
+`excludePatternMatch.ts`의 `matchesExcludePattern()`을 그대로 호출하지 않고 로직을 별도로 둔 이유: (1) 그쪽은 항상 전체 앵커 매치라 `*` 없는 입력("List")도 "파일명이 정확히 List여야" 매치되는데, 여기는 `*` 없을 때 기존 부분 일치(하위 호환)를 유지해야 한다. (2) 그쪽은 대소문자를 항상 구분(REQ-019는 Export 결과에 영향을 주는 영속 규칙이라 git의 대소문자 구분과 일관성을 맞춘 결정)하지만, 이 검색은 그때그때 타이핑하는 일시적 조건이라 대소문자 무관이 사용자 기대에 맞다 — 두 요구사항이 근본적으로 달라 함수를 공유하면 조건 분기가 오히려 더 많아졌을 것이다.
+
+## 17.3 좌우 공유, 경로 미확장
+
+`matchesFileName()`은 "포함된 파일"(`deployFilesSearchTerm`)과 "누락된 의존성"(`dependencySearchTerm`) 양쪽 검색에서 공유되므로, 와일드카드도 자동으로 양쪽에 다 적용된다 — §7.2가 확립한 "좌우 매칭 기준 통일" 원칙을 그대로 따른 것뿐, 우측만 따로 뺄 이유가 없었다.
+
+경로 전체 검색(디렉터리 기준 필터링)은 별도로 논의됐으나(2026-09-14, "파일이 포함된 경로 기준 조회" 제안) 이번 범위에서 제외하고 보류했다 — REQ-019가 이미 슬래시 포함 패턴으로 절반쯤 커버하는 영역이고, 목록 크기 자체가 보통 작아(가상 스크롤 임계값 300개) 경로 기준 필터가 얼마나 자주 필요할지 불확실하다는 게 보류 근거였다.
+
+## 17.4 REQ-016(커밋 파일명 검색)과의 의도적 불일치
+
+`src/main/git/commits.ts`의 `matchesFileName()`(REQ-016, 파일명으로 커밋 검색)은 손대지 않았다 — §7.2/§7.3이 "좌우 검색 필드와 매칭 기준을 통일했다"고 명시한 것과 달리, 이 지점부터 두 `matchesFileName` 함수는 서로 다른 매칭 규칙을 갖게 됐다. 커밋 검색까지 와일드카드를 확장해달라는 요청은 아직 없어 범위를 벗어난 변경을 하지 않았다 — 필요해지면 그때 REQ 번호를 붙여 별도로 논의한다.
+
+## 17.5 검증
+
+12개 케이스(기존 부분 일치 유지, 접미사 와일드카드 매치/불일치, 대소문자 무관, 빈 검색어, 경로 레벨 오매치 방지 등)로 매칭 함수를 직접 실행해 확인했다.
