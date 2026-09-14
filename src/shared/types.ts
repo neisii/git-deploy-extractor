@@ -68,6 +68,11 @@ export interface ListCommitsParams {
   pageSize: number
   searchTerm?: string
   searchMode?: CommitSearchMode // 기본 'message'
+  // REQ-022 — 작성자명 부분 일치(대소문자 무관). searchTerm/searchMode와
+  // 독립적으로 AND 결합된다.
+  author?: string
+  // REQ-022 — Merge 커밋 제외 (git --no-merges와 동일). 기본 false(포함).
+  excludeMerges?: boolean
 }
 
 export interface ListCommitsResult {

@@ -29,7 +29,18 @@ function matchesFileName(path: string, term: string): boolean {
 }
 
 export async function listCommits(params: ListCommitsParams): Promise<ListCommitsResult> {
-  const { repoPath, branch, startDate, endDate, maxCount, skip, pageSize, searchTerm } = params
+  const {
+    repoPath,
+    branch,
+    startDate,
+    endDate,
+    maxCount,
+    skip,
+    pageSize,
+    searchTerm,
+    author,
+    excludeMerges
+  } = params
   const searchMode = params.searchMode ?? 'message'
 
   if (skip >= maxCount) {
@@ -46,6 +57,16 @@ export async function listCommits(params: ListCommitsParams): Promise<ListCommit
     '--date=iso-strict',
     `--pretty=format:%H${FIELD_SEP}%an${FIELD_SEP}%ad${FIELD_SEP}%s${RECORD_SEP}`
   ]
+
+  // REQ-022 — 작성자 부분 일치(대소문자 무관). git --author는 정규식이지만
+  // 특수문자 이스케이프 없이 그대로 넘긴다(§7.3 searchTerm --grep과 동일한
+  // 기존 관례 — 사용자 이름에 정규식 메타문자가 흔하지 않아 실용적으로 충분).
+  if (author) {
+    args.push(`--author=${author}`, '-i')
+  }
+  if (excludeMerges) {
+    args.push('--no-merges')
+  }
 
   let pathspecArgs: string[] = []
   if (searchTerm && searchMode === 'filename') {

@@ -71,6 +71,8 @@ interface AppState {
   maxCount: number
   searchTerm: string
   searchMode: CommitSearchMode // RISK_ISSUES.md §7.3 — 메시지/파일명 토글, 기본 'message'
+  authorFilter: string // REQ-022 — 작성자명 부분 일치, searchTerm과 독립적으로 AND 결합
+  excludeMerges: boolean // REQ-022 — Merge 커밋 제외, 기본 false(포함)
 
   commits: CommitEntry[]
   selectedHashes: Set<string>
@@ -135,6 +137,8 @@ interface AppState {
   setBranch: (branch: string) => Promise<void>
   setSearchTerm: (term: string) => void
   setSearchMode: (mode: CommitSearchMode) => Promise<void>
+  setAuthorFilter: (author: string) => void
+  setExcludeMerges: (excludeMerges: boolean) => Promise<void>
   triggerSearch: () => Promise<void>
   setDateRange: (startDate: string, endDate: string) => Promise<void>
   setMaxCount: (maxCount: number) => Promise<void>
@@ -220,8 +224,17 @@ export const useAppStore = create<AppState>((set, get) => {
   // 검색어/모드, 조회 기간, 최대 개수 변경 — 는 전부 유지한다. 그래야
   // "검색 조건을 바꿔가며 여러 번 찾아 누적 체크"하는 워크플로우가 성립한다).
   async function loadCommitsFirstPage(keepSelection = false): Promise<void> {
-    const { repository, selectedBranch, startDate, endDate, maxCount, searchTerm, searchMode } =
-      get()
+    const {
+      repository,
+      selectedBranch,
+      startDate,
+      endDate,
+      maxCount,
+      searchTerm,
+      searchMode,
+      authorFilter,
+      excludeMerges
+    } = get()
     if (repository.status !== 'valid' || !selectedBranch || !repository.path) return
 
     set({
@@ -249,7 +262,9 @@ export const useAppStore = create<AppState>((set, get) => {
         skip: 0,
         pageSize: PAGE_SIZE,
         searchTerm: searchTerm || undefined,
-        searchMode
+        searchMode,
+        author: authorFilter || undefined,
+        excludeMerges
       })
       set({
         commits: result.commits,
@@ -412,6 +427,8 @@ export const useAppStore = create<AppState>((set, get) => {
     maxCount: 100,
     searchTerm: '',
     searchMode: 'message',
+    authorFilter: '',
+    excludeMerges: false,
 
     commits: [],
     selectedHashes: new Set(),
@@ -549,6 +566,25 @@ export const useAppStore = create<AppState>((set, get) => {
       await loadCommitsFirstPage(true)
     },
 
+    // REQ-022 — searchTerm과 동일한 디바운스 패턴(타이핑마다 재조회하지 않음).
+    setAuthorFilter: (author) => {
+      set({ authorFilter: author })
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+      searchDebounceTimer = setTimeout(() => {
+        void loadCommitsFirstPage(true)
+      }, SEARCH_DEBOUNCE_MS)
+    },
+
+    // REQ-022 — 체크박스 토글은 즉시 반영(디바운스 불필요, searchMode와 동일).
+    setExcludeMerges: async (excludeMerges) => {
+      set({ excludeMerges })
+      if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer)
+        searchDebounceTimer = null
+      }
+      await loadCommitsFirstPage(true)
+    },
+
     triggerSearch: async () => {
       if (searchDebounceTimer) {
         clearTimeout(searchDebounceTimer)
@@ -576,6 +612,8 @@ export const useAppStore = create<AppState>((set, get) => {
         maxCount,
         searchTerm,
         searchMode,
+        authorFilter,
+        excludeMerges,
         commits,
         commitPagination
       } = get()
@@ -593,7 +631,9 @@ export const useAppStore = create<AppState>((set, get) => {
           skip: commits.length,
           pageSize: PAGE_SIZE,
           searchTerm: searchTerm || undefined,
-          searchMode
+          searchMode,
+          author: authorFilter || undefined,
+          excludeMerges
         })
         set({
           commits: [...commits, ...result.commits],

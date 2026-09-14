@@ -15,6 +15,10 @@ export function BranchSearchBar(): React.JSX.Element {
   const setDateRange = useAppStore((s) => s.setDateRange)
   const maxCount = useAppStore((s) => s.maxCount)
   const setMaxCount = useAppStore((s) => s.setMaxCount)
+  const authorFilter = useAppStore((s) => s.authorFilter)
+  const setAuthorFilter = useAppStore((s) => s.setAuthorFilter)
+  const excludeMerges = useAppStore((s) => s.excludeMerges)
+  const setExcludeMerges = useAppStore((s) => s.setExcludeMerges)
 
   return (
     <section className="panel branch-search-bar">
@@ -89,6 +93,24 @@ export function BranchSearchBar(): React.JSX.Element {
             onChange={(e) => void setMaxCount(Number(e.target.value) || 1)}
           />
           개
+        </label>
+
+        <label>
+          작성자 :
+          <input
+            type="text"
+            value={authorFilter}
+            onChange={(e) => setAuthorFilter(e.target.value)}
+          />
+        </label>
+
+        <label>
+          <input
+            type="checkbox"
+            checked={excludeMerges}
+            onChange={(e) => void setExcludeMerges(e.target.checked)}
+          />
+          Merge 커밋 제외
         </label>
       </div>
     </section>
