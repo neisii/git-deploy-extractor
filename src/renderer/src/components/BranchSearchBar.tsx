@@ -109,18 +109,20 @@ export function BranchSearchBar(): React.JSX.Element {
 
       <div className="branch-search-bar__row branch-search-bar__row--split">
         <label className="branch-search-bar__multiline-field">
-          작성자 (쉼표/공백/줄바꿈 구분, 여러 명이면 하나라도 일치 시 포함) :
+          작성자 :
           <textarea
             rows={2}
+            placeholder="쉼표/공백/줄바꿈 구분, 여러 명이면 하나라도 일치 시 포함"
             value={authorFilter}
             onChange={(e) => setAuthorFilter(e.target.value)}
           />
         </label>
 
         <label className="branch-search-bar__multiline-field">
-          해시 필터 (쉼표/공백/줄바꿈 구분, 입력 시 다른 조건 무시) :
+          해시 필터 :
           <textarea
             rows={2}
+            placeholder="쉼표/공백/줄바꿈 구분, 입력 시 다른 조건 무시"
             value={hashFilterText}
             onChange={(e) => setHashFilterText(e.target.value)}
           />
