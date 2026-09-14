@@ -107,7 +107,7 @@ export function BranchSearchBar(): React.JSX.Element {
         </label>
       </div>
 
-      <div className="branch-search-bar__row">
+      <div className="branch-search-bar__row branch-search-bar__row--split">
         <label className="branch-search-bar__multiline-field">
           작성자 (쉼표/공백/줄바꿈 구분, 여러 명이면 하나라도 일치 시 포함) :
           <textarea
@@ -116,9 +116,7 @@ export function BranchSearchBar(): React.JSX.Element {
             onChange={(e) => setAuthorFilter(e.target.value)}
           />
         </label>
-      </div>
 
-      <div className="branch-search-bar__row">
         <label className="branch-search-bar__multiline-field">
           해시 필터 (쉼표/공백/줄바꿈 구분, 입력 시 다른 조건 무시) :
           <textarea

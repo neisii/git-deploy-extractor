@@ -90,6 +90,17 @@ body,
   resize: vertical;
 }
 
+/* 2026-09-14 — 작성자/해시 필터를 한 행에 나란히 배치, DeployFilesPanel의
+   좌(포함된 파일)/우(누락된 의존성) 50:50 분할과 같은 감각으로 "반반"
+   보이게 한다. flex-basis(320px)를 기준으로 grow/shrink하므로 창이
+   넓으면 자연히 절반씩 채우고, 640px보다 좁아지면(각 320px 미만) 자동으로
+   아래로 줄바꿈되어 세로로 쌓인다 — 별도 미디어 쿼리 없이 `flex-wrap`만으로
+   해결(DeployFilesPanel의 드래그 리사이즈 SplitPane과 달리, 두 필드는
+   항상 동일 비율이면 충분해 더 단순한 이 방식을 택했다). */
+.branch-search-bar__row--split .branch-search-bar__multiline-field {
+  flex: 1 1 320px;
+}
+
 /* 우측 하단 고정 이미지(.credit-link, 50px)와 겹치지 않도록 그만큼
    오른쪽 여백을 확보한다. */
 .footer-action-bar {
