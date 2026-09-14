@@ -23,9 +23,15 @@ jobs:
             artifact_glob: dist/*.exe
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      # 2026-09-14 — v4는 Node 20 런타임이라 GitHub가 Node 24로 강제 실행하며
+      # deprecation 경고를 띄웠다(빌드 자체는 성공하지만 경고 로그가 남음).
+      # checkout/setup-node/upload-artifact는 각 저장소 CHANGELOG를 v4~v7까지
+      # 확인해 이 워크플로우가 쓰는 입력(node-version/cache, name/path/
+      # if-no-files-found)에 영향을 주는 breaking change가 없음을 확인하고
+      # 최신 메이저(v7)로 올렸다.
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -40,7 +46,7 @@ jobs:
           # 동작은 그대로다.
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.os }}-build
           path: ${{ matrix.artifact_glob }}
@@ -49,7 +55,8 @@ jobs:
       # workflow_dispatch로 수동 실행하면 github.ref가 브랜치(refs/heads/main)라
       # 릴리스에 첨부할 태그가 없다 — 태그 push일 때만 실행해 엉뚱한 릴리스를
       # 건드리지 않는다. 수동 실행 시 산출물은 위 upload-artifact로만 확인한다.
-      - uses: softprops/action-gh-release@v2
+      # v2는 2026-09-14 기준 유지보수 종료(Node 20 런타임 고정) — v3(Node 24)로 교체.
+      - uses: softprops/action-gh-release@v3
         if: startsWith(github.ref, 'refs/tags/v')
         with:
           files: ${{ matrix.artifact_glob }}
