@@ -1,0 +1,1031 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Component Playground — 리팩토링 목표 구조</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --line: #d5d9e0; --text: #1f2933; --sub: #6b7684;
+    --accent: #2f6fed; --warn: #b45309; --err: #c0262d; --ok: #1a7f4b;
+    --d0: #94a3b8; --d1: #64748b; --d2: #2563eb; --d3: #0891b2; --d4: #16a34a; --d5: #d97706; --d6: #db2777;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.45 -apple-system, "Segoe UI", "Apple SD Gothic Neo", sans-serif; background: var(--bg); color: var(--text); }
+  .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr) 320px; gap: 12px; padding: 12px; min-height: 100vh; }
+  @media (max-width: 1280px) { .layout { grid-template-columns: 1fr; } }
+  .side { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; align-self: start; position: sticky; top: 12px; }
+  .side h2 { font-size: 13px; margin: 0 0 8px; }
+  .side h3 { font-size: 12px; margin: 14px 0 6px; color: var(--sub); text-transform: uppercase; letter-spacing: .04em; }
+  .side label { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+  .side select, .side input[type=range] { width: 100%; }
+  .stage { overflow-x: auto; padding-bottom: 8px; }
+  .hint { color: var(--sub); font-size: 12px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; overflow: auto; font-size: 11.5px; margin: 6px 0 0; white-space: pre-wrap; }
+  code { background: #eef1f5; padding: 1px 4px; border-radius: 3px; }
+  .crumb { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 6px 0; }
+  .crumb span { padding: 1px 6px; border-radius: 10px; color: #fff; font-size: 11px; }
+  .kv { display: grid; grid-template-columns: 64px 1fr; gap: 3px 8px; margin: 6px 0; }
+  .kv dt { color: var(--sub); } .kv dd { margin: 0; }
+  button { font: inherit; cursor: pointer; padding: 2px 8px; border: 1px solid var(--line); border-radius: 5px; background: #fff; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  input[type=text] { font: inherit; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; min-width: 0; }
+
+  /* ---------- 모의 앱 ---------- */
+  .app { min-width: 560px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .box { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: #fff; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .muted { color: var(--sub); }
+  .badge { background: #eef1f5; border-radius: 10px; padding: 0 8px; }
+  .split { display: grid; gap: 0; }
+  .handle { width: 8px; cursor: col-resize; display: flex; justify-content: center; }
+  .handle::after { content: ""; width: 2px; background: var(--line); }
+  .kvrow { display: flex; gap: 12px; }
+  .status { color: var(--sub); padding: 12px; text-align: center; border: 1px dashed var(--line); border-radius: 6px; margin: 6px 0; }
+  .status.error { color: var(--err); } .status.stale { color: var(--warn); }
+  .files { flex: 1; min-height: 0; overflow: auto; border-top: 1px solid var(--line); margin-top: 6px; }
+  .file { display: flex; gap: 6px; align-items: center; padding: 1px 0; white-space: nowrap; }
+  .file .x { color: var(--sub); }
+  .file.added { color: var(--ok); }
+  .dir { display: flex; align-items: center; gap: 4px; white-space: nowrap; padding: 1px 0; }
+  .dirname { font-weight: 500; cursor: pointer; }
+  .dircount { color: var(--sub); font-size: 11px; }
+  .tog { border: 0; background: none; padding: 0; width: 16px; color: var(--sub); }
+  .patin { position: relative; display: inline-block; }
+  .pat-pop { display: none; position: absolute; left: 0; top: calc(100% + 2px); z-index: 4; min-width: 100%; width: max-content; max-width: 460px; padding: 4px 8px; background: #fff; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.18); color: var(--sub); font-size: 12px; }
+  .patin:focus-within .pat-pop:not(:empty) { display: block; }
+  .pat-pop { max-height: 180px; overflow: auto; }
+  .pat-pop .pl { display: block; white-space: normal; word-break: break-all; }
+  .tw { display: flex; align-items: center; gap: 4px; }
+  .tw > .trow { flex: 1; }
+  .cpy { visibility: hidden; border: 0; background: none; color: var(--sub); padding: 0 4px; font-size: 12px; line-height: 1; cursor: pointer; }
+  .tw:hover .cpy, .tw:focus-within .cpy, .cpy:focus { visibility: visible; }
+  .cpy.err { color: var(--err); }
+  .miss { color: var(--err); font-weight: 500; }
+  .ib.neutral { color: var(--sub); border-color: var(--line); }
+  .ib { font-style: normal; font-size: 10px; font-weight: 700; color: var(--err); border: 1px solid var(--err); border-radius: 3px; padding: 0 4px; margin-left: 4px; }
+  .trow { display: flex; justify-content: flex-start; align-items: center; gap: 8px; align-items: center; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+  .tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 3px 8px; }
+  .tab.on { border-bottom-color: var(--accent); font-weight: 600; }
+  .badge.over { background: #fdecec; color: var(--err); }
+  .file.dim .path { opacity: .5; text-decoration: line-through; }
+  .xbtn { border: 0; background: transparent; color: var(--err); padding: 0 5px; font-weight: 700; font-size: 14px; line-height: 1; }
+  .xbtn:hover { background: #fdecec; border-radius: 4px; }
+  .origin { font-style: normal; font-size: 10px; color: var(--sub); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+  .tagw { color: var(--warn); font-size: 11px; }
+  .chip { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; }
+  .chip button { border: 0; border-radius: 0; background: transparent; padding: 1px 7px; }
+  .chip.on { background: #e8f0ff; border-color: #a9c1f5; }
+  .chip.off { color: var(--sub); text-decoration: line-through; }
+  .chip.exc.on { background: #fdecec; border-color: #f0b4b4; }
+  .chip.inc.on { background: #e8f0ff; border-color: #a9c1f5; }
+  .kb { font-style: normal; font-size: 10px; color: #fff; padding: 0 4px; border-radius: 3px; margin-left: 5px; background: #64748b; }
+  .kb-path { background: #2563eb; } .kb-pkg { background: #7c3aed; }
+  .chip.manual { background: #e6f7ec; border-color: #9ad5b0; }
+  .workspace { position: relative; display: flex; flex-direction: column; }
+  .backdrop { position: absolute; inset: 0; z-index: 5; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; }
+  .popup { width: min(720px, 94%); overflow-y: auto; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.35); display: flex; flex-direction: column; gap: 8px; }
+  .popup header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+  .popup .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .popup .cands { max-height: none; border: 0; }
+  .cands { list-style: none; margin: 0; padding: 0; max-height: 120px; overflow: auto; border: 1px solid var(--line); border-radius: 5px; }
+  .cands li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 6px; }
+
+  /* ---------- 경계 오버레이 ---------- */
+  .show-bounds [data-comp] { position: relative; outline: 1px dashed var(--c, var(--d0)); outline-offset: 1px; }
+  .show-bounds [data-comp]::before {
+    content: attr(data-comp) " " attr(data-st);
+    position: absolute; top: -9px; left: 6px; z-index: 3; padding: 0 4px; border-radius: 3px;
+    font: 600 9.5px/13px ui-monospace, Menlo, monospace; color: #fff; background: var(--c, var(--d0)); white-space: nowrap; pointer-events: none;
+  }
+  [data-depth="0"] { --c: var(--d0); } [data-depth="1"] { --c: var(--d1); } [data-depth="2"] { --c: var(--d2); }
+  [data-depth="3"] { --c: var(--d3); } [data-depth="4"] { --c: var(--d4); } [data-depth="5"] { --c: var(--d5); } [data-depth="6"] { --c: var(--d6); }
+  .show-bounds [data-comp] { margin-top: 6px; }
+  /* WorkArea 자식은 트랙 높이 전체를 채운다: 라벨용 여백 제거, 자식은 min-height:0, 내부 목록만 스크롤 */
+  .show-bounds #workArea > [data-comp] { margin-top: 0; }
+  .show-bounds #workArea { padding-top: 10px; }
+  #workArea > * { min-height: 0; }
+  .handle-v { height: 8px; display: flex; align-items: center; cursor: row-resize; }
+  .handle-v::after { content: ""; height: 2px; width: 100%; background: var(--line); }
+  .fill { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .fill-scroll { flex: 1; min-height: 0; overflow: auto; }
+  #deploySplit > div, #commitSplit > div { min-height: 0; min-width: 0; }
+  /* 검색 조건 그룹 | 경계(드래그) | 필터 그룹 — 포함된 파일/Extract 대상과 같은 방식의 좌우 분할 */
+  .qbody { display: grid; grid-template-columns: minmax(320px, 50%) 8px minmax(330px, 1fr); align-items: stretch; }
+  .qbody > .box { min-width: 0; }
+  .qleft { min-width: 0; }
+  .qright { display: flex; gap: 8px; min-width: 0; align-items: flex-start; }
+  .qfh { display: flex; flex-wrap: nowrap; white-space: nowrap; gap: 8px; align-items: center; height: 22px; }
+  .qfield { position: relative; }
+  .qfield.qkw { flex: 1.5 1 0; min-width: 210px; }
+  .qfh label { display: inline-flex; gap: 2px; align-items: center; }
+  .qfield { display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-width: 100px; }
+  .qfield textarea { width: 100%; flex: none; resize: none; font: inherit; }   /* rows=2: 그룹이 늘어나도 정확히 2줄 높이 유지 */
+  /* 값을 입력하기 시작하면(placeholder가 사라진 뒤) 포커스 중인 필드 아래에 힌트 툴팁 표시 */
+  .qhint { display: none; position: absolute; left: 0; top: calc(100% + 2px); z-index: 6; width: max-content; min-width: 100%; max-width: 340px; padding: 4px 8px; background: #fff; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.18); color: var(--sub); font-size: 12px; white-space: normal; }
+  .qfield:focus-within textarea:not(:placeholder-shown) ~ .qhint { display: block; }
+  .qhint .warnline { display: block; color: var(--warn); margin-top: 2px; }
+  .sec { display: flex; flex-direction: column; min-height: 0; }
+  .sec-head { display: flex; align-items: center; gap: 8px; min-height: 24px; padding: 0 2px; margin-bottom: 4px; }
+  .sec-head b { font-size: 12px; }
+  .sec-sum { display: none; color: var(--sub); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .collapsed > .sec-head .sec-sum { display: inline; }
+  .sec-toggle { margin-left: auto; font-size: 12px; padding: 0 8px; }
+  .sec-body { flex: 1; min-height: 0; }
+  .collapsed > .sec-body { display: none; }
+  .handle-v.off { height: 0; overflow: hidden; }
+  .handle-v.off::after { display: none; }
+  .inspect-on [data-comp]:hover { background-image: linear-gradient(rgba(47,111,237,.06), rgba(47,111,237,.06)); }
+  .selected { outline: 2px solid var(--accent) !important; outline-offset: 1px; }
+  .selected::before { background: var(--accent) !important; }
+  .flash { animation: flash .7s; }
+  @keyframes flash { 0% { box-shadow: 0 0 0 3px rgba(217,119,6,.7); } 100% { box-shadow: 0 0 0 0 rgba(217,119,6,0); } }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ================= 좌측: 컨트롤 ================= -->
+  <aside class="side">
+    <h2>컨트롤</h2>
+    <p class="hint">리팩토링 목표 구조(P4)를 직접 만져보는 목업입니다. 실제 앱 코드와는 무관하고 <code>[S]</code> 스토어 · <code>[L]</code> 로컬 · <code>[D]</code> 파생 표기는 제안 구조입니다.</p>
+
+    <h3>보기</h3>
+    <label><input type="checkbox" id="optBounds" checked> 컴포넌트 경계·이름·상태 소유 표시</label>
+    <label><input type="checkbox" id="optInspect"> 검사 모드 (클릭으로 컴포넌트 선택, 동작 차단)</label>
+
+    <h3>분석 단계 (스토어에서 파생)</h3>
+    <select id="phase">
+      <option value="ready">ready — 목록 표시</option>
+      <option value="stale">stale — Preview 필요</option>
+      <option value="empty">empty — 선택 없음</option>
+      <option value="loading">loading — 분석 중</option>
+      <option value="error">error — 계산 실패</option>
+      <option value="depLoading">ready + 의존성 확인 중</option>
+      <option value="depNa">ready + 의존성 적용 불가</option>
+    </select>
+    <label><input type="checkbox" id="optLegacy"> 기존 방식 재현: stale이면 패널 통째 교체 (U1)</label>
+
+    <h3>Extract 목록 (신규 모델)</h3>
+    <select id="initMode">
+      <option value="all">Preview 직후: 전체 Extract로 이동 (현행 기본값 유지)</option>
+      <option value="none">Preview 직후: 전체 미선택 (미선택 변경 파일에 남김)</option>
+    </select>
+    <div class="row" style="margin-top:4px"><button id="btnReset">Preview 재실행 (초기화)</button></div>
+    <p class="hint">체크하면 Extract 대상 목록으로 이동, Extract 목록의 <b>×</b>를 누르면 원래 목록으로 복귀합니다. <b>누락된 의존성은 <code>+ 파일 추가</code> 팝업의 HEAD 트리에서 붉은 글자(+ <code>Impl</code>/<code>I</code> 배지)로 표시</b>되며 ×로 되돌리면 그 트리로 돌아갑니다. 직접 검색으로 추가한 파일은 원래 목록이 없어 <b>×</b>가 철회(삭제)입니다.</p>
+
+    <h3>Export 시뮬레이션</h3>
+    <select id="simRepoRel" title="저장소 D:\\work\\shallow-backend 와 추출 위치의 관계">
+      <option value="sibling">추출 경로: 저장소 밖의 다른 폴더 (정상)</option>
+      <option value="same">추출 경로: 저장소와 같은 폴더</option>
+      <option value="inside">추출 경로: 저장소 안의 하위 폴더</option>
+      <option value="contains">추출 위치가 저장소를 포함함</option>
+      <option value="none">추출 경로 미선택</option>
+    </select>
+    <label><input type="checkbox" id="simNonEmpty"> 선택한 경로(폴더)가 비어 있지 않음 (바로 추출에만 영향)</label>
+    <p class="hint">추출 위치가 저장소와 <b>겹치면</b>(같음·저장소 안·저장소를 포함) 두 모드 모두 Export가 비활성화됩니다. 경로를 고르지 않아도 비활성화(저장소 루트 기본값 폐지). "바로 추출"은 폴더가 <b>비어 있을 때만</b> 허용. 폴더 생성 방식은 덮어쓰기 확인 후 진행.</p>
+
+    <h3>팝업 (openPopup 하나만)</h3>
+    <div class="row">
+      <button id="btnManual">+ 파일 추가</button>
+      <button id="btnPatterns">파일 패턴 [보기]</button>
+      <button id="btnDeleted">Deleted 목록</button>
+      <button id="btnWarn">경고 목록</button>
+      <button id="btnClose">닫기</button>
+    </div>
+    <label><input type="checkbox" id="optClamp" checked> 팝업 높이를 부모에 맞춰 클램프 (U2 수정)</label>
+    <p class="hint">팝업 크기는 720×480px(기존 480×320의 1.5배)입니다. 끄면 부모 높이와 무관한 고정 480px이 되어, 아래 슬라이더로 작업 영역을 낮추면 팝업이 잘립니다. 팝업은 종류와 관계없이 동시에 하나만 열립니다(파일 추가 / 제외 패턴 / Deleted / 경고). Delete List 영역은 없어졌고, <code>PreviewSummary</code>의 <code>Deleted: N</code>을 클릭하면 삭제 파일 목록 팝업이 열립니다.</p>
+
+    <h3>크기</h3>
+    <label>작업 영역(WorkArea) 높이 <span id="hVal"></span></label>
+    <input type="range" id="optH" min="200" max="700" value="520">
+    <label>위:아래 비율 (세로 SplitPane) <span id="vVal"></span></label>
+    <input type="range" id="optV" min="20" max="80" value="45">
+    <label>화면 폭 <span id="wVal"></span></label>
+    <input type="range" id="optW" min="560" max="1100" value="1100">
+    <label>Extract 패널 폭 비율 <span id="rVal"></span></label>
+    <input type="range" id="optR" min="30" max="70" value="50">
+
+  </aside>
+
+  <!-- ================= 가운데: 모의 앱 ================= -->
+  <main class="stage">
+    <div id="stage" class="app show-bounds" data-comp="AppShell" data-depth="1" data-st="레이아웃만">
+
+      <div class="box" data-comp="RepositoryBar" data-depth="2" data-st="[S] repository·update"
+           data-note="저장소 라벨/경로/버전 배지. 자식은 전부 props만 받는 리프.">
+        <div class="row">
+          <span data-comp="RepoLabel" data-depth="3" data-st="props" data-note="path, remoteName → 표시 문자열"><b>deep-backend</b> <span class="muted">(shallow-backend)</span> / main</span>
+          <span class="row" data-comp="RepoBarRight" data-depth="3" data-st="layout" data-note="Browse... · Reload · 버전 배지를 저장소 바의 오른쪽 끝에 모아 배치(margin-left:auto). 폭이 좁아 줄바꿈되어도 오른쪽 정렬 유지." style="margin-left:auto;flex-wrap:nowrap">
+          <span data-comp="RepoPathActions" data-depth="3" data-st="events" data-note="이벤트: browse, reload"><button>Browse...</button> <button id="btnReload" title="저장소를 다시 읽고 선택한 브랜치·모든 조회/필터 조건·선택·분석 결과를 기본값으로 초기화합니다">Reload</button></span>
+          <span data-comp="VersionBadge" data-depth="3" data-st="props" data-note="updateBadgeState 파생 결과만 받음" class="badge">v0.6.0</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="sec" id="secQuery" data-comp="CommitQueryBar" data-depth="2" data-st="[S] commitQuery · [L] collapsed"
+           data-note="검색 조건 전체. 접힘 상태는 이 컴포넌트가 로컬로 소유(다른 영역 레이아웃에 영향 없음). 디바운스는 useDebouncedAction 훅이 담당.">
+        <div class="sec-head" data-comp="SectionHeader" data-depth="4" data-st="props" data-note="CollapsibleSection의 헤더. 제목, 접었을 때만 보이는 요약, 우측 상단 접기/펼치기 버튼.">
+          <b>조회 조건</b><span class="sec-sum" id="sumQuery"></span>
+          <button class="sec-toggle" data-collapse="query" data-comp="CollapseToggle" data-depth="5" data-st="event↑" data-note="클릭 → 소유자의 setCollapsed('query', …). 숨김/표시 시 section:hide / section:show 이벤트가 발생하고 우측 이벤트 로그에 기록된다." aria-expanded="true">▴ 접기</button>
+        </div>
+        <div class="sec-body">
+        <div class="qbody" id="qbody">
+          <div class="qleft box" data-comp="QueryConditionGroup" data-depth="3" data-st="layout" data-note="검색 조건 그룹(Branch · Search · 조회 기간 · 최대 개수 · Merge 제외). 오른쪽 필터 그룹과의 경계를 드래그해 폭 비율을 조절(SplitPane, 비율은 localStorage 영속).">
+        <div class="row">
+          <span data-comp="BranchSelect" data-depth="3" data-st="props">Branch: <select id="qBranch"><option>main</option><option>develop</option><option>release/1.0</option></select></span>
+          <button id="btnSearch" data-comp="SearchButton" data-depth="3" data-st="event↑" title="즉시 조회 (텍스트 영역에서는 Ctrl/Cmd+Enter도 동일). 입력 후 300ms가 지나면 자동으로도 조회됩니다.">Search</button>
+        </div>
+        <div class="row" style="margin-top:4px">
+          <span data-comp="DateRangeField" data-depth="3" data-st="props"><input type="date" id="qStart" value="2026-09-14"> ~ <input type="date" id="qEnd" value="2026-09-21"></span>
+          <span data-comp="MaxCountField" data-depth="3" data-st="[L] 입력 중 문자열" data-note="비우면 1로 스냅하던 버그(U3): 로컬 문자열로 들고 있다가 blur/Enter에서만 확정.">최대 <input type="text" id="qMax" size="4" value="100"> 개</span>
+          <span data-comp="MergeToggle" data-depth="3" data-st="props"><label><input type="checkbox" id="qMerge" checked> Merge 제외</label></span>
+        </div>
+          </div>
+          <div class="handle" id="qHandle" data-comp="SplitHandle" data-depth="3" data-st="[L] ratio" title="드래그해서 검색 조건 ↔ 필터 폭 비율 조절"></div>
+          <div class="qright box" data-comp="QueryFilterGroup" data-depth="3" data-st="layout" data-note="필터 그룹: 키워드 · 작성자 · 해시 필터 — 같은 높이(2줄이 한 번에 보임)의 텍스트 영역 세 개를 나란히 배치. 세 필드 모두 줄바꿈으로 구분(한 줄에 하나).">
+            <div class="qfield qkw" data-comp="MultiValueField" data-depth="3" data-st="props" data-note="키워드(A안, 간단형): 한 줄에 하나, 앞에 - 를 붙이면 제외, 글자 그대로(대소문자 무시) 부분 일치, 포함은 OR·제외는 OR. 검색 대상(메시지/파일명)은 이 필드 헤더에 둠. 파일명 모드에서는 제외(-) 줄이 무시됨.">
+              <div class="qfh"><span class="muted">키워드</span>
+                <span data-comp="SearchModeRadio" data-depth="4" data-st="props"><label><input type="radio" name="sm" id="qModeMsg" checked>메시지</label><label><input type="radio" name="sm" id="qModeFile">파일명</label></span></div>
+              <textarea id="qSearch" rows="2" aria-describedby="qSearchHint" placeholder="한 줄에 하나&#10;앞에 - 를 붙이면 제외&#10;예) guarantee&#10;    -Revert"></textarea>
+              <div class="qhint" id="qSearchHint" role="status">한 줄에 하나 · 앞에 <code>-</code>를 붙이면 제외 · 글자 그대로 검색(대소문자 무시, <code>*</code>·정규식 아님)<span id="kwWarn" class="warnline" style="display:none"></span></div></div>
+            <label class="qfield" data-comp="MultiValueField" data-depth="3" data-st="props" data-note="작성자: 한 줄에 하나(줄바꿈 구분). 이름에 공백이 있어도 됨."><span class="qfh muted">작성자</span><textarea id="qAuthor" rows="2" aria-describedby="qAuthorHint" placeholder="한 줄에 하나"></textarea><div class="qhint" id="qAuthorHint" role="status">한 줄에 하나 · 이름 일부 일치(대소문자 무시) · 이름에 공백이 있어도 됨</div></label>
+            <label class="qfield" data-comp="MultiValueField" data-depth="3" data-st="props" data-note="해시 필터: 한 줄에 하나(줄바꿈 구분). 값이 있으면 다른 모든 조건 무시."><span class="qfh muted">해시 필터</span><textarea id="qHash" rows="2" aria-describedby="qHashHint" placeholder="한 줄에 하나 · 입력 시 다른 조건 무시"></textarea><div class="qhint" id="qHashHint" role="status">한 줄에 하나 · 입력하면 다른 모든 조건 무시 · 해시가 정확히 일치하는 커밋만(축약 해시 가능)</div></label>
+          </div>
+        </div>
+        </div>
+      </div>
+
+      <div id="workArea" data-comp="WorkArea" data-depth="2" data-st="[L] openPopup·splitRatio" data-note="세로 SplitPane(grid 트랙 2개+핸들). 자식 CommitWorkspace/DeployFilesWorkspace는 항상 자기 트랙의 높이를 100% 채우고(min-height:0), 넘치는 내용은 각 목록 내부에서만 스크롤한다. openPopup의 유일한 소유자이자 PopupHost의 앵커. PreviewSummary(위)와 DeployFilesWorkspace(아래)의 공통 부모라서 두 가지에서 올라오는 이벤트를 모두 받을 수 있다." style="position:relative; display:grid; height:520px; gap:0">
+        <div class="sec" id="secCommits" data-comp="CommitWorkspace" data-depth="3" data-st="[L] splitRatio" data-note="가로 SplitPane 80:20. 접힘 상태는 WorkArea가 소유(트랙 높이를 재분배해야 하므로).">
+        <div class="sec-head" data-comp="SectionHeader" data-depth="4" data-st="props" data-note="CollapsibleSection의 헤더. 제목, 접었을 때만 보이는 요약, 우측 상단 접기/펼치기 버튼.">
+          <b>커밋</b><span class="sec-sum" id="sumCommits"></span>
+          <button class="sec-toggle" data-collapse="commits" data-comp="CollapseToggle" data-depth="5" data-st="event↑" data-note="클릭 → 소유자의 setCollapsed('commits', …). 숨김/표시 시 section:hide / section:show 이벤트가 발생하고 우측 이벤트 로그에 기록된다." aria-expanded="true">▴ 접기</button>
+        </div>
+        <div class="split sec-body" id="commitSplit" style="grid-template-columns: 4fr 8px 1fr">
+          <div class="box fill" data-comp="CommitList" data-depth="4" data-st="[S] commits·selection" data-note="목록 컨테이너. 스토어를 읽는 D4.">
+            <div class="row" data-comp="CommitListHeader" data-depth="5" data-st="[D] 전체선택 상태" data-note="checked/indeterminate 파생 → TriStateCheckbox.">
+              <label><input type="checkbox" id="chkAllCommits"> 전체 선택</label> <span class="muted" id="commitSel"></span> <button id="btnPreview" style="margin-left:auto">Preview</button>
+            </div>
+            <div class="fill-scroll" id="commitRows"></div>
+          </div>
+          <div class="handle"></div>
+          <div class="box fill" data-comp="PreviewSummary" data-depth="4" data-st="[S] summary" data-note="분석 단계에 따라 표시 변경.">
+            <div id="summaryBody"></div>
+          </div>
+        </div>
+        </div>
+
+        <div class="handle-v" title="드래그해서 상하 비율 조절(목업: 슬라이더)"></div>
+        <div class="workspace sec" id="workspace" data-comp="DeployFilesWorkspace" data-depth="3" data-st="[S] analysis"
+             data-note="좌우 패널 조립. 팝업 상태는 갖지 않고 IncludedFilesPane의 이벤트를 WorkArea로 올려 보낸다." >
+          <div class="sec-head" data-comp="SectionHeader" data-depth="4" data-st="props" data-note="CollapsibleSection의 헤더. 제목, 접었을 때만 보이는 요약, 우측 상단 접기/펼치기 버튼.">
+          <b>배포 대상 파일</b><span class="sec-sum" id="sumDeploy"></span>
+          <button class="sec-toggle" data-collapse="deploy" data-comp="CollapseToggle" data-depth="5" data-st="event↑" data-note="클릭 → 소유자의 setCollapsed('deploy', …). 숨김/표시 시 section:hide / section:show 이벤트가 발생하고 우측 이벤트 로그에 기록된다." aria-expanded="true">▴ 접기</button>
+        </div>
+          <div class="split sec-body" id="deploySplit">
+            <div id="leftHost" style="height:100%"></div>
+            <div class="handle"></div>
+            <div id="extractHost" style="height:100%"></div>
+          </div>
+        </div>
+        <div id="popupHost" data-comp="PopupHost" data-depth="3" data-st="openPopup 수신" data-note="WorkArea가 소유한 openPopup 값에 따라 하나만 렌더링. 동시에 두 개는 표현 불가. 'manual' | 'patterns' | 'deleted' | 'warnings'."></div>
+      </div>
+
+      <div class="box" data-comp="ExportBar" data-depth="2" data-st="[S] export">
+        <div class="row"><span data-comp="ExportPathPicker" data-depth="3" data-st="props" data-note="부모 경로 선택. 실제 생성 위치(=Export 결과 폴더)는 오른쪽 선택상자의 모드에 따라 달라지며 이 줄에 그대로 표시된다."><button>변경</button> <span id="exportPath" title="Export 결과가 생성될 위치"></span></span>
+        <span class="row" style="margin-left:auto;gap:6px">
+          <span data-comp="ExportModeSelect" data-depth="3" data-st="[S] exportMode(영속)" data-note="추출 위치 모드. direct: 선택한 경로에 바로 추출 / sub: 선택한 경로 아래 git-deploy-extracted 폴더를 만들어 추출(기본값). direct는 선택한 폴더가 비어 있을 때만 허용. 선택은 localStorage에 저장(가정)."><select id="exportMode" title="추출 위치 방식">
+            <option value="sub">git-deploy-extracted 폴더 생성 후 추출</option>
+            <option value="direct">선택한 경로에 바로 추출</option>
+          </select></span>
+          <button id="btnExport" data-comp="ExportButton" data-depth="3" data-st="event↑" style="background:#1f2933;color:#fff">Export</button>
+        </span></div>
+        <div class="row muted" id="exportStatus" data-comp="ExportStatus" data-depth="3" data-st="props" style="margin-top:3px"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ================= 우측: 인스펙터 + 상태 ================= -->
+  <aside class="side">
+    <h2>인스펙터</h2>
+    <div id="inspector" class="hint">검사 모드를 켜고 컴포넌트를 클릭하거나, 경계 표시 상태에서 마우스를 올려보세요.</div>
+    <h3>실시간 상태</h3>
+    <pre id="stateDump"></pre>
+    <h3>이벤트 로그 (숨기기/보이기)</h3>
+    <pre id="evLog" style="min-height:60px">(접기/펼치기 버튼을 눌러보세요)</pre>
+    <h3>소유 규칙</h3>
+    <p class="hint">D4 이상 컨테이너만 스토어/훅에 접근합니다. D5·D6은 props와 콜백만 받고, 이벤트는 소유자까지 올라갑니다. <code>openPopup</code>은 <code>WorkArea</code>에만 존재합니다(<code>PreviewSummary</code>와 <code>DeployFilesWorkspace</code>의 공통 부모).</p>
+  </aside>
+</div>
+
+<script>
+(() => {
+  // ------------------ 상태 ------------------
+  const ALL_FILES = [
+    { p: 'src/main/java/com/acme/guarantee/GuaranteeListController.java', s: 'modified', on: true },
+    { p: 'src/main/java/com/acme/guarantee/GuaranteeService.java', s: 'modified', on: true },
+    { p: 'src/main/java/com/acme/legacy/LegacyPayService.java', s: 'modified', on: true },
+    { p: 'src/main/java/com/acme/legacy/old/OldUtil.java', s: 'added', on: true },
+    { p: 'src/test/java/com/acme/guarantee/GuaranteeServiceTest.java', s: 'modified', on: true },
+    { p: 'src/main/resources/static/js/guarantee/list.js', s: 'modified', on: true },
+    { p: 'src/main/resources/templates/guarantee/list.html', s: 'added', on: true },
+    { p: 'src/main/resources/static/img/icon.png', s: 'added', on: true },
+    { p: 'docs/README.md', s: 'modified', on: true },
+    { p: 'target/classes/App.class', s: 'modified', on: true },
+  ];
+  const MISSING = [
+    { p: 'src/main/java/com/acme/guarantee/repository/GuaranteeListExternalRepository.java', kind: '구현체', on: false },
+    { p: 'src/main/java/com/acme/guarantee/repository/GuaranteeListQueryRepository.java', kind: '인터페이스', on: false },
+    { p: 'src/main/java/com/acme/support/gateway/PaymentGatewayClient.java', kind: '구현체', on: false },
+  ];
+  const HEAD_TREE = [...new Set([
+    ...ALL_FILES.map(f => f.p), ...MISSING.map(m => m.p),
+    'pom.xml', 'README.md', '.gitignore', 'config/application.yml', 'config/application-dev.yml', 'docs/design/overview.md',
+    'src/main/java/com/acme/App.java', 'src/main/java/com/acme/common/util/DateUtil.java', 'src/main/java/com/acme/common/util/StringUtil.java',
+    'src/main/java/com/acme/guarantee/GuaranteeListView.java', 'src/main/java/com/acme/support/BeanProviderImpl.java', 'src/main/java/com/acme/support/BeanProviderTest.java',
+    'src/main/resources/application.yml', 'src/main/resources/mapper/GuaranteeMapper.xml', 'src/test/java/com/acme/common/DateUtilTest.java',
+  ])];
+  const st = {
+    simNonEmpty: false, exportMode: 'sub', exportBase: 'D:\\deploy-output', open: {}, phase: 'ready', legacy: false, initMode: 'all', repoRel: 'sibling',
+    openPopup: null,                       // 'manual' | 'patterns' | null   ← DeployFilesWorkspace 로컬
+    collapsed: { query: false, commits: false, deploy: false },
+    patterns: [
+      { pattern: '*.png', mode: 'exclude', enabled: true },
+      { pattern: '*.md', mode: 'exclude', enabled: true },
+      { pattern: 'target/**', mode: 'exclude', enabled: false },
+      { pattern: 'com.acme.legacy.**', mode: 'exclude', enabled: true },
+      { pattern: 'com.acme.guarantee.**', mode: 'include', enabled: false },
+    ],
+    files: ALL_FILES.map(f => ({ ...f })),
+    manual: [], missing: MISSING.map(m => ({ ...m })),
+    warned: ['config/removed-in-head.yml', 'src/main/java/.../MovedService.java'],
+    parseWarn: 1,
+    deleted: ['old.js', 'src/main/resources/static/js/legacy/old-list.js', 'src/main/java/.../LegacyGuaranteeService.java', 'src/main/resources/templates/guarantee/list-old.html', 'config/deprecated.properties', 'docs/obsolete.md', 'src/test/.../LegacyServiceTest.java'],
+    commits: [
+      { h: 'b61e2ab', a: 'neisii', d: '09-06', m: 'guarantee html', on: true },
+      { h: 'c3d9f00', a: 'bot', d: '09-06', m: 'Revert "guarantee html"', on: false },
+      { h: '5e0f712', a: 'neisii', d: '09-08', m: 'payment bug', on: false },
+      { h: '8dd9e91', a: 'taeyang', d: '09-07', m: '공통 Repository 구현체 정리', on: true },
+      { h: 'e11aa02', a: 'ci', d: '09-05', m: '[skip ci] bump version', on: false },
+      { h: '66a3112', a: 'minsu', d: '09-09', m: 'refactoring', on: false },
+      { h: 'f4b7c19', a: 'minsu', d: '09-04', m: 'WIP: refactoring', on: true },
+      { h: 'a8f2d31', a: 'neisii', d: '09-05', m: 'guarantee UI', on: false },
+    ],
+    clamp: true, newPattern: '', patMsg: '', newMode: 'exclude', manualQuery: '',
+  };
+
+  // ------------------ 유틸 ------------------
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const base = p => p.slice(p.lastIndexOf('/') + 1);
+  // 글롭 → 정규식. `*` = 한 세그먼트, `**` = 하위 전체, 선행 `**/`는 있어도 없어도(루트 포함) 매치
+  function globToRe(g) {
+    let r = g.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    r = r.replace(/\*\*\//g, '§A').replace(/\*\*/g, '§B').replace(/\*/g, '[^/]*').replace(/§A/g, '(?:.*\/)?').replace(/§B/g, '.*');
+    return new RegExp('^' + r + '$');
+  }
+  // 종류는 입력 형식에서 파생한다(사용자가 고르지 않음):
+  //  1) '/' 포함 → 경로   2) a.b.c.** 형태(식별자만, 끝이 .**) → 패키지 표기: 경로 **/a/b/c/** 로 변환   3) 그 외 → 파일명
+  const PKG_RE = /^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*\.\*\*$/;
+  function interpret(pattern) {
+    const t = pattern.trim();
+    if (t.includes('/')) return { kind: 'path', glob: t };
+    if (PKG_RE.test(t)) return { kind: 'pkg', glob: '**/' + t.slice(0, -3).split('.').join('/') + '/**' };
+    return { kind: 'name', glob: t };
+  }
+  function matchPattern(x, path) {
+    const it = interpret(x.pattern);
+    return globToRe(it.glob).test(it.kind === 'name' ? base(path) : path);
+  }
+  // 제외가 항상 우선. 활성 포함 패턴이 하나라도 있으면 그중 하나 이상에 매치돼야 남는다.
+  function hiddenByPatterns(path) {
+    const act = st.patterns.filter(p => p.enabled);
+    if (act.some(p => p.mode === 'exclude' && matchPattern(p, path))) return true;
+    const inc = act.filter(p => p.mode === 'include');
+    return inc.length > 0 && !inc.some(p => matchPattern(p, path));
+  }
+  // 메시지 제외: 쉼표/줄바꿈 구분(공백은 구문 내 허용), 대소문자 무관 부분 일치, 하나라도 포함되면 제외
+  // 키워드 입력 방식 비교(제안): current(분리) / A(하나의 입력, 앞에 '-' 를 붙이면 제외) / B(한 그룹, 포함·제외 두 칸)
+  // 키워드(A안, 간단형): 텍스트 영역에 한 줄에 하나, 앞에 '-' 를 붙이면 제외.
+  // 글자 그대로(대소문자 무시) 부분 일치 — 정규식·* 와일드카드 아님. 포함은 하나라도 일치하면 포함(OR), 제외는 하나라도 일치하면 제외.
+  const splitLines = t => t.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+  function kwModel() {
+    const file = $('#qModeFile').checked, inc = [], exc = [];
+    for (const line of splitLines($('#qSearch').value)) {
+      if (line.startsWith('-')) { const r = line.slice(1).trim(); if (r) exc.push(r); } else inc.push(line);
+    }
+    return { file, inc, exc: file ? [] : exc, ignored: file ? exc : [], warn: file && exc.length ? '파일명 검색에서는 제외(-) 줄을 쓸 수 없습니다 — 무시됩니다' : '' };
+  }
+  const msgKeywords = () => kwModel().exc;
+  const msgHidden = (c, km = kwModel()) => {
+    const t = c.m.toLowerCase();
+    if (km.exc.some(k => t.includes(k.toLowerCase()))) return true;                                   // 제외: 하나라도 일치하면 제외
+    if (!km.file && km.inc.length && !km.inc.some(k => t.includes(k.toLowerCase()))) return true;    // 포함(메시지 검색): 하나라도 일치해야 남음
+    return false;
+  };
+  function updateKw() { renderCommits(); updateSummaries(); dump(); }
+  function renderCommits() {
+    const km = kwModel(), vis = st.commits.filter(c => !msgHidden(c, km));
+    $('#commitRows').innerHTML = vis.map(c => `<div data-comp="CommitRow" data-depth="5" data-st="props"><label><input type="checkbox" data-k="commit" data-h="${c.h}" ${c.on ? 'checked' : ''}> ${c.h} ${esc(c.a)} ${c.d} ${esc(c.m)}</label></div>`).join('') || '<div class="status">커밋이 없습니다</div>';
+    const total = st.commits.filter(c => c.on).length, hiddenSel = st.commits.filter(c => c.on && msgHidden(c, km)).length, hidden = st.commits.length - vis.length;
+    $('#commitSel').textContent = `${total}개 선택됨` + (hidden ? ` · 키워드 조건으로 ${hidden}개 숨김` : '') + (hiddenSel ? ` (선택 중 ${hiddenSel}개는 화면에 안 보임)` : '');
+    const w = $('#kwWarn'); w.textContent = km.warn ? '⚠ ' + km.warn : ''; w.style.display = km.warn ? '' : 'none';
+    const all = $('#chkAllCommits'); all.checked = vis.length > 0 && vis.every(c => c.on); all.indeterminate = vis.some(c => c.on) && !all.checked;
+  }
+  const matchCount = x => st.files.filter(f => matchPattern(x, f.p)).length;
+  // Extract 대상 = 변경 파일(on) + 누락된 의존성(on) + 수동 추가. 활성 패턴에 걸리면 Export되지 않으므로 표시만 흐리게 한다.
+  function extractItems() {
+    const items = [];
+    st.files.forEach((f, i) => { if (f.on) items.push({ o: 'file', p: f.p, s: f.s, origin: '변경' }); });
+    st.missing.forEach(m => { if (m.on) items.push({ o: 'miss', p: m.p, s: 'added', kind: m.kind, origin: '의존성·' + m.kind }); });
+    st.manual.forEach(p => items.push({ o: 'manual', p, s: 'added', origin: '수동' }));
+    items.forEach(it => { it.hidden = hiddenByPatterns(it.p); });
+    return items;
+  }
+  const view = () => {
+    const cand = st.files.filter(f => !f.on);
+    const visible = cand.filter(f => !hiddenByPatterns(f.p));
+    const ex = extractItems();
+    return { visible, cand: cand.length, hidden: cand.length - visible.length, before: st.files.length,
+      extractCount: ex.length, extractHidden: ex.filter(i => i.hidden).length, ex,
+      missRemaining: st.missing.filter(m => !m.on).length };
+  };
+  function flash(sel) { const el = $(sel); if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+
+  // ------------------ 트리 ------------------
+  // 경로 목록 → 디렉터리 트리. 하위가 디렉터리 하나뿐이고 파일이 없는 체인은 한 줄로 합친다(IDE의 compact middle packages).
+  function buildTree(items, compactFrom = 1) {
+    const root = { dirs: new Map(), files: [], name: '', path: '' };
+    for (const it of items) {
+      const parts = it.p.split('/'); const name = parts.pop(); let node = root, acc = '';
+      for (const seg of parts) {
+        acc = acc ? acc + '/' + seg : seg;
+        if (!node.dirs.has(seg)) node.dirs.set(seg, { dirs: new Map(), files: [], name: seg, path: acc });
+        node = node.dirs.get(seg);
+      }
+      node.files.push({ ...it, name });
+    }
+    // compactFrom: 경로 세그먼트 깊이가 이 값 이상인 폴더만 자식과 병합(기본 1 = 전 구간). 탐색 트리는 3 → src(1)·main(2)는 병합하지 않음
+    (function compress(node) {
+      for (const [k, c] of [...node.dirs]) {
+        let cur = c;
+        while (cur.files.length === 0 && cur.dirs.size === 1 && cur.path.split('/').length >= compactFrom) { const only = [...cur.dirs.values()][0]; only.name = cur.name + '/' + only.name; cur = only; }
+        compress(cur); node.dirs.delete(k); node.dirs.set(cur.name, cur);
+      }
+    })(root);
+    return root;
+  }
+  const countFiles = n => n.files.length + [...n.dirs.values()].reduce((a, d) => a + countFiles(d), 0);
+  // id: 목록 식별자(펼침 상태 키), leafFn(item) → 행 html, folderFn(dir, count, key) → 폴더 행 html(이름/동작)
+  function treeHtml(id, items, leafFn, folderFn, opts = {}) {
+    const out = [];
+    (function walk(node, depth) {
+      for (const d of [...node.dirs.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+        const key = id + '|' + d.path, ov = st.open[key];
+        const open = ov === undefined ? (opts.defaultOpen ? opts.defaultOpen(d) : true) : ov;   // 사용자가 직접 토글한 상태가 기본 펼침보다 우선
+        out.push(`<div class="dir tw" style="padding-left:${depth * 14}px" data-comp="TreeFolderRow" data-depth="6" data-st="props" data-note="폴더 행: ▾/▸ 펼침(로컬), 개수, 경로 복사(호버), 목록별 폴더 동작. 병합 체인은 한 줄."><button class="tog" data-tog="${esc(key)}" data-open="${open ? 1 : 0}" title="${open ? '접기' : '펼치기'}">${open ? '▾' : '▸'}</button>${folderFn(d, countFiles(d), key)}</div>`);
+        if (open) walk(d, depth + 1);
+      }
+      for (const f of node.files.sort((a, b) => a.name.localeCompare(b.name))) out.push(`<div class="tw" style="padding-left:${depth * 14 + 18}px">${leafFn(f)}</div>`);
+    })(buildTree(items, opts.compactFrom || 1), 0);
+    return out.join('');
+  }
+  // 경로 복사 버튼(호버/포커스 시에만 보임, 저장소 기준 상대경로)
+  const copyBtn = p => `<button class="cpy" data-copy="${esc(p)}" title="경로 복사(저장소 기준 상대경로)" aria-label="경로 복사: ${esc(p)}">⧉</button>`;
+  async function copyPath(btn) {
+    const p = btn.dataset.copy;
+    try { await navigator.clipboard.writeText(p); btn.textContent = '✓'; btn.title = '복사됨'; btn.classList.remove('err'); logEvent('copy  ' + p); }
+    catch (e) { btn.textContent = '✕'; btn.classList.add('err'); btn.title = '복사하지 못했습니다'; }
+    setTimeout(() => { if (btn.isConnected) { btn.textContent = '⧉'; btn.title = '경로 복사(저장소 기준 상대경로)'; btn.classList.remove('err'); } }, 1500);
+  }
+  const plainFolder = (d, n, key) => `<span class="dirname" data-tog="${esc(key)}">📁 ${esc(d.name)}</span> <span class="dircount">${n}</span>${copyBtn(d.path)}`;
+
+  // ------------------ 렌더: 상태별 본문 ------------------
+  function panelState(kind, msg) { return `<div class="status ${kind === 'error' ? 'error' : kind === 'stale' ? 'stale' : ''}" data-comp="PanelState" data-depth="6" data-st="kind=${kind}" data-note="본문 슬롯에만 들어가는 상태 표시. 패널 자체는 언마운트되지 않음.">${msg}</div>`; }
+
+  function summaryHtml() {
+    if (st.phase === 'empty') return '커밋을 선택하세요';
+    if (st.phase === 'loading') return '계산 중...';
+    if (st.phase === 'error') return '<span style="color:var(--err)">계산 실패</span>';
+    if (st.phase === 'stale') return '선택이 변경되었습니다';
+    const v = view();
+    return `Files: ${v.before}<br>Added: ${st.files.filter(f => f.s === 'added').length}<br>Modified: ${st.files.filter(f => f.s === 'modified').length}<br>
+      ${st.warned.length ? `<button id="btnWarnCount" data-comp="WarningsCountButton" data-depth="5" data-st="event↑" data-note="기존 DeployFilesHeader의 'N개 파일이 HEAD에 없어 제외되었습니다' 배너(DR-009)를 대체. 클릭 → WorkArea의 setOpenPopup('warnings')." style="margin-top:2px;color:var(--warn)">⚠ HEAD에 없음: ${st.warned.length} ▸</button><br>` : ''}
+      <button id="btnDeletedCount" data-comp="DeletedCountButton" data-depth="5" data-st="event↑" data-note="클릭 → PreviewSummary → CommitWorkspace → WorkArea의 setOpenPopup('deleted')로 올라감. 삭제 0건이면 비활성." style="margin-top:2px" ${st.deleted.length ? '' : 'disabled'}>Deleted: ${st.deleted.length} ▸</button>`;
+  }
+
+  function bodyFor(side) {
+    const ph = st.phase;
+    if (ph === 'empty') return panelState('empty', '커밋을 선택하세요');
+    if (ph === 'stale') return panelState('stale', '선택이 변경되었습니다 — Preview를 눌러 계산하세요');
+    if (ph === 'loading') return panelState('loading', '계산 중...');
+    if (ph === 'error') return panelState('error', '계산 실패: git 명령이 실패했습니다');
+    const v = view();
+    if (side === 'left') {
+      const empty = v.cand === 0 ? '미선택 변경 파일이 없습니다 — 전부 Extract 대상으로 이동했습니다' : '패턴에 걸려 모든 변경 파일이 숨겨졌습니다';
+      return `<div class="files" data-comp="FileList" data-depth="6" data-st="[L] 컬럼폭·실측" data-note="가상 스크롤 전환(300개)·헤더 행·컬럼 리사이즈. 유일하게 로컬 상태를 가진 리프.">
+        <label class="file" data-comp="FileListHeaderRow" data-depth="6" data-st="props" data-note="헤더 행은 전체 선택 체크박스만 남김(Local Path 글자·컬럼 리사이즈 핸들 삭제 — 컬럼이 하나뿐이고 행에는 파일명이 보이므로)." title="화면에 보이는 변경 파일을 모두 Extract 대상으로 이동"><input type="checkbox" id="chkAll" ${v.visible.length ? '' : 'disabled'}></label>
+        ${v.visible.length ? treeHtml('cand', v.visible.map(f => ({ ...f, idx: st.files.indexOf(f) })),
+          f => `<label class="file ${f.s === 'added' ? 'added' : ''}" data-comp="FileRow" data-depth="6" data-st="props" title="${esc(f.p)}" data-note="체크하면 Extract 대상으로 이동(원래 목록에서는 사라짐). status==='added'면 글자색 녹색."><input type="checkbox" data-i="${f.idx}" data-k="file"> ${esc(f.name)}</label>${copyBtn(f.p)}`,
+          (d, n, key) => `<input type="checkbox" data-fmove="${esc(d.path)}" title="폴더의 변경 파일 ${n}개를 모두 Extract 대상으로 이동"><span class="dirname" data-tog="${esc(key)}">📁 ${esc(d.name)}</span> <span class="dircount">${n}</span>${copyBtn(d.path)}`) : `<div class="status">${empty}</div>`}
+      </div>`;
+    }
+    // Extract 대상: 파일명 우측에 × (원래 목록으로 복귀)
+    return `<div class="files" data-comp="FileList" data-depth="6" data-st="[L] 컬럼폭·실측">
+      ${v.ex.length ? treeHtml('ext', v.ex,
+        it => `<div class="file ${it.s === 'added' ? 'added' : ''} ${it.hidden ? 'dim' : ''}" data-comp="ExtractRow" data-depth="6" data-st="props" title="${esc(it.p)}" data-note="파일명 · 경로 복사(호버) · (16px 간격) × · 출처 배지. ×는 원래 목록으로 복귀(${it.o === 'manual' ? '수동 추가는 철회' : it.o === 'miss' ? '파일 추가 팝업 HEAD 트리로' : '미선택 변경 파일로'}). 활성 패턴에 걸린 행은 흐리게 표시되고 Export되지 않는다.">
+          <span class="path">${esc(it.name)}</span>${it.o === 'miss' ? `<em class="ib neutral" title="누락된 의존성 (${it.kind})">${it.kind === '구현체' ? 'Impl' : 'I'}</em>` : ''}${copyBtn(it.p)}<span style="display:inline-block;width:16px"></span>
+          <button class="xbtn" data-ret data-o="${it.o}" data-p="${esc(it.p)}" data-comp="RemoveButton" data-depth="6" data-st="event↑" title="${it.o === 'manual' ? '수동 추가 철회' : it.o === 'miss' ? '파일 추가 팝업 HEAD 트리로 되돌림' : '미선택 변경 파일로 되돌림'}">×</button>
+          ${it.o === 'miss' ? '' : `<em class="origin">${esc(it.origin)}</em>`}${it.hidden ? ' <span class="tagw" title="활성 파일 패턴에 걸려 Export되지 않음">패턴 제외</span>' : ''}</div>`,
+        (d, n, key) => `<span class="dirname" data-tog="${esc(key)}">📁 ${esc(d.name)}</span> <span class="dircount">${n}</span>${copyBtn(d.path)}<span style="display:inline-block;width:16px"></span><button class="xbtn" data-fret="${esc(d.path)}" title="폴더의 ${n}개를 모두 원래 목록으로 되돌림(수동 추가는 철회)">×</button>`) : '<div class="status">Extract 대상이 없습니다 — 왼쪽 목록에서 체크하세요</div>'}
+    </div>`;
+  }
+
+  const KIND_LABEL = { name: '파일명', path: '경로', pkg: '패키지→경로' };
+  function chipHtml(x, i) {
+    return `<span class="chip ${x.mode === 'exclude' ? 'exc' : 'inc'} ${x.enabled ? 'on' : 'off'}" data-comp="Chip" data-depth="6" data-st="props" data-note="제외/포함 + 해석된 종류 배지 + 매치 수. 토글 버튼과 삭제 버튼을 분리한 구조(HTML 중첩 불가 제약).">
+      <button data-act="toggle" data-i="${i}" title="${x.mode === 'exclude' ? '제외' : '포함'} · ${KIND_LABEL[interpret(x.pattern).kind]} 패턴(글롭 ${interpret(x.pattern).glob}) · 현재 ${matchCount(x)}개 파일에 매치 — 클릭하면 ${x.enabled ? '끕니다' : '켭니다'}">${x.mode === 'exclude' ? '−' : '+'} ${esc(x.pattern)}<em class="kb kb-${interpret(x.pattern).kind}">${KIND_LABEL[interpret(x.pattern).kind]}</em><span class="muted"> ·${matchCount(x)}</span></button>
+      <button data-act="remove" data-i="${i}" title="이력에서 삭제">×</button></span>`;
+  }
+  function chipsHtml(mode) {
+    const list = st.patterns.map((x, i) => [x, i]).filter(([x]) => x.mode === mode);
+    return list.length ? list.map(([x, i]) => chipHtml(x, i)).join(' ') : '<span class="muted">없음</span>';
+  }
+
+  // 요약 표기(H1 결정): "활성 K개"만 표시하고, 커서를 올리면 활성 상태인 패턴 목록을 툴팁으로 보여준다
+  function summaryText() { return `활성 ${st.patterns.filter(p => p.enabled).length}개`; }
+  function activeTip() {
+    const act = st.patterns.filter(p => p.enabled);
+    if (!act.length) return '활성 패턴 없음';
+    return `활성 패턴 ${act.length}개\n` + act.map(p => (p.mode === 'exclude' ? '− ' : '+ ') + p.pattern).join('\n');
+  }
+  const tipAttr = () => esc(activeTip()).replace(/\n/g, '&#10;');
+  // 한 번에 여러 패턴: 쉼표(,)·줄바꿈으로 구분(경로·파일명에 쉼표는 없음), 앞뒤 공백 제거, 빈 항목 무시, 같은 입력 안의 중복은 한 번만
+  const parsePatterns = text => [...new Set(text.split(/[,\n]+/).map(t => t.trim()).filter(Boolean))];
+  function previewHtml() {
+    const items = parsePatterns(st.newPattern);
+    if (!items.length) return '';   // 빈 입력: 아무것도 표시하지 않음(예시는 placeholder·툴팁이 담당)
+    const one = v => {
+      const it = interpret(v), n = matchCount({ pattern: v });
+      const warn = n === 0 ? ' <span style="color:var(--warn)">— 매치되는 파일이 없습니다' + (it.kind === 'name' && /^[A-Za-z_]\w*(\.[A-Za-z_]\w*)+$/.test(v) ? '. 패키지라면 끝에 <code>.**</code>를 붙이세요' : '') + '</span>' : '';
+      return `<em class="kb kb-${it.kind}" style="margin:0">${KIND_LABEL[it.kind]}</em> <code>${esc(it.glob)}</code> · 현재 ${n}개 파일 매치${warn}`;
+    };
+    if (items.length === 1) return `해석: ${one(items[0])}`;
+    return `<span class="pl"><b>${items.length}개 패턴</b> (모두 ${st.newMode === 'exclude' ? '제외' : '포함'}로 추가)</span>` + items.map(v => `<span class="pl">• <code>${esc(v)}</code> → ${one(v)}</span>`).join('');
+  }
+
+  function leftPane() {
+    const v = view();
+    const head = `<div class="row" data-comp="FilePaneTitle" data-depth="6" data-st="props" data-note="미선택 변경 파일 수/전체. 체크하면 Extract 대상으로 이동하므로 이 목록에는 아직 추출 대상이 아닌 파일만 남는다.">
+        <b title="선택한 커밋이 아니라 기준 Branch의 HEAD 최신 버전 파일을 추출합니다(DR-003). 체크하면 Extract 대상으로 이동합니다." style="cursor:help;border-bottom:1px dotted var(--sub)">포함된 파일</b> <span class="muted">(남은 ${v.cand}개/전체 ${v.before}개)</span>
+        <button id="btnAdd" data-comp="AddFileButton" data-depth="6" data-st="event↑" data-note="제목 줄 우측 끝. 클릭 → WorkArea의 setOpenPopup('manual'). 추가한 파일은 곧바로 Extract 대상에 들어간다." style="margin-left:auto" title="HEAD 트리의 임의 파일 추가 + 누락된 의존성 추가">+ 파일 추가${(st.phase === 'ready' && v.missRemaining) ? ` <span class="badge ${v.missRemaining > 50 ? 'over' : ''}" title="누락된 의존성 ${v.missRemaining}개${v.missRemaining > 50 ? ' — 50개 초과' : ''}">누락 ${v.missRemaining}</span>` : ''}</button></div>`;
+        const bar = `<div data-comp="FilterPatternBar" data-depth="5" data-st="[L] newMode·newPattern · [S] patterns" data-note="제외/포함 선택 + 입력 + 요약 + [보기]. 종류는 입력 형식에서 자동 파생: '/' 포함=경로, a.b.c.** 형태=패키지 표기(경로 **/a/b/c/** 로 변환), 그 외=파일명. 입력 아래 미리보기가 해석 결과와 매치 수를 보여준다.">
+      <div class="row">
+        <span>패턴:</span>
+        <select id="selMode" title="제외: 매치되는 파일을 뺌 / 포함: 매치되는 파일만 남김"><option value="exclude" ${st.newMode === 'exclude' ? 'selected' : ''}>제외</option><option value="include" ${st.newMode === 'include' ? 'selected' : ''}>포함</option></select>
+        <span class="patin" data-comp="PatternInput" data-depth="6" data-st="[L] newPattern" data-note="입력창 + 해석 오버레이. 오버레이는 입력창에 포커스가 있고 입력이 있을 때만 입력창 바로 아래에 겹쳐 뜨며 레이아웃(아래 목록 높이)에 영향을 주지 않는다.">
+          <input type="text" id="inpPattern" placeholder="*.png, src/test/**, com.acme.legacy.**" title="여러 개는 쉼표(,)로 구분 · 파일명: *.png · 경로: src/test/** · 패키지: com.acme.legacy.** (경로로 변환)" size="34" value="${esc(st.newPattern)}">
+          <div id="patPreview" class="pat-pop" role="status" aria-live="polite">${previewHtml()}</div></span>
+        <button id="btnPatAdd">+추가</button>
+      </div>
+      <div class="row" style="margin-top:3px">
+        <span id="sumText" class="badge" style="cursor:help" title="${tipAttr()}">${summaryText()}</span><span id="patMsg" class="muted" role="status" aria-live="polite">${esc(st.patMsg)}</span>
+        <button id="btnView" ${st.patterns.length === 0 ? 'disabled title="등록된 패턴이 없습니다"' : ''}>보기</button>
+        ${v.hidden ? `<span class="muted" title="활성 패턴에 걸려 숨겨진 파일 수">· ${v.hidden}개 숨김</span>` : ''}
+      </div>
+      </div>`;
+
+    if (st.legacy && st.phase === 'stale') {
+      return `<div class="box" data-comp="(기존) 플레이스홀더 박스" data-depth="4" data-st="컬럼 언마운트됨"><b>포함된 파일</b>${panelState('stale', '선택이 변경되었습니다 — Preview를 눌러 계산하세요')}
+        <div class="hint" style="color:var(--err)">⚠ 기존 방식: 제외 패턴 UI·검색어·입력 중 문자열이 사라집니다 (U1)</div></div>`;
+    }
+    return `<div class="box fill" data-comp="IncludedFilesPane" data-depth="4" data-st="[D] useIncludedFilesView" data-note="컨테이너. 뷰 훅으로 목록·카운터·전체선택을 받아 FilePane에 조립.">
+      <div class="fill" data-comp="FilePane" data-depth="5" data-st="슬롯 제공" data-note="Panel + toolbar 슬롯 + FileList. 좌측 전용 prop 없음. 검색 줄 우측과 제외 패턴 줄은 IncludedFilesPane만 채움.">
+        ${head}${bar}${bodyFor('left')}
+      </div></div>`;
+  }
+
+  function extractPane() {
+    const v = view();
+    return `<div class="box fill" data-comp="ExtractTargetsPane" data-depth="4" data-st="[D] useExtractTargetsView" data-note="실제 Export 대상 목록. 변경 파일·누락된 의존성·수동 추가 파일이 합쳐 보이고, 각 행 × 로 원래 목록에 되돌린다. 활성 파일 패턴에 걸린 행은 흐리게 표시(Export 제외).">
+      <div class="fill" data-comp="FilePane" data-depth="5" data-st="슬롯 제공" data-note="같은 FilePane 재사용. 행 렌더러만 ExtractRow.">
+        <div class="row" data-comp="FilePaneTitle" data-depth="6" data-st="props"><b>Extract 대상</b> <span class="muted">(${v.extractCount}개${v.extractHidden ? ` · 패턴 제외 ${v.extractHidden}개` : ''})</span>
+          <button id="btnRetAll" style="margin-left:auto" ${v.extractCount ? '' : 'disabled'} title="모두 원래 목록으로 되돌립니다(수동 추가는 철회)">모두 되돌리기</button></div>
+        ${bodyFor('extract')}
+      </div></div>`;
+  }
+
+  function popupHtml() {
+    if (!st.openPopup) return '';
+    const hClamp = st.clamp ? 'height: min(480px, calc(100% - 20px))' : 'height: 480px';
+    if (st.openPopup === 'warnings') {
+      return `<div class="backdrop" id="backdrop"><div class="popup" style="${hClamp}" data-comp="WarningsPopup" data-depth="5" data-st="구독만(로컬 상태 없음)" data-note="Popup primitive 사용. analysis.warnings를 읽기 전용으로 표시.">
+        <header><span>HEAD에 없어 제외된 파일 (${st.warned.length}개)</span><button data-close>×</button></header>
+        <div class="cands">${treeHtml('warn', st.warned.map(p => ({ p })), f => `<div class="trow" data-comp="WarningRow" data-depth="6" data-st="props" title="${esc(f.p)}"><span>${esc(f.name)}</span>${copyBtn(f.p)}</div>`, plainFolder)}</div>
+        <div class="muted">선택한 커밋에서 변경됐지만 기준 Branch의 HEAD에는 존재하지 않아 배포 대상에서 제외된 파일입니다(DR-009).</div>
+      </div></div>`;
+    }
+    if (st.openPopup === 'deleted') {
+      return `<div class="backdrop" id="backdrop"><div class="popup" style="${hClamp}" data-comp="DeletedFilesPopup" data-depth="5" data-st="구독만(로컬 상태 없음)" data-note="Popup primitive 사용. 스토어의 deleteList를 읽기 전용으로 표시. 기존 DeleteListPanel의 역할을 대체.">
+        <header><span>삭제된 파일 (${st.deleted.length}개)</span><button data-close>×</button></header>
+        <div class="cands">${treeHtml('del', st.deleted.map(p => ({ p })), f => `<div class="trow" data-comp="DeletedFileRow" data-depth="6" data-st="props" title="${esc(f.p)}"><span>${esc(f.name)}</span>${copyBtn(f.p)}</div>`, plainFolder)}</div>
+        <div class="muted">Export의 delete-list.txt에 기록되는 서버 경로입니다. 많으면 이 안에서만 스크롤.</div>
+      </div></div>`;
+    }
+    if (st.openPopup === 'patterns') {
+      return `<div class="backdrop" id="backdrop"><div class="popup" style="${hClamp}" data-comp="FilterPatternsPopup" data-depth="5" data-st="구독만(로컬 상태 없음)" data-note="Popup primitive 사용. 제외/포함 두 구역으로 나눠 칩을 표시. 스토어를 구독해 조작 시 인라인 요약이 즉시 갱신됨.">
+        <header><span title="${tipAttr()}" style="cursor:help">파일 패턴 (${summaryText()})</span><button data-close>×</button></header>
+        <div><b>제외</b> <span class="muted">— 매치되는 파일을 뺌 (항상 우선)</span></div>
+        <div class="chips">${chipsHtml('exclude')}</div>
+        <div><b>포함</b> <span class="muted">— 활성 포함 패턴이 있으면 그중 하나 이상에 매치되는 파일만 남김</span></div>
+        <div class="chips">${chipsHtml('include')}</div>
+        <div class="muted">칩 클릭 = 활성 토글, × = 삭제, ·N = 현재 매치 수. 패키지 표기 <code>a.b.c.**</code>는 경로 <code>**/a/b/c/**</code>로 변환되어 같은 경로의 리소스·테스트 소스까지 매치합니다(<code>.java</code> 한정 아님).</div>
+        <div class="chips">${Array.from({ length: 14 }, (_, i) => `<span class="chip"><button disabled>sample-${i + 1}/**</button></span>`).join(' ')}</div>
+      </div></div>`;
+    }
+    // 단일 화면(탭 없음): 툴바 · 분석 상태 안내 · HEAD 트리 · 수동 추가 칩
+    const ph = st.phase, depReady = ph === 'ready', treeReady = ['ready', 'depLoading', 'depNa'].includes(ph);
+    const q = st.manualQuery.trim().toLowerCase();
+    const diffSet = new Set(st.files.map(f => f.p)), manualSet = new Set(st.manual), missMap = new Map(st.missing.map((m, i) => [m.p, { i, kind: m.kind, on: m.on }]));
+    const all = HEAD_TREE.filter(p => !diffSet.has(p) && !manualSet.has(p) && !(missMap.get(p) && missMap.get(p).on))
+      .map(p => ({ p, miss: depReady && missMap.get(p) ? missMap.get(p) : null }));
+    const matched = q ? all.filter(x => x.p.toLowerCase().includes(q)) : all;
+    const shown = q ? matched.slice(0, 50) : matched;
+    const missVisible = matched.filter(x => x.miss);                       // 접힌 폴더 안에 있어도 포함(접힘은 표시 상태일 뿐)
+    const missPaths = all.filter(x => x.miss).map(x => x.p);
+    let note = '';
+    if (depReady && st.parseWarn) note = `<div data-comp="ParseWarningNotice" data-depth="6" data-st="props" data-note="의존성 검사 결과 안내(REQ-013). 트리는 계속 사용 가능." style="color:var(--warn)">⚠ ${st.parseWarn}개 파일을 파싱하지 못해 의존성 검사에서 제외했습니다</div>`;
+    if (ph === 'depLoading') note = '<div class="muted" data-comp="AnalysisNote" data-depth="6" data-st="props">의존성 확인 중... (트리는 사용할 수 있습니다)</div>';
+    if (ph === 'depNa') note = '<div class="muted" data-comp="AnalysisNote" data-depth="6" data-st="props">이 저장소에는 적용할 수 없습니다 (@SpringBootApplication 없음) — 붉은 표시 없이 HEAD 트리만 사용할 수 있습니다</div>';
+    const leaf = f => {
+      const m = f.miss, nm = m ? `<span class="miss" title="누락된 의존성 (${m.kind})">${esc(f.name)}</span><em class="ib" title="${m.kind}">${m.kind === '구현체' ? 'Impl' : 'I'}</em>` : esc(f.name);
+      return `<div class="trow" data-comp="${m ? 'DependencyRow' : 'HeadFileRow'}" data-depth="6" data-st="props" title="${esc(f.p)}" data-note="${m ? '누락된 의존성: 붉은 글자 + Impl/I 배지. 추가 → Extract로 이동, Extract ×로 되돌리면 다시 붉게 나타남.' : 'HEAD 파일. 추가 → 수동 추가 파일로 Extract에 들어감.'}"><span>${nm}</span>${copyBtn(f.p)}<button data-add="${esc(f.p)}" style="margin-left:auto">추가</button></div>`;
+    };
+    const opts = q ? { defaultOpen: () => true }
+      : { compactFrom: 3, defaultOpen: d => (d.path.split('/').length - (d.name.split('/').length - 1)) <= 1 || missPaths.some(mp => mp.startsWith(d.path + '/')) };
+    const treeBody = !treeReady ? panelState('stale', 'Preview 후 사용할 수 있습니다')
+      : shown.length ? `<div class="cands">${treeHtml(q ? 'srch' : 'browse', shown, leaf, plainFolder, opts)}</div>${q && matched.length > 50 ? '<div class="muted">상위 50개만 표시합니다 — 검색어를 더 구체적으로 입력하세요</div>' : ''}`
+      : '<div class="status">일치하는 파일이 없습니다</div>';
+    return `<div class="backdrop" id="backdrop"><div class="popup" style="${hClamp}" data-comp="AddFilesPopup" data-depth="5" data-st="[L] query" data-note="파일 추가 + 누락된 의존성을 하나의 HEAD 트리로 통합(탭 없음). 탐색 모드: 경로 세그먼트 1단계 펼침(src=1, main=2까지 보임) ∪ 누락된 의존성의 조상 폴더. 검색 모드: 결과만 전부 펼침. 추가한 항목은 곧바로 Extract 대상으로 들어감.">
+      <header><span>파일 추가</span><button data-close>×</button></header>
+      <div class="row" data-comp="AddFilesToolbar" data-depth="6" data-st="props">
+        <label>검색: <input type="text" id="inpManual" placeholder="경로 일부 입력... (예: BeanProvider, yml)" value="${esc(st.manualQuery)}" size="34"></label>
+        <button data-depall style="margin-left:auto" ${missVisible.length ? '' : 'disabled'} title="화면에 보이는 누락된 의존성을 모두 Extract 대상에 추가(일반 파일은 포함되지 않음)">보이는 항목 모두 추가 (${missVisible.length})</button></div>
+      ${note}
+      <div data-comp="HeadTreeBrowser" data-depth="6" data-st="[D] HEAD 트리 · 펼침 로컬">${treeBody}</div>
+      ${st.manual.length ? `<div class="chips">${st.manual.map(p => `<span class="chip manual"><button data-rm="${esc(p)}">${esc(base(p))} ×</button></span>`).join(' ')}</div>` : ''}
+    </div></div>`;
+  }
+
+  // ------------------ 렌더 총괄 ------------------
+  let selectedEl = null;
+  function render() {
+    const focusId = document.activeElement && document.activeElement.id;
+    const selStart = document.activeElement && document.activeElement.selectionStart;
+    $('#summaryBody').innerHTML = summaryHtml();
+    $('#leftHost').innerHTML = leftPane();
+    $('#extractHost').innerHTML = extractPane();
+    $('#popupHost').innerHTML = popupHtml();
+    $('#popupHost').style.cssText = st.openPopup ? 'position:absolute;inset:0;z-index:5' : '';
+    const readyish = ['ready', 'depLoading', 'depNa'].includes(st.phase);
+    $('#btnManual').disabled = !!st.openPopup && st.openPopup !== 'manual';
+    $('#btnPatterns').disabled = !!st.openPopup && st.openPopup !== 'patterns';
+    $('#btnWarn').disabled = (!!st.openPopup && st.openPopup !== 'warnings') || !readyish || !st.warned.length;
+    $('#btnDeleted').disabled = (!!st.openPopup && st.openPopup !== 'deleted') || !readyish || !st.deleted.length;
+    if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus(); try { el.setSelectionRange(selStart, selStart); } catch (e) {} } }
+    renderCommits();
+    { const pb = $('#btnPreview'), busy = ['loading', 'depLoading'].includes(st.phase); pb.disabled = busy; pb.title = busy ? '분석 중입니다 — 완료 후 다시 실행할 수 있습니다' : ''; }
+    updateExport();
+    updateSummaries();
+    dump();
+  }
+
+  function dump() {
+    const v = view();
+    $('#stateDump').textContent = JSON.stringify({
+      'collapsed': { 'CommitQueryBar [L]': st.collapsed.query, 'WorkArea [L] commits': st.collapsed.commits, 'WorkArea [L] deploy': st.collapsed.deploy },
+      'WorkArea [L]': { openPopup: st.openPopup, '(가능한 값)': "'manual' | 'patterns' | 'deleted' | 'warnings' | null" },
+      'CommitQueryBar [S] 키워드': { target: $('#qModeFile').checked ? '파일명' : '메시지', include: kwModel().inc, exclude: kwModel().exc, ignoredExclude: kwModel().ignored, hiddenCommits: st.commits.filter(c => msgHidden(c)).length, hiddenButSelected: st.commits.filter(c => c.on && msgHidden(c)).length },
+      'PreviewSummary [S]': { deletedCount: st.deleted.length, warnedCount: st.warned.length },
+      'analysis [S] (파생 phase)': st.phase,
+      'IncludedFilesPane [S/D]': { remainingCandidates: v.cand, hiddenByPatterns: v.hidden },
+      'ExtractTargetsPane [S/D]': { extractCount: v.extractCount, patternExcluded: v.extractHidden, fromDiff: v.ex.filter(i => i.o === 'file').length, fromDependency: v.ex.filter(i => i.o === 'miss').length, manual: v.ex.filter(i => i.o === 'manual').length },
+      'patterns [S]': st.patterns.map(p => (p.enabled ? '● ' : '○ ') + (p.mode === 'exclude' ? '제외 ' : '포함 ') + interpret(p.pattern).kind + ':' + p.pattern + (interpret(p.pattern).kind === 'pkg' ? '  →  ' + interpret(p.pattern).glob : '')),
+      'FilterPatternBar [L]': { newMode: st.newMode, newPattern: st.newPattern },
+      'ExportBar [S]': { exportMode: st.exportMode, repoRelation: st.repoRel, resolvedDir: exportDir() || '(미선택)', blockedBy: (blockReason() || {}).code || null },
+      'AddFilesPopup [L]': { query: st.manualQuery, missingRemaining: v.missRemaining, manuallyAdded: st.manual.length },
+    }, null, 2);
+  }
+
+  // ------------------ 이벤트 ------------------
+  const setOpen = v => { st.openPopup = v; if (v !== 'manual') st.manualQuery = ''; render(); flash('#popupHost > *'); };
+
+  document.addEventListener('click', e => {
+    if ($('#optInspect').checked) {            // 검사 모드: 동작 차단, 선택만
+      const comp = e.target.closest('[data-comp]');
+      if (comp && $('#stage').contains(comp)) { e.preventDefault(); e.stopPropagation(); select(comp); }
+      return;
+    }
+    const t = e.target;
+    const cp = t.closest && t.closest('[data-copy]');
+    if (cp) { e.preventDefault(); e.stopPropagation(); copyPath(cp); return; }
+    if (t.hasAttribute('data-depall')) {       // 누락된 의존성 한정: 검색어를 통과한 아직 안 넣은 누락된 의존성 전부(접힌 폴더 안 포함)
+      const q = st.manualQuery.trim().toLowerCase();
+      st.missing.forEach(m => { if (!m.on && (!q || m.p.toLowerCase().includes(q))) m.on = true; });
+      render(); return flash('#extractHost > *');
+    }
+    const tog = t.closest && t.closest('[data-tog]');
+    if (tog) { const k = tog.dataset.tog, b = tog.closest('.dir').querySelector('button.tog'); st.open[k] = !(b.dataset.open === '1'); render(); return; }
+    const fr = t.closest && t.closest('[data-fret]');
+    if (fr) {                                    // Extract 폴더 ×: 폴더 아래 전체를 원래 목록으로 복귀(수동은 철회)
+      const pre = fr.dataset.fret + '/';
+      st.files.forEach(f => { if (f.on && f.p.startsWith(pre)) f.on = false; });
+      st.missing.forEach(m => { if (m.on && m.p.startsWith(pre)) m.on = false; });
+      st.manual = st.manual.filter(x => !x.startsWith(pre));
+      render(); return flash('#extractHost > *');
+    }
+    const rt = t.closest && t.closest('[data-ret]');
+    if (rt) {                                    // Extract 목록의 ×: 원래 목록으로 복귀
+      const o = rt.dataset.o, path = rt.dataset.p;
+      if (o === 'file') st.files.find(f => f.p === path).on = false;
+      else if (o === 'miss') st.missing.find(m => m.p === path).on = false;
+      else st.manual = st.manual.filter(x => x !== path);
+      render(); return flash('#extractHost > *');
+    }
+    if (t.id === 'btnRetAll') { st.files.forEach(f => f.on = false); st.missing.forEach(m => m.on = false); st.manual = []; render(); return flash('#extractHost > *'); }
+    if (t.id === 'btnReset') { st.files.forEach(f => f.on = st.initMode === 'all'); st.missing.forEach(m => m.on = false); st.manual = []; render(); return flash('#extractHost > *'); }
+    const tg = t.closest && t.closest('[data-collapse]');
+    if (tg) return setCollapsed(tg.dataset.collapse, !st.collapsed[tg.dataset.collapse]);
+    if (t.id === 'btnReload') return reloadAll();
+    if (t.id === 'btnSearch') { logEvent('search  (즉시 조회)'); return; }
+    if (t.id === 'btnExport') return doExport();
+    if (t.id === 'btnAdd' || t.id === 'btnManual') return setOpen('manual');
+    if (t.id === 'btnView' || t.id === 'btnPatterns') return setOpen('patterns');
+    if (t.id === 'btnDeletedCount' || t.id === 'btnDeleted') return setOpen('deleted');
+    if (t.id === 'btnWarnCount' || t.id === 'btnWarn') return setOpen('warnings');
+    if (t.id === 'btnClose' || t.hasAttribute('data-close') || t.id === 'backdrop') return setOpen(null);
+    if (t.id === 'btnPatAdd') return addPattern();
+    if (t.dataset.act === 'toggle') { st.patterns[+t.dataset.i].enabled = !st.patterns[+t.dataset.i].enabled; render(); flash('#sumText'); return; }
+    if (t.dataset.act === 'remove') { st.patterns.splice(+t.dataset.i, 1); if (!st.patterns.length && st.openPopup === 'patterns') st.openPopup = null; render(); flash('#sumText'); return; }
+    if (t.dataset.add) { const m = st.missing.find(x => x.p === t.dataset.add); if (m) m.on = true; else st.manual.push(t.dataset.add); render(); return flash('#extractHost > *'); }
+    if (t.dataset.rm) { st.manual = st.manual.filter(p => p !== t.dataset.rm); render(); return; }
+  }, true);
+
+  document.addEventListener('change', e => {
+    const t = e.target;
+    if (t.name === 'sm') return updateKw();
+    if (t.id === 'chkAll') { view().visible.forEach(f => f.on = true); render(); return flash('#extractHost > *'); }
+    if (t.id === 'simRepoRel') { st.repoRel = t.value; updateExport(); return dump(); }
+    if (t.id === 'simNonEmpty') { st.simNonEmpty = t.checked; updateExport(); return dump(); }
+    if (t.id === 'exportMode') { st.exportMode = t.value; try { localStorage.setItem('gde:exportMode', t.value); } catch (e) {} updateExport(); return dump(); }
+    if (t.id === 'initMode') { st.initMode = t.value; return dump(); }
+    if (t.dataset.fmove !== undefined) { const pre = t.dataset.fmove + '/'; view().visible.forEach(f => { if (f.p.startsWith(pre)) f.on = true; }); render(); return flash('#extractHost > *'); }
+    if (t.dataset.k === 'file') { st.files[+t.dataset.i].on = true; render(); return flash('#extractHost > *'); }
+    if (t.dataset.k === 'commit') { const c = st.commits.find(x => x.h === t.dataset.h); c.on = t.checked; return render(); }
+    if (t.id === 'chkAllCommits') { const vis = st.commits.filter(c => !msgHidden(c)); const target = !vis.every(c => c.on); vis.forEach(c => c.on = target); return render(); }
+    if (t.id === 'selMode') { st.newMode = t.value; return dump(); }
+  });
+  document.addEventListener('input', e => {
+    const t = e.target;
+    if (t.id === 'qSearch') return updateKw();
+    if (t.id === 'inpPattern') { st.newPattern = t.value; const pv = $('#patPreview'); if (pv) pv.innerHTML = previewHtml(); return dump(); }
+    if (t.id === 'inpManual') { st.manualQuery = t.value; return render(); }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && ['qSearch', 'qAuthor', 'qHash'].includes(e.target.id)) logEvent('search  (Ctrl/Cmd+Enter 즉시 조회)');
+  });
+  document.addEventListener('paste', e => {      // 한 줄 입력창은 붙여 넣은 줄바꿈을 지우므로 쉼표로 바꿔 넣는다
+    if (e.target.id !== 'inpPattern') return;
+    const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\r?\n+/g, ', ');
+    e.preventDefault(); e.target.setRangeText(text, e.target.selectionStart, e.target.selectionEnd, 'end');
+    e.target.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && st.openPopup) setOpen(null);           // U5: Esc 닫기
+    if (e.key === 'Enter' && e.target.id === 'inpPattern') addPattern();
+  });
+  let patMsgTimer = null;
+  function addPattern() {
+    const items = parsePatterns(st.newPattern); if (!items.length) return;
+    let added = 0;
+    for (const v of items) {
+      const ex = st.patterns.find(p => p.pattern === v && p.mode === st.newMode);
+      if (ex) ex.enabled = true;                       // 이미 있으면 새로 만들지 않고 활성화
+      else { st.patterns.push({ pattern: v, mode: st.newMode, enabled: true }); added++; }
+    }
+    const existed = items.length - added;
+    st.patMsg = `${added}개 추가됨` + (existed ? ` · ${existed}개는 이미 있어 활성화` : '');
+    st.newPattern = ''; render(); flash('#sumText');
+    clearTimeout(patMsgTimer); patMsgTimer = setTimeout(() => { st.patMsg = ''; const el = $('#patMsg'); if (el) el.textContent = ''; }, 3000);
+  }
+
+  // ------------------ Export 위치 ------------------
+  const REPO = 'D:\\work\\shallow-backend';
+  const baseFor = () => ({ sibling: st.exportBase, same: REPO, inside: REPO + '\\out', contains: 'D:\\work', none: '' })[st.repoRel];
+  const exportDir = () => !baseFor() ? '' : st.exportMode === 'sub' ? baseFor() + '\\git-deploy-extracted' : baseFor();
+  // 텍스트 트리(extract-list.txt용): 폴더 먼저, ├── / └── 커넥터, 단일 자식 폴더 체인은 한 줄로 합침(UI 트리와 동일)
+  function treeText(paths) {
+    if (!paths.length) return '  (없음)';
+    const root = buildTree(paths.map(p => ({ p }))), lines = [];
+    (function walk(node, prefix) {
+      const dirs = [...node.dirs.values()].sort((a, b) => a.name.localeCompare(b.name));
+      const files = node.files.slice().sort((a, b) => a.name.localeCompare(b.name));
+      const entries = [...dirs.map(d => ({ d })), ...files.map(f => ({ f }))];
+      entries.forEach((e, i) => {
+        const last = i === entries.length - 1, conn = last ? '└── ' : '├── ';
+        if (e.d) { lines.push(prefix + conn + e.d.name + '/'); walk(e.d, prefix + (last ? '    ' : '│   ')); }
+        else lines.push(prefix + conn + e.f.name);
+      });
+    })(root, '');
+    return lines.join('\n');
+  }
+  // 배포 대상 목록 + 삭제 대상 목록을 하나의 txt로, 경계선으로 구분(각 목록은 트리)
+  function deployListTxt() {
+    const bar = '='.repeat(64);
+    const exported = extractItems().filter(i => !i.hidden).map(i => i.p);   // 활성 패턴에 걸린 항목은 Export되지 않음
+    const now = new Date(), pad = n => String(n).padStart(2, '0'), off = -now.getTimezoneOffset();
+    const ts = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${off >= 0 ? '+' : '-'}${pad(Math.floor(Math.abs(off) / 60))}:${pad(Math.abs(off) % 60)}`;
+    const sel = st.commits.filter(c => c.on), aw = Math.max(0, ...sel.slice(0, 10).map(c => c.a.length));
+    const commitLines = sel.slice(0, 10).map(c => `   ${c.h.slice(0, 7)}  2026-${c.d}  ${c.a.padEnd(aw)}  ${c.m}`);
+    if (sel.length > 10) commitLines.push(`   … 외 ${sel.length - 10}개`);
+    const head = [bar, ' Extract 목록', ` 생성 시각   : ${ts}`, ` 기준 브랜치 : ${$('#qBranch').value}`, ` 원본 커밋 (${sel.length}개)`, ...commitLines, bar, ''];
+    return [...head, bar, ` 배포 대상 파일 (${exported.length}개)`, bar, treeText(exported), '', bar, ` 삭제 대상 파일 (${st.deleted.length}개)`, bar, treeText(st.deleted)].join('\n') + '\n';
+  }
+  // 우선순위: ① 경로 미선택 ② 저장소와 겹침(INSIDE_REPO / CONTAINS_REPO) ③ (바로 추출) 폴더가 비어 있지 않음 — 먼저 걸린 사유 하나만
+  function blockReason() {
+    if (st.repoRel === 'none') return { code: 'NO_PATH', msg: '추출할 폴더를 선택하세요.' };
+    if (st.repoRel === 'same' || st.repoRel === 'inside') return { code: 'INSIDE_REPO', msg: '추출 위치가 저장소와 같거나 저장소 안에 있습니다. 저장소 밖의 다른 폴더를 선택하세요.' };
+    if (st.repoRel === 'contains') return { code: 'CONTAINS_REPO', msg: '선택한 위치가 저장소를 포함하고 있어 추출할 수 없습니다. 다른 폴더를 선택하세요.' };
+    if (st.exportMode === 'direct' && st.simNonEmpty) return { code: 'NOT_EMPTY', msg: '선택한 폴더가 비어 있지 않아 바로 추출할 수 없습니다. 빈 폴더를 선택하거나 “폴더 생성 후 추출”을 사용하세요.' };
+    // 일시적 사유는 마지막: 분석이 끝나면 저절로 풀린다(의존성 확인이 끝나기 전 Export는 누락 알림을 건너뛰게 되므로 막는다)
+    if (st.phase === 'loading') return { code: 'ANALYZING', msg: 'Preview 계산 중입니다 — 완료 후 Export할 수 있습니다.' };
+    if (st.phase === 'depLoading') return { code: 'ANALYZING', msg: '의존성 확인 중입니다 — 완료 후 Export할 수 있습니다.' };
+    return null;
+  }
+  const exportBlocked = () => blockReason() !== null;
+  function updateExport() {
+    $('#exportPath').textContent = exportDir() || '추출할 폴더를 선택하세요';
+    $('#exportMode').value = st.exportMode;
+    $('#btnExport').disabled = exportBlocked();
+    const r = blockReason();
+    if (r) $('#exportStatus').innerHTML = `<span style="color:var(--err)" data-code="${r.code}">${esc(r.msg)}</span>`;
+    else if ($('#exportStatus').dataset.blocked) $('#exportStatus').innerHTML = '';
+    $('#exportStatus').dataset.blocked = r ? '1' : '';
+  }
+  function doExport() {
+    if (exportBlocked()) return;
+    const dir = exportDir(), n = extractItems().filter(i => !i.hidden).length;
+    const confirmNote = (st.exportMode === 'sub' && st.simNonEmpty && st.repoRel === 'sibling') ? '<div class="muted">확인창(가정): 이미 있는 git-deploy-extracted를 덮어씁니다 → 계속</div>' : '';
+    $('#exportStatus').style.display = 'block';
+    $('#exportStatus').innerHTML = `${confirmNote}Export 완료(목업): <b>${esc(dir)}</b> <span class="muted">— 추출한 파일 ${n}개 + <code>extract-list.txt</code> (JSON 요약 파일은 생성하지 않음)</span>
+      <details open style="margin-top:4px"><summary>extract-list.txt 내용</summary><pre style="margin:4px 0 0;max-height:220px">${esc(deployListTxt())}</pre></details>`;
+    $('#exportStatus').dataset.blocked = '';
+    logEvent('export  → ' + dir + (st.exportMode === 'direct' ? '  (바로 추출)' : '  (폴더 생성 후 추출)'));
+  }
+
+  // ------------------ Reload: 조건·선택·분석 결과를 모두 기본값으로 ------------------
+  const fmtDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  function defaultRange() { const e = new Date(), b = new Date(e); b.setDate(b.getDate() - 7); return [fmtDate(b), fmtDate(e)]; }   // 오늘-7일 ~ 오늘 (REQ-003 기본값)
+  function applyDefaultQuery() {
+    $('#qBranch').value = 'main'; $('#qModeMsg').checked = true; $('#qSearch').value = '';
+    const [a, b] = defaultRange(); $('#qStart').value = a; $('#qEnd').value = b;
+    $('#qMax').value = '100'; $('#qMerge').checked = true;
+    $('#qAuthor').value = ''; $('#qHash').value = '';
+  }
+  function reloadAll() {
+    applyDefaultQuery();                                            // Branch 포함 모든 조회 조건 → 기본값
+    st.commits.forEach(c => { c.on = false; });                     // 커밋 선택 해제
+    st.files.forEach(f => { f.on = st.initMode === 'all'; }); st.missing.forEach(m => { m.on = false; }); st.manual = [];   // Extract/미선택 변경 파일 초기 상태
+    st.openPopup = null; st.manualQuery = '';
+    st.phase = 'empty'; $('#phase').value = 'empty';                // 분석 결과 폐기 → Preview 다시 필요
+    render(); logEvent('reload  조회 조건·선택·분석 결과 초기화 (유지: 파일 패턴·Export 경로·접힘·분할 비율)');
+  }
+  $('#secQuery').addEventListener('input', () => updateSummaries());
+  $('#secQuery').addEventListener('change', () => updateSummaries());
+
+  // ------------------ 조회 조건 두 그룹 사이 경계 조절 (SplitPane과 같은 방식) ------------------
+  const Q_MIN_START = 320, Q_MIN_END = 330, Q_KEY = 'gde:splitRatio:queryGroups';
+  let qRatio = 0.5;
+  try { const v = parseFloat(localStorage.getItem(Q_KEY)); if (v > 0 && v < 1) qRatio = v; } catch (e) {}
+  function applyQSplit() { $('#qbody').style.gridTemplateColumns = `minmax(${Q_MIN_START}px, ${qRatio * 100}%) 8px minmax(${Q_MIN_END}px, 1fr)`; }
+  $('#qHandle').addEventListener('mousedown', e => {
+    e.preventDefault();
+    const c = $('#qbody'), rect = c.getBoundingClientRect(), size = rect.width;
+    const calc = x => {
+      if (size <= 0) return qRatio;
+      const minR = Math.min(Q_MIN_START / size, 0.5), maxR = Math.max(1 - Q_MIN_END / size, 0.5);   // 두 최소 폭의 합보다 좁으면 0.5로 수렴
+      return Math.min(Math.max((x - rect.left) / size, minR), maxR);
+    };
+    const move = ev => { qRatio = calc(ev.clientX); applyQSplit(); };
+    const up = ev => {
+      qRatio = calc(ev.clientX); applyQSplit();
+      try { localStorage.setItem(Q_KEY, String(qRatio)); } catch (err) {}
+      window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
+      logEvent('resize  검색 조건 ↔ 필터 = ' + Math.round(qRatio * 100) + ':' + Math.round((1 - qRatio) * 100));
+    };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  });
+
+  // ------------------ 컨트롤 바인딩 ------------------
+  const bind = (id, fn) => $(id).addEventListener('input', fn);
+  bind('#phase', e => { st.phase = e.target.value; render(); });
+  bind('#optLegacy', e => { st.legacy = e.target.checked; render(); });
+  bind('#optClamp', e => { st.clamp = e.target.checked; render(); });
+  bind('#optBounds', e => $('#stage').classList.toggle('show-bounds', e.target.checked));
+  bind('#optInspect', e => document.body.classList.toggle('inspect-on', e.target.checked));
+  bind('#optH', e => { $('#workArea').style.height = e.target.value + 'px'; $('#hVal').textContent = e.target.value + 'px'; });
+  bind('#optW', e => { $('#stage').style.width = e.target.value + 'px'; $('#wVal').textContent = e.target.value + 'px'; });
+  bind('#optV', e => setRows(+e.target.value));
+  bind('#optR', e => setCols(+e.target.value));
+
+  // ------------------ 인스펙터 ------------------
+  const COLORS = ['#94a3b8', '#64748b', '#2563eb', '#0891b2', '#16a34a', '#d97706', '#db2777'];
+  function chain(el) { const out = []; let n = el; while (n) { if (n.dataset && n.dataset.comp) out.unshift(n); n = n.parentElement; } return out; }
+  function childrenOf(el) { return [...el.querySelectorAll('[data-comp]')].filter(c => { let p = c.parentElement; while (p && p !== el) { if (p.dataset && p.dataset.comp) return false; p = p.parentElement; } return p === el; }); }
+  function inspect(comp) {
+    const ch = chain(comp), kids = childrenOf(comp);
+    const uniq = a => [...new Set(a.map(k => k.dataset.comp))];
+    $('#inspector').innerHTML = `
+      <div class="crumb">${ch.map(c => `<span style="background:${COLORS[+c.dataset.depth] || '#888'}">${esc(c.dataset.comp)}</span>`).join(' › ')}</div>
+      <dl class="kv"><dt>깊이</dt><dd>D${comp.dataset.depth}</dd>
+        <dt>상태</dt><dd>${esc(comp.dataset.st || '—')}</dd>
+        <dt>부모</dt><dd>${ch.length > 1 ? esc(ch[ch.length - 2].dataset.comp) : '—'}</dd>
+        <dt>자식</dt><dd>${kids.length ? uniq(kids).map(esc).join(', ') : '(리프)'}</dd></dl>
+      ${comp.dataset.note ? `<div>${esc(comp.dataset.note)}</div>` : ''}`;
+  }
+  function select(comp) { if (selectedEl) selectedEl.classList.remove('selected'); selectedEl = comp; comp.classList.add('selected'); inspect(comp); }
+  $('#stage').addEventListener('mouseover', e => {
+    if (!$('#optBounds').checked || selectedEl) return;
+    const comp = e.target.closest('[data-comp]'); if (comp) inspect(comp);
+  });
+  $('#stage').addEventListener('mouseleave', () => { if (!selectedEl) $('#inspector').innerHTML = '<span class="hint">컴포넌트에 마우스를 올려보세요.</span>'; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && selectedEl && !st.openPopup) { selectedEl.classList.remove('selected'); selectedEl = null; } });
+
+  function setCols(r) {
+    $('#deploySplit').style.gridTemplateColumns = `minmax(0, ${100 - r}fr) 8px minmax(0, ${r}fr)`;
+    $('#rVal').textContent = `${100 - r}:${r}`;
+  }
+  let ratioV = 45;
+  function layoutRows() {
+    const c = st.collapsed, v = ratioV, wa = $('#workArea');
+    // 접힌 자식은 헤더 높이(auto)만 차지하고, 남은 높이는 펼쳐진 자식이 전부 흡수한다.
+    let rows;
+    if (c.commits && c.deploy) rows = 'auto 0 auto';
+    else if (c.commits) rows = 'auto 0 1fr';
+    else if (c.deploy) rows = '1fr 0 auto';
+    else rows = `minmax(90px, ${v}fr) 8px minmax(120px, ${100 - v}fr)`;
+    wa.style.gridTemplateRows = rows;
+    wa.style.alignContent = (c.commits && c.deploy) ? 'start' : 'stretch';
+    $('.handle-v').classList.toggle('off', c.commits || c.deploy);
+    $('#vVal').textContent = `${v}:${100 - v}`;
+  }
+  function setRows(v) { ratioV = v; layoutRows(); }
+
+  // ---- 접기/펼치기: 상태 변경 + 숨김/표시 이벤트 발행 ----
+  const SECTIONS = { query: ['#secQuery', 'CommitQueryBar', 'CommitQueryBar [L]'], commits: ['#secCommits', 'CommitWorkspace', 'WorkArea [L]'], deploy: ['#workspace', 'DeployFilesWorkspace', 'WorkArea [L]'] };
+  const evLines = [];
+  function logEvent(line) {
+    const t = new Date().toTimeString().slice(0, 8);
+    evLines.unshift(`[${t}] ${line}`); evLines.length = Math.min(evLines.length, 8);
+    $('#evLog').textContent = evLines.join('\n');
+  }
+  function setCollapsed(key, value) {
+    const [sel, name, owner] = SECTIONS[key], el = $(sel);
+    if (st.collapsed[key] === value) return;
+    st.collapsed[key] = value;
+    el.classList.toggle('collapsed', value);
+    const btn = el.querySelector(':scope > .sec-head .sec-toggle');
+    btn.textContent = value ? '▾ 펼치기' : '▴ 접기'; btn.setAttribute('aria-expanded', String(!value));
+    layoutRows();
+    // 숨기기/보이기 이벤트: 각 영역 요소에서 발생시키고, 핸들러가 받아 처리한다.
+    el.dispatchEvent(new CustomEvent(value ? 'section:hide' : 'section:show', { detail: { key, name, owner }, bubbles: true }));
+    dump();
+  }
+  for (const key of Object.keys(SECTIONS)) {
+    const el = $(SECTIONS[key][0]);
+    el.addEventListener('section:hide', e => { if (e.target === el) logEvent(`hide  ${e.detail.name}  (소유: ${e.detail.owner})`); });
+    el.addEventListener('section:show', e => { if (e.target === el) logEvent(`show  ${e.detail.name}  (소유: ${e.detail.owner})`); });
+  }
+  function updateSummaries() {
+    const v = view(); const ready = ['ready', 'depLoading', 'depNa'].includes(st.phase);
+    const qv = id => $(id).value.trim();
+    $('#sumQuery').textContent = [$('#qBranch').value, ($('#qModeFile').checked ? '파일명' : '메시지') + (kwModel().inc.length ? ` "${kwModel().inc.join(', ')}"` : ''), `${$('#qStart').value}~${$('#qEnd').value}`, $('#qMerge').checked ? 'Merge 제외' : 'Merge 포함', qv('#qAuthor') ? '작성자 필터' : '', qv('#qHash') ? '해시 필터' : '', msgKeywords().length ? `메시지 제외 ${msgKeywords().length}` : ''].filter(Boolean).join(' · ');
+    $('#sumCommits').textContent = `${st.commits.filter(c => c.on).length}개 선택됨`;
+    $('#sumDeploy').textContent = ready ? `Extract ${v.extractCount}개${v.extractHidden ? `(패턴 제외 ${v.extractHidden})` : ''} · 미선택 변경 파일 ${v.cand}개 · 누락된 의존성 ${v.missRemaining}개` : ({ empty: '선택 없음', stale: 'Preview 필요', loading: '계산 중', error: '계산 실패' }[st.phase] || '');
+  }
+
+  // 초기화
+  applyQSplit();
+  try { const m = localStorage.getItem('gde:exportMode'); if (m === 'direct' || m === 'sub') st.exportMode = m; } catch (e) {}
+  applyDefaultQuery();
+  $('#hVal').textContent = '520px'; setRows(45);
+  $('#stage').style.width = '1100px'; $('#wVal').textContent = '1100px';
+  setCols(50);
+  render();
+})();
+</script>
+</body>
+</html>
