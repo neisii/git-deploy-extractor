@@ -1,5 +1,7 @@
 # Git Deploy Extractor 리스크/오픈이슈 문서
 
+> **현행 기준: v0.6.0.** 리팩토링 계획·스펙은 [`docs/refactoring/REFACTORING_TASKS.md`](docs/refactoring/REFACTORING_TASKS.md)에 있으며, 구현·병합 전까지 이 문서가 현행이다.
+
 > Version: 0.1
 > Status: Draft
 > 기준 문서: DETAILED_DESIGN.md, UI_UX_SPEC.md
