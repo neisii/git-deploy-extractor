@@ -6,6 +6,7 @@ import type { FileListItem } from './deployFiles/FileListColumn'
 import { ManualAddPopup } from './deployFiles/ManualAddPopup'
 import { SplitPane } from './SplitPane'
 import { matchesAnyActiveExcludePattern } from '../lib/excludePatternMatch'
+import { visibleMissingDependencies } from '../lib/visibleMissingDependencies'
 
 // RISK_ISSUES.md §7.2 — 파일명(경로의 마지막 조각)에 대한 매칭. 좌우 두
 // 검색 필드(포함된 파일/누락된 의존성)가 동일 기준을 공유한다.
@@ -104,12 +105,16 @@ export function DeployFilesPanel(): React.JSX.Element {
     [headTreeFiles, includedSet]
   )
 
+  // RT-17(R4·R5) — 이미 Extract 목록(변경 파일·수동 추가)에 있는 경로는
+  // "누락된 의존성"에서 아예 제외한다(visibleMissingDependencies). 그대로
+  // 두면 수동으로 추가한 파일이 체크된 채로 오른쪽 패널에도 계속 남아
+  // 같은 파일이 두 곳에 중복 표시됐다.
   const missingItems = useMemo((): FileListItem[] => {
-    return missingDependencies
+    return visibleMissingDependencies(missingDependencies, includedSet)
       .filter((d) => matchesFileName(d.localPath, dependencySearchTerm))
       .map((d) => ({
         localPath: d.localPath,
-        checked: includedSet.has(d.localPath),
+        checked: false,
         extraLabel: d.kind === 'interface' ? '(인터페이스)' : '(구현체)'
       }))
   }, [missingDependencies, dependencySearchTerm, includedSet])

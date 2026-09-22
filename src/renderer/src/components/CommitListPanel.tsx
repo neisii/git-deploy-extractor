@@ -41,6 +41,8 @@ export function CommitListPanel(): React.JSX.Element {
   const loadNextPage = useAppStore((s) => s.loadNextPage)
   const commitListError = useAppStore((s) => s.commitListError)
   const runPreview = useAppStore((s) => s.runPreview)
+  const analyzing = useAppStore((s) => s.analyzing)
+  const dependencyAnalyzing = useAppStore((s) => s.dependencyAnalyzing)
 
   const allChecked = commits.length > 0 && commits.every((c) => selectedHashes.has(c.hash))
   const someChecked = commits.some((c) => selectedHashes.has(c.hash))
@@ -105,7 +107,15 @@ export function CommitListPanel(): React.JSX.Element {
             {selectedHashes.size}개 선택됨
           </span>
         </div>
-        <button disabled={selectedHashes.size === 0} onClick={() => void runPreview()}>
+        <button
+          disabled={selectedHashes.size === 0 || analyzing || dependencyAnalyzing}
+          title={
+            analyzing || dependencyAnalyzing
+              ? '분석 중입니다 — 완료 후 다시 실행할 수 있습니다'
+              : undefined
+          }
+          onClick={() => void runPreview()}
+        >
           Preview
         </button>
       </div>

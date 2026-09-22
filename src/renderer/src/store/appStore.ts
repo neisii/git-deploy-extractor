@@ -228,6 +228,17 @@ let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 // 유틸(createRequestGuard)을 쓴다.
 const commitQueryGuard = createRequestGuard()
 
+// RT-17(R4·R5) — 분석(Preview + 의존성 분석) 요청 순서 가드. commitQueryGuard
+// 와 같은 유틸을 쓴다. selectionMatches만으로는 "같은 선택으로 Preview를
+// 두 번 눌렀을 때 어느 응답이 최신인지"를 구분할 수 없어(선택이 동일하면
+// 둘 다 매치) 별도 세대 카운터가 필요하다. 선택이 바뀌는 지점
+// (toggleCommit/toggleAllCommits/setProfile/loadCommitsFirstPage)이
+// start()로 진행 중인 요청을 무효화하고 analyzing/dependencyAnalyzing을
+// 그 자리에서 바로 끈다 — runAnalysis의 stale 응답 처리는 플래그를
+// 건드리지 않는다(끄면 그사이 시작된 새 요청의 진행 표시를 지워버릴 수
+// 있음, "이전 요청이 끝나며 플래그를 끄는 일이 없어야 함").
+const analysisGuard = createRequestGuard()
+
 // 연속 클릭 가드(DR-016) — Electron 네이티브 확인창이 이미 떠 있는 동안
 // 다시 클릭해도 새 확인창을 띄우지 않는다. 모듈 레벨 변수로 두는 이유는
 // searchDebounceTimer와 같다: 이 값 자체는 UI에 표시되지 않는 순수 가드용
@@ -290,6 +301,11 @@ export const useAppStore = create<AppState>((set, get) => {
     const hashFilter = parseMultiValueFilter(hashFilterText)
     const authors = parseMultiValueFilter(authorFilter)
     const requestId = commitQueryGuard.start()
+    // RT-17(R4·R5): 첫 페이지를 다시 불러오면 진행 중이던 분석 요청은
+    // 전부 무효가 된다(Reload·검색 조건 변경 등 이 함수를 거치는 모든
+    // 경로 공통) — analyzing도 여기서 바로 끈다(dependencyAnalyzing은
+    // emptyDependencyState에 이미 포함됨).
+    analysisGuard.start()
 
     set({
       commits: [],
@@ -297,6 +313,7 @@ export const useAppStore = create<AppState>((set, get) => {
       commitPagination: { hasMore: false, loading: true },
       commitListError: null,
       invalidHashFilter: [],
+      analyzing: false,
       summary: null,
       deployFiles: [],
       deleteList: [],
@@ -346,7 +363,18 @@ export const useAppStore = create<AppState>((set, get) => {
   // 선택 중 일부가 조용히 누락되는 문제가 있었다 — Preview를 유일한
   // 트리거로 못박아 이 구간 자체를 없앴다).
   async function runAnalysis(): Promise<void> {
-    const { repository, selectedBranch, selectedHashes, selectedProfile } = get()
+    const {
+      repository,
+      selectedBranch,
+      selectedHashes,
+      selectedProfile,
+      analyzing,
+      dependencyAnalyzing
+    } = get()
+    // RT-17(R4·R5) 이중 방어 — Preview 버튼이 이미 이 조건으로 비활성화
+    // 되지만, runPreview()가 다른 경로로도 호출될 수 있어 여기서도 막는다.
+    if (analyzing || dependencyAnalyzing) return
+
     if (!repository.path || !selectedBranch || selectedHashes.size === 0) {
       set({
         summary: null,
@@ -367,6 +395,13 @@ export const useAppStore = create<AppState>((set, get) => {
       branch: selectedBranch,
       profileName: selectedProfile
     }
+    // RT-17(R4·R5) — 요청 번호 가드. selectionMatches만으로는 "같은
+    // 선택으로 Preview를 두 번 눌렀을 때 어느 응답이 최신인지"를 구분할
+    // 수 없다(선택이 같으면 둘 다 매치돼버림). isCurrent()가 두 조건을
+    // 모두 본다: 이 요청이 여전히 최신 세대인지 + 선택이 그때와 같은지.
+    const requestId = analysisGuard.start()
+    const isCurrent = (): boolean =>
+      analysisGuard.isCurrent(requestId) && selectionMatches(requestSelection, get())
 
     set({ analyzing: true, analysisError: null, ...emptyDependencyState })
     try {
@@ -377,15 +412,11 @@ export const useAppStore = create<AppState>((set, get) => {
         profileName: selectedProfile
       })
 
-      // §6.1 케이스 C(레이스 컨디션 가드): 계산이 끝난 시점에 선택이 요청
-      // 시점과 다르면(계산 중 커밋 체크박스를 바꿨다면) 이 결과를 적용하지
-      // 않는다 — 적용하면 analyzedSelection이 "방금 바뀐 선택"이 아니라
-      // "요청 시점의 옛 선택"을 가리키게 되어 isStale 판정이 틀릴 수 있다.
-      // 사용자가 다시 [Preview]를 눌러야 최신 선택 기준으로 재계산된다.
-      if (!selectionMatches(requestSelection, get())) {
-        set({ analyzing: false })
-        return
-      }
+      // stale이면 결과를 버린다. analyzing/dependencyAnalyzing은 건드리지
+      // 않는다 — 그사이 시작된 새 요청의 진행 표시일 수 있어서, 이 응답이
+      // 그걸 꺼버리면 안 된다(끄는 건 그 새 요청 자신의 몫이거나, 선택이
+      // 바뀐 지점에서 이미 끝났다).
+      if (!isCurrent()) return
 
       set({
         analyzing: false,
@@ -402,7 +433,7 @@ export const useAppStore = create<AppState>((set, get) => {
       // 실패해도 팝업 후보가 비어 보일 뿐 나머지 Preview 결과엔 영향 없다.
       try {
         const headTreeFiles = await window.api.git.listTrackedFiles(repository.path, selectedBranch)
-        if (selectionMatches(requestSelection, get())) {
+        if (isCurrent()) {
           set({ headTreeFiles })
         }
       } catch {
@@ -420,10 +451,7 @@ export const useAppStore = create<AppState>((set, get) => {
           includedLocalPaths: plan.files.map((f) => f.localPath),
           profileName: selectedProfile
         })
-        if (!selectionMatches(requestSelection, get())) {
-          set({ dependencyAnalyzing: false })
-          return
-        }
+        if (!isCurrent()) return
         set({
           dependencyAnalyzing: false,
           dependencyApplicable: depResult.applicable,
@@ -432,10 +460,7 @@ export const useAppStore = create<AppState>((set, get) => {
           dependencyParseWarnings: depResult.parseWarnings
         })
       } catch (error) {
-        if (!selectionMatches(requestSelection, get())) {
-          set({ dependencyAnalyzing: false })
-          return
-        }
+        if (!isCurrent()) return
         set({
           dependencyAnalyzing: false,
           dependencyApplicable: false,
@@ -443,10 +468,7 @@ export const useAppStore = create<AppState>((set, get) => {
         })
       }
     } catch (error) {
-      if (!selectionMatches(requestSelection, get())) {
-        set({ analyzing: false })
-        return
-      }
+      if (!isCurrent()) return
       set({
         analyzing: false,
         analysisError: error instanceof Error ? error.message : String(error)
@@ -753,7 +775,17 @@ export const useAppStore = create<AppState>((set, get) => {
       } else {
         next.add(hash)
       }
-      set({ selectedHashes: next, ...idleExportState })
+      // RT-17(R4·R5) — 선택이 바뀌면 진행 중이던 분석 요청은 그 자리에서
+      // 바로 무효화한다(analysisGuard.start()) 및 Preview 버튼을 즉시
+      // 다시 활성화한다(analyzing/dependencyAnalyzing을 여기서 끔 — 응답이
+      // 늦게 와도 runAnalysis의 stale 처리는 이 플래그를 건드리지 않는다).
+      analysisGuard.start()
+      set({
+        selectedHashes: next,
+        ...idleExportState,
+        analyzing: false,
+        dependencyAnalyzing: false
+      })
 
       if (next.size === 0) {
         set({
@@ -785,7 +817,14 @@ export const useAppStore = create<AppState>((set, get) => {
         if (allSelected) next.delete(c.hash)
         else next.add(c.hash)
       }
-      set({ selectedHashes: next, ...idleExportState })
+      // RT-17(R4·R5) — toggleCommit과 동일한 이유.
+      analysisGuard.start()
+      set({
+        selectedHashes: next,
+        ...idleExportState,
+        analyzing: false,
+        dependencyAnalyzing: false
+      })
 
       if (next.size === 0) {
         set({
@@ -965,8 +1004,11 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     setProfile: (profileName) => {
-      set({ selectedProfile: profileName })
-      // toggleCommit과 동일한 이유로 자동 재계산하지 않는다.
+      // RT-17(R4·R5) — toggleCommit과 동일한 이유(선택 구성 요소가
+      // 바뀌었으니 진행 중이던 분석은 무효).
+      analysisGuard.start()
+      set({ selectedProfile: profileName, analyzing: false, dependencyAnalyzing: false })
+      // 자동 재계산은 하지 않는다(사용자가 Preview를 다시 눌러야 함).
     },
 
     runPreview: async () => {
