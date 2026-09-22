@@ -49,8 +49,10 @@ export const useAppStore = create<AppState>()((...a) => ({
 }))
 
 // 아래는 전부 슬라이스 분리 전 appStore.ts가 갖고 있던 공개 API를 그대로
-// 유지하기 위한 재export다 — 실제 정의는 각 슬라이스로 옮겨졌다.
-export { parseMultiValueFilter } from './slices/commitsSlice'
+// 유지하기 위한 재export다 — 실제 정의는 각 슬라이스/서비스로 옮겨졌다.
+// parseMultiValueFilter는 RT-32(S2)에서 services/commitQueryParams.ts로
+// 더 옮겨졌다(listCommits 파라미터 조립과 나란히 두기 위함).
+export { parseMultiValueFilter } from '../services/commitQueryParams'
 export { selectionMatches, selectIsAnalysisStale } from './slices/analysisSlice'
 export type { AnalyzedSelection, SelectionSnapshot, DeleteEntry } from './slices/analysisSlice'
 export type { DeployFileEntry, DeployFilesFilter } from './slices/deployFilesSlice'

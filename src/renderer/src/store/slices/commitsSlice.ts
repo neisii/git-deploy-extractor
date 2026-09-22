@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { CommitEntry } from '../../../../shared/types'
 import { createRequestGuard } from '../../lib/requestGuard'
+import { buildListCommitsParams } from '../../services/commitQueryParams'
 import { api } from '../../api'
 import type { AppState } from '../appStore'
 import { analysisGuard, emptyDependencyState } from './analysisSlice'
@@ -8,18 +9,6 @@ import { emptyManualAddState } from './deployFilesSlice'
 import { idleExportState } from './exportSlice'
 
 const PAGE_SIZE = 100
-
-// REQ-023(해시 필터)에서 처음 도입, 2026-09-14부터 REQ-022 작성자
-// 필터도 재사용한다 — 쉼표/공백/줄바꿈 어느 것으로 구분해 붙여넣어도
-// 동일하게 처리한다. 빈 입력이면 빈 배열(호출부에서 undefined로 변환해
-// 해당 필터 없는 일반 조회로 취급).
-// export: RT-01(vitest 안전망)에서 직접 테스트하기 위함 — 동작 변경 없음.
-export function parseMultiValueFilter(text: string): string[] {
-  return text
-    .split(/[\s,]+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length > 0)
-}
 
 interface CommitPagination {
   hasMore: boolean
@@ -77,8 +66,6 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
       hashFilterText
     } = get()
     if (repository.status !== 'valid' || !selectedBranch || !repository.path) return
-    const hashFilter = parseMultiValueFilter(hashFilterText)
-    const authors = parseMultiValueFilter(authorFilter)
     const requestId = commitQueryGuard.start()
     // RT-17(R4·R5): 첫 페이지를 다시 불러오면 진행 중이던 분석 요청은
     // 전부 무효가 된다(Reload·검색 조건 변경 등 이 함수를 거치는 모든
@@ -104,20 +91,24 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
     })
 
     try {
-      const result = await api.git.listCommits({
-        repoPath: repository.path,
-        branch: selectedBranch,
-        startDate,
-        endDate,
-        maxCount,
-        skip: 0,
-        pageSize: PAGE_SIZE,
-        searchTerm: searchTerm || undefined,
-        searchMode,
-        authors: authors.length > 0 ? authors : undefined,
-        excludeMerges,
-        hashFilter: hashFilter.length > 0 ? hashFilter : undefined
-      })
+      const result = await api.git.listCommits(
+        buildListCommitsParams(
+          repository.path,
+          selectedBranch,
+          {
+            startDate,
+            endDate,
+            maxCount,
+            searchTerm,
+            searchMode,
+            authorFilter,
+            excludeMerges,
+            hashFilterText
+          },
+          0,
+          PAGE_SIZE
+        )
+      )
       // RT-11(R2): 이 조회가 시작된 뒤 더 최신 조회가 시작됐다면(검색
       // 조건을 빠르게 여러 번 바꾼 경우) 이 응답은 버린다 — 늦게 도착한
       // 이전 응답이 최신 결과를 덮어쓰는 걸 막는다.
@@ -153,8 +144,6 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
     } = get()
     if (!repository.path || !selectedBranch) return
     if (!commitPagination.hasMore || commitPagination.loading) return
-    const hashFilter = parseMultiValueFilter(hashFilterText)
-    const authors = parseMultiValueFilter(authorFilter)
     // RT-11(R2): 이 다음 페이지 요청이 속한 "세대"를 캡처해 둔다 —
     // 응답이 오기 전에 loadCommitsFirstPage가 새 조회를 시작하면(세대가
     // 증가하면) 이 요청은 무효가 된다. 호출 시점의 commits 스냅샷에
@@ -164,20 +153,24 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
 
     set({ commitPagination: { ...commitPagination, loading: true } })
     try {
-      const result = await api.git.listCommits({
-        repoPath: repository.path,
-        branch: selectedBranch,
-        startDate,
-        endDate,
-        maxCount,
-        skip: commits.length,
-        pageSize: PAGE_SIZE,
-        searchTerm: searchTerm || undefined,
-        searchMode,
-        authors: authors.length > 0 ? authors : undefined,
-        excludeMerges,
-        hashFilter: hashFilter.length > 0 ? hashFilter : undefined
-      })
+      const result = await api.git.listCommits(
+        buildListCommitsParams(
+          repository.path,
+          selectedBranch,
+          {
+            startDate,
+            endDate,
+            maxCount,
+            searchTerm,
+            searchMode,
+            authorFilter,
+            excludeMerges,
+            hashFilterText
+          },
+          commits.length,
+          PAGE_SIZE
+        )
+      )
       // 첫 페이지 재조회(Reload/검색 조건 변경/Branch 전환 등)가 이 요청
       // 도중에 시작됐다면, 이 응답을 초기화된 목록에 이어붙이면 안 된다
       // — 응답을 통째로 버린다(R2: "재조회 후 초기화된 목록이 되살아날

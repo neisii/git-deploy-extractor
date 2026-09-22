@@ -3,16 +3,21 @@ import type { CommitSearchMode } from '../../../../shared/types'
 import { getDefaultDateRange } from '../../../../shared/dateRange'
 import type { AppState } from '../appStore'
 
-const SEARCH_DEBOUNCE_MS = 300
-
-let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
-
 const defaultRange = getDefaultDateRange()
 
 // RT-31(S1) — appStore.ts에서 커밋 조회 조건(기간/검색어/작성자/해시 필터
-// 등) 상태·액션만 분리한 슬라이스. 조건이 바뀔 때마다 commitsSlice의
-// loadCommitsFirstPage를 get()으로 호출해 새로 조회한다 — 실제 커밋
-// 목록·페이지네이션 자체는 commitsSlice가 소유한다.
+// 등) 상태·액션만 분리한 슬라이스. 실제 커밋 목록·페이지네이션 자체는
+// commitsSlice가 소유한다.
+//
+// RT-32(S3) — 예전엔 setSearchTerm/setAuthorFilter/setHashFilterText/
+// setDateRange가 여기서 직접 디바운스(모듈 전역 타이머 하나를 넷이
+// 공유)한 뒤 loadCommitsFirstPage를 호출했다. 디바운스는 "언제 조회를
+// 트리거할지"를 결정하는 UI 타이밍 문제라 컴포넌트 쪽 관심사로 보고
+// BranchSearchBar.tsx의 useDebouncedAction 훅으로 옮겼다 — 이 네 setter는
+// 이제 상태만 즉시 반영하는 순수 setter이고, 실제 조회는 컴포넌트가
+// (디바운스했든 즉시든) triggerSearch를 호출해서 일으킨다. 나머지
+// (setSearchMode/setExcludeMerges/setMaxCount)는 원래도 디바운스 없이
+// 즉시 조회했으므로 그대로 둔다.
 export interface CommitQuerySlice {
   startDate: string
   endDate: string
@@ -52,74 +57,39 @@ export const createCommitQuerySlice: StateCreator<AppState, [], [], CommitQueryS
   invalidHashFilter: [],
 
   // §6.1: 검색어/기간/최대개수/검색모드 변경은 전부 선택을 유지한다
-  // (keepSelection=true) — "검색 조건을 바꿔가며 여러 번 찾아 누적
-  // 체크"하는 워크플로우가 이 기능의 핵심 목적이다.
-  setSearchTerm: (term) => {
-    set({ searchTerm: term })
-    if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-    searchDebounceTimer = setTimeout(() => {
-      void get().loadCommitsFirstPage(true)
-    }, SEARCH_DEBOUNCE_MS)
-  },
+  // (keepSelection=true, triggerSearch가 loadCommitsFirstPage(true)를
+  // 부른다) — "검색 조건을 바꿔가며 여러 번 찾아 누적 체크"하는
+  // 워크플로우가 이 기능의 핵심 목적이다. 조회 자체는 컴포넌트가
+  // (디바운스 또는 즉시) triggerSearch를 호출해서 일으킨다.
+  setSearchTerm: (term) => set({ searchTerm: term }),
 
   setSearchMode: async (mode) => {
     set({ searchMode: mode })
-    if (searchDebounceTimer) {
-      clearTimeout(searchDebounceTimer)
-      searchDebounceTimer = null
-    }
     await get().loadCommitsFirstPage(true)
   },
 
-  // REQ-022 — searchTerm과 동일한 디바운스 패턴(타이핑마다 재조회하지 않음).
-  setAuthorFilter: (author) => {
-    set({ authorFilter: author })
-    if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-    searchDebounceTimer = setTimeout(() => {
-      void get().loadCommitsFirstPage(true)
-    }, SEARCH_DEBOUNCE_MS)
-  },
+  setAuthorFilter: (author) => set({ authorFilter: author }),
 
   // REQ-022 — 체크박스 토글은 즉시 반영(디바운스 불필요, searchMode와 동일).
   setExcludeMerges: async (excludeMerges) => {
     set({ excludeMerges })
-    if (searchDebounceTimer) {
-      clearTimeout(searchDebounceTimer)
-      searchDebounceTimer = null
-    }
     await get().loadCommitsFirstPage(true)
   },
 
-  // REQ-023 — searchTerm/authorFilter와 동일한 디바운스 패턴. 파싱(공백/쉼표
-  // 분리)은 loadCommitsFirstPage/loadNextPage 호출 시점에 한다 — 여기선
-  // 원본 텍스트만 그대로 들고 있는다.
-  setHashFilterText: (text) => {
-    set({ hashFilterText: text })
-    if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-    searchDebounceTimer = setTimeout(() => {
-      void get().loadCommitsFirstPage(true)
-    }, SEARCH_DEBOUNCE_MS)
-  },
+  // REQ-023 — 파싱(공백/쉼표 분리)은 loadCommitsFirstPage/loadNextPage
+  // 호출 시점에 한다(services/commitQueryParams.ts) — 여기선 원본
+  // 텍스트만 그대로 들고 있는다.
+  setHashFilterText: (text) => set({ hashFilterText: text }),
 
   triggerSearch: async () => {
-    if (searchDebounceTimer) {
-      clearTimeout(searchDebounceTimer)
-      searchDebounceTimer = null
-    }
     await get().loadCommitsFirstPage(true)
   },
 
   // RT-16(U6) — 예전엔 디바운스 없이 값이 바뀔 때마다(네이티브 date
   // input이 년/월/일 하위 필드마다 change를 낼 수 있어 타이핑 중간값
-  // 포함) 즉시 재조회했다. searchTerm/authorFilter/hashFilterText와
-  // 같은 300ms 디바운스로 통일한다.
-  setDateRange: (startDate, endDate) => {
-    set({ startDate, endDate })
-    if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-    searchDebounceTimer = setTimeout(() => {
-      void get().loadCommitsFirstPage(true)
-    }, SEARCH_DEBOUNCE_MS)
-  },
+  // 포함) 즉시 재조회했다. 지금은 searchTerm/authorFilter/hashFilterText와
+  // 마찬가지로 컴포넌트의 useDebouncedAction이 조회 시점을 결정한다.
+  setDateRange: (startDate, endDate) => set({ startDate, endDate }),
 
   setMaxCount: async (maxCount) => {
     set({ maxCount })

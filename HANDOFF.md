@@ -310,16 +310,29 @@ v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에 분리�
     analysisSlice ← deployFilesSlice — 순환 없음). `useAppStore`·
     `selectIsAnalysisStale`·`DeployFilesFilter` 등 기존 공개 API는 전부
     `./appStore`에서 재export해 컴포넌트·테스트 import 경로는 무변경.
-    **다음 착수 지점은 RT-32**입니다(`services/commitQueryParams.ts`로
-    파라미터 조립 단일화, `useDebouncedAction` 훅으로 타이머 분리 — 지금
-    이 디바운스 타이머는 `commitQuerySlice.ts` 모듈 스코프에 있음).
-    RT-60(문서 정식 병합)은 P4까지 다 끝난 뒤 P5에서 한 번에 처리하는
-    게 이 계획의 순서라 아직 하지 마세요 — 지금까지는
-    `docs/refactoring/REFACTORING_TASKS.md` §6 표에 반영 대상만 계속
-    쌓아뒀습니다. P2/P3는 동작 불변이 원칙이라 RT-20~31 모두
-    `npm test`(108개)·`typecheck`·`lint`·`build`·`test:e2e`(7개) 전부
-    통과로 확인했고, 이후 RT도 시작 전에 같은 기준선이 통과하는지 먼저
-    확인하세요.
+    RT-32: `commitsSlice.ts`의 `loadCommitsFirstPage`/`loadNextPage`가
+    복붙하던 `listCommits` 파라미터 조립(필터 8개, `skip`만 다름)을
+    `services/commitQueryParams.ts`의 `buildListCommitsParams(...)`로
+    단일화(`parseMultiValueFilter`도 이 파일로 이동). 디바운스 타이머는
+    `renderer/src/lib/useDebouncedAction.ts` 훅으로 스토어 밖(컴포넌트
+    쪽)으로 옮겼다 — 예전엔 `commitQuerySlice.ts` 모듈 전역 타이머
+    하나를 검색어/작성자/해시/기간 네 필드가 공유해서 한 필드 편집이
+    다른 필드의 대기 중이던 디바운스까지 우연히 취소했는데, 이제
+    `BranchSearchBar.tsx`가 필드마다 독립된 훅 인스턴스를 갖는다.
+    **스토어의 네 setter(`setSearchTerm` 등)는 이제 상태만 즉시
+    반영하는 순수 setter다 — 조회를 트리거하려면 컴포넌트가 훅의
+    `run()`을 명시적으로 불러야 한다**(스토어 setter 호출만으로는 더
+    이상 자동 조회되지 않음, 새 필드를 추가할 때 잊지 마세요). 즉시
+    조회 지점(Search 버튼·Ctrl/Cmd+Enter 등)은 4개 훅의 `cancel()`을
+    전부 불러 예전 `clearTimeout` 효과를 재현한다. **다음 착수 지점은
+    RT-33**입니다(`services/exportPlan.ts` — Export 대상 파일 계산을
+    순수 함수로, RT-51 이후 기준). RT-60(문서 정식 병합)은 P4까지 다
+    끝난 뒤 P5에서 한 번에 처리하는 게 이 계획의 순서라 아직 하지
+    마세요 — 지금까지는 `docs/refactoring/REFACTORING_TASKS.md` §6
+    표에 반영 대상만 계속 쌓아뒀습니다. P2/P3는 동작 불변이 원칙이라
+    RT-20~32 모두 `npm test`(111개)·`typecheck`·`lint`·`build`·
+    `test:e2e`(7개) 전부 통과로 확인했고, 이후 RT도 시작 전에 같은
+    기준선이 통과하는지 먼저 확인하세요.
   - RT-01에서 만든 `renderer/src/lib/filePattern.ts`(§3.1 글롭/패키지
     매칭 로직)는 **아직 UI에 배선되지 않았습니다** — RT-46(P4)에서
     기존 `excludePatternMatch.ts`(REQ-019 구버전, `*` 단일 세그먼트

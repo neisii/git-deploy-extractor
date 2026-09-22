@@ -1,7 +1,9 @@
 // RT-11(R2)/RT-17(R4·R5) 공용 유틸 — "이 비동기 요청이 아직도 최신
 // 요청인가"를 판정하는 단조 증가 카운터. 값 자체는 UI에 표시되지 않는
-// 순수 가드용이라 store state로 만들 이유가 없다(searchDebounceTimer·
-// updateDialogOpen과 같은 모듈 레벨 변수 관례).
+// 순수 가드용이라 store state로 만들 이유가 없다(updateSlice.ts의
+// updateDialogOpen과 같은 모듈 레벨 변수 관례 — RT-32부터는 검색
+// 디바운스 타이머도 같은 이유로 컴포넌트 쪽 useDebouncedAction 훅
+// 안 ref로 옮겨졌다).
 //
 // 사용법: 요청을 시작할 때 start()로 새 id를 받아 클로저에 담아두고,
 // 응답·실패 처리에서 isCurrent(id)가 false면 그 결과를 버린다. 같은
