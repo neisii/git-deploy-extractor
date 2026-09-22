@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react'
 import { List } from 'react-window'
 import type { RowComponentProps } from 'react-window'
 import type { CommitEntry } from '../../../shared/types'
 import { useAppStore } from '../store/appStore'
+import { TriStateCheckbox } from './TriStateCheckbox'
 
 interface CommitRowProps {
   commits: CommitEntry[]
@@ -48,13 +48,6 @@ export function CommitListPanel(): React.JSX.Element {
   const someChecked = commits.some((c) => selectedHashes.has(c.hash))
   const indeterminate = someChecked && !allChecked
 
-  const headerCheckboxRef = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (headerCheckboxRef.current) {
-      headerCheckboxRef.current.indeterminate = indeterminate
-    }
-  }, [indeterminate])
-
   // RISK_ISSUES.md §6.1 케이스 D — 헤더(전체 선택 체크박스 + 선택 개수
   // 카운터)는 목록이 비어있거나(검색 결과 0건) 로딩/에러 상태여도 항상
   // 렌더링돼야 한다. 예전에는 이 상태들에서 패널 전체를 다른 텍스트로
@@ -90,10 +83,12 @@ export function CommitListPanel(): React.JSX.Element {
       <div className="commit-list-panel__header">
         <div className="commit-list-panel__header-left">
           <label>
-            <input
-              ref={headerCheckboxRef}
-              type="checkbox"
+            {/* RT-40(S5) — CommitListPanel·FileListColumn이 각자 들고
+                있던 checked+indeterminate ref/effect 코드를 공용
+                primitive로 합쳤다(TriStateCheckbox). */}
+            <TriStateCheckbox
               checked={allChecked}
+              indeterminate={indeterminate}
               disabled={commits.length === 0}
               onChange={() => toggleAllCommits()}
             />
