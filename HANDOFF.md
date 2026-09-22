@@ -9,11 +9,15 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
 이미 구현 완료 후 v0.6.0으로 릴리스된 상태입니다 — 처음부터 만드는 게 아니라
 기존 앱을 확장하는 작업입니다.
 
-**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0·P1 구현 완료 — 2026-09-22).**
+**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 구현 완료 — 2026-09-22).**
 v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에 분리해 뒀습니다. **다음
-착수 지점은 P2(RT-20~24, main/shared 구조 정리 — 동작 불변)입니다.** 이번 작업이 새
-기능이 아니라 이 리팩토링의 일부(`RT-xx`)라면 아래 "리팩토링 작업 규칙"을 따르고,
-새 기능이라면 그 계획과 겹치는지부터 확인하세요.
+착수 지점은 P4의 RT-40(primitives — Panel/PanelState/Chip/TriStateCheckbox/
+CollapsibleSection + RT-15의 Popup)입니다. P4부터는 실제 UI 변경 단계라 P0~P3의
+"동작 불변" 원칙이 더 이상 적용되지 않습니다** — §3 확정 UI 변경(U-1~U-22)·목업
+(`component-playground.html`)·§5.1 각 RT 상세 명세를 따르고, 관련 §7 미결 사항(M-x)이
+미확정이면 구현 전에 먼저 확인하세요. 이번 작업이 새 기능이 아니라 이 리팩토링의
+일부(`RT-xx`)라면 아래 "리팩토링 작업 규칙"을 따르고, 새 기능이라면 그 계획과
+겹치는지부터 확인하세요.
 
 - `docs/refactoring/REFACTORING_TASKS.md` — 단일 원천. §0 제품 사용 맥락(폐쇄망 배포
   흐름) · §0.1 용어 · §3 확정 UI 변경 U-1~U-22 · §4 코드 분석(버그 R1~R5 등) · §5 작업
@@ -333,15 +337,32 @@ v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에 분리�
     에서 이 함수 내부가 "Extract 목록 − 활성 패턴 해당 항목" 기준으로
     바뀔 예정이고, `exportSlice`의 호출부 계약은 유지되도록 설계해뒀다
     (§5.1 RT-51 명세 참고 — RT-51 작업 시 이 파일부터 열어보세요).
-    **다음 착수 지점은 RT-34**입니다(파생 훅: `useIncludedFilesView`·
-    `useMissingDependenciesView`·`useAnalysisPhase` — 이게 끝나면 P3
-    완료). RT-60(문서 정식 병합)은 P4까지 다 끝난 뒤 P5에서 한 번에
-    처리하는 게 이 계획의 순서라 아직 하지 마세요 — 지금까지는
-    `docs/refactoring/REFACTORING_TASKS.md` §6 표에 반영 대상만 계속
-    쌓아뒀습니다. P2/P3는 동작 불변이 원칙이라 RT-20~33 모두
-    `npm test`(115개)·`typecheck`·`lint`·`build`·`test:e2e`(7개) 전부
-    통과로 확인했고, 이후 RT도 시작 전에 같은 기준선이 통과하는지 먼저
-    확인하세요.
+    RT-34: `DeployFilesPanel.tsx`의 좌/우 파생 계산(상태 Filter→제외
+    패턴→파일명 검색, 전체 선택 판정, 카운터)을 `lib/useIncludedFilesView.ts`·
+    `lib/useMissingDependenciesView.ts`로, `DeploymentPreviewPanel.tsx`의
+    "empty/stale/loading/ready/error" 우선순위 판정을 `lib/useAnalysisPhase.ts`로
+    뺐다. 두 view 훅이 `includedSet`을 공유(누락된 의존성 중복 제거).
+    **`FooterActionBar`/`CommitListPanel`은 의도적으로 `useAnalysisPhase`로
+    옮기지 않았습니다** — 옮기면 그 두 컴포넌트가 지금 구독 안 하는
+    `summary`/`analysisError`까지 구독하게 돼 불필요한 재렌더링이
+    생기므로, 새로 이 훅을 쓸 컴포넌트를 고를 때도 "이 컴포넌트가 5개
+    필드 전부를 실제로 쓰는가"부터 확인하세요. `useMemo` 기반 훅이라
+    vitest로 직접 단위 테스트 못 합니다(jsdom 미도입, RT-01 방침 유지) —
+    동작 검증은 `test:e2e`로 대신했습니다.
+    **이걸로 P3(RT-30~34) 완료 — 다음 착수 지점은 P4의 RT-40**입니다
+    (primitives: `Panel`·`PanelState`·`Chip`·`TriStateCheckbox`·
+    `CollapsibleSection` + RT-15의 `Popup`). **P4부터는 P2/P3와 원칙이
+    다릅니다** — P4는 실제 UI 변경 단계라 "동작 불변" 검증(테스트
+    그린만으로 충분)이 더 이상 적용되지 않고, §3 확정 UI 변경(U-1~U-22)·
+    목업(`component-playground.html`)·§5.1 각 RT 상세 명세를 따라야
+    합니다. RT-40 착수 전에 §5.1 RT-40 명세와 관련 §7 미결 사항(M-x)이
+    확정됐는지 먼저 확인하세요 — 미확정이면 임의 판단하지 말고 먼저
+    물어보라는 게 이 리팩토링 전체의 규칙입니다. RT-60(문서 정식 병합)은
+    P4까지 다 끝난 뒤 P5에서 한 번에 처리하는 게 이 계획의 순서라 아직
+    하지 마세요 — 지금까지는 `docs/refactoring/REFACTORING_TASKS.md`
+    §6 표에 반영 대상만 계속 쌓아뒀습니다. P2/P3는 동작 불변이 원칙이라
+    RT-20~34 모두 `npm test`(119개)·`typecheck`·`lint`·`build`·
+    `test:e2e`(7개) 전부 통과로 확인했습니다.
   - RT-01에서 만든 `renderer/src/lib/filePattern.ts`(§3.1 글롭/패키지
     매칭 로직)는 **아직 UI에 배선되지 않았습니다** — RT-46(P4)에서
     기존 `excludePatternMatch.ts`(REQ-019 구버전, `*` 단일 세그먼트

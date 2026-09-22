@@ -1,13 +1,9 @@
-import { useAppStore, selectIsAnalysisStale } from '../store/appStore'
+import { useAnalysisPhase } from '../lib/useAnalysisPhase'
 
 export function DeploymentPreviewPanel(): React.JSX.Element {
-  const summary = useAppStore((s) => s.summary)
-  const analyzing = useAppStore((s) => s.analyzing)
-  const analysisError = useAppStore((s) => s.analysisError)
-  const selectedHashes = useAppStore((s) => s.selectedHashes)
-  const isStale = useAppStore(selectIsAnalysisStale)
+  const { phase, summary, analysisError } = useAnalysisPhase()
 
-  if (analysisError) {
+  if (phase === 'error') {
     return (
       <div className="panel deployment-preview-panel deployment-preview-panel--error">
         계산 실패: {analysisError}
@@ -15,15 +11,15 @@ export function DeploymentPreviewPanel(): React.JSX.Element {
     )
   }
 
-  if (selectedHashes.size === 0) {
+  if (phase === 'empty') {
     return <div className="panel deployment-preview-panel">커밋을 선택하세요</div>
   }
 
-  if (analyzing) {
+  if (phase === 'loading') {
     return <div className="panel deployment-preview-panel">계산 중...</div>
   }
 
-  if (isStale || !summary) {
+  if (phase === 'stale' || !summary) {
     return (
       <div className="panel deployment-preview-panel">
         선택이 변경되었습니다 — Preview를 눌러 계산하세요
