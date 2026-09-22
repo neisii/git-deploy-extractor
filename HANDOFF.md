@@ -9,13 +9,16 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
 이미 구현 완료 후 v0.6.0으로 릴리스된 상태입니다 — 처음부터 만드는 게 아니라
 기존 앱을 확장하는 작업입니다.
 
-**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 + P4의 RT-40 구현
+**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 + P4의 RT-40·41 구현
 완료 — 2026-09-22).** v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에
-분리해 뒀습니다. **다음 착수 지점은 P4의 RT-41(`FileListColumn` 해체 →
-`FilePane`+`FileList`+`FileRow`)입니다. P4는 실제 UI 변경 단계라 P0~P3의
-"동작 불변" 원칙이 더 이상 적용되지 않습니다** — §3 확정 UI 변경(U-1~U-22)·목업
-(`component-playground.html`)·§5.1 각 RT 상세 명세를 따르고, 관련 §7 미결 사항(M-x)이
-미확정이면 구현 전에 먼저 확인하세요. 이번 작업이 새 기능이 아니라 이 리팩토링의
+분리해 뒀습니다. **다음 착수 지점은 P4의 RT-42(`IncludedFilesPane` 조립,
+`DeployFilesWorkspace`에서 로직 제거)입니다 — §5.1이 RT-41/42를 한 절에 같이
+적어뒀으니 RT-41이 이미 어디까지 했는지(FileListColumn 해체만, 좌우 패널
+이름·Extract 모델 전환은 아직) 먼저 확인하고 시작하세요. P4는 실제 UI 변경
+단계라 P0~P3의 "동작 불변" 원칙이 더 이상 적용되지 않습니다** — §3 확정 UI
+변경(U-1~U-22)·목업(`component-playground.html`)·§5.1 각 RT 상세 명세를 따르고,
+관련 §7 미결 사항(M-x)이 미확정이면 구현 전에 먼저 확인하세요. 이번 작업이
+새 기능이 아니라 이 리팩토링의
 일부(`RT-xx`)라면 아래 "리팩토링 작업 규칙"을 따르고, 새 기능이라면 그 계획과
 겹치는지부터 확인하세요.
 
@@ -369,21 +372,46 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
     해체하며 남은 TriStateCheckbox 중복도 해소, RT-44: PreviewSummary가
     PanelState 사용, RT-46: FilterPatternBar가 Chip 사용, RT-47:
     CollapsibleSection을 실제 3곳에 적용 + section:hide/show 리스너).
-    **다음 착수 지점은 RT-41**입니다(`FileListColumn` 해체 →
-    `FilePane`+`FileList`+`FileRow`). **P4부터는 P2/P3와 원칙이
-    다릅니다** — 실제 UI 변경 단계라 "동작 불변" 검증(테스트 그린만으로
-    충분)이 더 이상 적용되지 않고, §3 확정 UI 변경(U-1~U-22)·목업
-    (`component-playground.html`)·§5.1 각 RT 상세 명세를 따라야 합니다.
-    각 RT 착수 전에 그 §5.1 명세와 관련 §7 미결 사항(M-x)이 확정됐는지
-    먼저 확인하세요 — 미확정이면 임의 판단하지 말고 먼저 물어보라는 게
-    이 리팩토링 전체의 규칙입니다. RT-60(문서 정식 병합)은 P4까지 다
-    끝난 뒤 P5에서 한 번에 처리하는 게 이 계획의 순서라 아직 하지
-    마세요 — 지금까지는 `docs/refactoring/REFACTORING_TASKS.md` §6
-    표에 반영 대상만 계속 쌓아뒀습니다. RT-40은 신규 컴포넌트 추가 +
-    `TriStateCheckbox` 배선 하나뿐이라 `npm test`(122개)·`typecheck`·
-    `lint`·`build`·`test:e2e`(7개) 전부 통과로 검증했지만, RT-41부터는
-    실제 화면이 바뀌므로 이 테스트들이 그린이어도 "동작 불변"을
-    의미하지 않습니다 — §5.1 수용 기준과 목업을 기준으로 판단하세요.
+    RT-41: `FileListColumn`(393줄) 해체. **§5.1이 RT-41/42를 한 절에
+    같이 적어둬서 범위가 헷갈리기 쉽습니다** — `IncludedFilesPane`/
+    `ExtractTargetsPane`/`DeployFilesWorkspace`(좌우 패널 이름을
+    "Extract" 모델로 바꾸는 것)는 RT-42 몫이고, RT-41 자체 체크리스트
+    한 줄에는 그 이름이 없어 이번엔 컴포넌트 분리(`FilePane`+`FileList`+
+    `FileRow`+`useMeasuredColumnWidth`)와 리사이즈 삭제·`PanelState`
+    적용만 했습니다 — 좌/우 패널은 여전히 "포함된 파일"/"누락된 의존성"
+    그대로입니다(RT-51 전까지 `deployFiles[].included`의 의미도 그대로).
+    새 컴포넌트: `components/FileRow.tsx`(`FileListItem` 타입 소유) ·
+    `components/deployFiles/FileList.tsx`(헤더 행은 이제
+    `TriStateCheckbox` 하나뿐, 툴팁 "화면에 보이는 변경 파일을 모두
+    Extract 대상으로 이동") · `components/FilePane.tsx`(RT-40의
+    `Panel`/`PanelHeader`/`PanelBody`로 지음 — **RT-40에서 안 쓰이던
+    4개 중 첫 배선**) · `lib/useMeasuredColumnWidth.ts`(헤더 라벨이
+    없어져 아이템 텍스트만 측정). **toolbar 조립(검색·제외 패턴·+파일
+    추가)은 지금 DeployFilesPanel.tsx가 직접 맡습니다** — `FilePane`은
+    "좌측 전용 prop 없음"이라 그 로직을 모르고, RT-42가 `IncludedFilesPane`
+    으로 옮길 예정입니다. **시각적 변화(임시)**: "+ 파일 추가" 버튼·
+    Filter 드롭다운이 title 줄이 아니라 toolbar 줄로 내려갔습니다
+    (RT-45가 title 줄 우측 배치를 확정할 예정 — 그 전까지 과도기
+    배치이니 "제자리가 아니다"라고 되돌리지 마세요). Playwright로 실제
+    렌더링을 스크린샷 확인(레이아웃 안 깨짐, `PanelState kind="na"`
+    문구 정확) — 커밋 대상 아닌 임시 파일이라 삭제했습니다.
+    **다음 착수 지점은 RT-42**입니다(`IncludedFilesPane` 조립,
+    `DeployFilesWorkspace`에서 로직 제거 — "누락된 의존성"을 RT-52의
+    팝업 HEAD 트리로 옮기는 것까지는 RT-52가 있어야 하니, RT-42 착수
+    시 그 경계를 다시 한번 명확히 하고 시작하세요). **P4부터는 P2/P3와
+    원칙이 다릅니다** — 실제 UI 변경 단계라 "동작 불변" 검증(테스트
+    그린만으로 충분)이 더 이상 적용되지 않고, §3 확정 UI 변경(U-1~U-22)·
+    목업(`component-playground.html`)·§5.1 각 RT 상세 명세를 따라야
+    합니다. 각 RT 착수 전에 그 §5.1 명세와 관련 §7 미결 사항(M-x)이
+    확정됐는지 먼저 확인하세요 — 미확정이면 임의 판단하지 말고 먼저
+    물어보라는 게 이 리팩토링 전체의 규칙입니다. RT-60(문서 정식 병합)은
+    P4까지 다 끝난 뒤 P5에서 한 번에 처리하는 게 이 계획의 순서라 아직
+    하지 마세요 — 지금까지는 `docs/refactoring/REFACTORING_TASKS.md`
+    §6 표에 반영 대상만 계속 쌓아뒀습니다. RT-40·41 둘 다 `npm test`
+    (122개)·`typecheck`·`lint`·`build`·`test:e2e`(7개) 전부 통과로
+    검증했지만, RT-41부터는 실제 화면이 바뀌므로 이 테스트들이
+    그린이어도 "동작 불변"을 의미하지 않습니다 — §5.1 수용 기준과
+    목업을 기준으로 판단하세요.
   - RT-01에서 만든 `renderer/src/lib/filePattern.ts`(§3.1 글롭/패키지
     매칭 로직)는 **아직 UI에 배선되지 않았습니다** — RT-46(P4)에서
     기존 `excludePatternMatch.ts`(REQ-019 구버전, `*` 단일 세그먼트

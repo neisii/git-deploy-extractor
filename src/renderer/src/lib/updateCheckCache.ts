@@ -11,7 +11,7 @@ export interface UpdateCheckCache {
 }
 
 // 컴포넌트 마운트 후 비동기로 채우면 첫 렌더링에 배지가 잠깐 "평시" 상태로
-// 반짝인다 — 스토어 생성 시점에 이 함수로 동기 초기화한다(columnWidths.ts와
+// 반짝인다 — 스토어 생성 시점에 이 함수로 동기 초기화한다(splitRatio.ts와
 // 동일 패턴, RISK_ISSUES.md 결정 이력 #35).
 export function loadUpdateCheckCache(): UpdateCheckCache | null {
   try {

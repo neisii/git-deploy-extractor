@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Popup } from '../Popup'
 
-// REQ-021/DR-019 — 배포 대상 파일 수동 추가 팝업. 좌우 두 FileListColumn을
+// REQ-021/DR-019 — 배포 대상 파일 수동 추가 팝업. 좌우 두 FilePane을
 // 감싸는 부모(.deploy-files-panel) 중앙에 고정 크기로 뜬다. 정정
 // (2026-08-22): 원래는 "포함된 파일" 목록을 가리지 않는 위치/높이를 실측해서
 // 띄우는 형태였으나, 목록을 가려도 상관없다는 결정으로 단순화됐다 — 대신

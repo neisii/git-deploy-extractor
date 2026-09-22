@@ -58,7 +58,7 @@ export const createUpdateSlice: StateCreator<AppState, [], [], UpdateSlice> = (s
   }
 
   return {
-    // 캐시가 있으면 그 값으로 동기 초기화한다(splitRatio/columnWidths와 동일
+    // 캐시가 있으면 그 값으로 동기 초기화한다(splitRatio.ts와 동일
     // 패턴) — 마운트 후 비동기로 채우면 첫 렌더링에 배지가 "평시"로 잠깐
     // 반짝이는 깜빡임이 생긴다(RISK_ISSUES.md 결정 이력 #35).
     updateInfo: initialUpdateCache

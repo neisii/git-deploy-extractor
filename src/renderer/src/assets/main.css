@@ -434,19 +434,10 @@ body,
   min-height: 0;
 }
 
-/* 좌(포함된 파일)/우(누락된 의존성) 각 컬럼의 세로 레이아웃 — 헤더/검색
-   행은 고정 높이, 목록만 남은 공간을 채우며 스크롤한다. */
-.file-list-column {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-}
-
-.file-list-column__title {
-  font-weight: 600;
-}
-
+/* RT-41 — 좌(포함된 파일)/우(누락된 의존성) 각 FilePane의 toolbar 슬롯에
+   들어가는 조각들(검색·제외 패턴). 예전엔 FileListColumn 전체를 감싸던
+   .file-list-column 래퍼가 있었지만, 그 역할은 이제 FilePane(.file-pane*)이
+   대신한다. */
 .file-list-column__search {
   margin-bottom: 6px;
 }
@@ -456,7 +447,7 @@ body,
 }
 
 /* REQ-019/DR-018 — 제외 패턴 입력 행(검색 아래) + 등록된 패턴 칩 목록.
-   "포함된 파일"에만 렌더링된다(FileListColumn이 관련 prop을 받았을 때만). */
+   "포함된 파일" 쪽 toolbar에만 렌더링된다(DeployFilesPanel.tsx가 조립). */
 .file-list-column__exclude-patterns {
   display: flex;
   flex-wrap: wrap;
@@ -519,13 +510,34 @@ body,
   opacity: 1;
 }
 
-.deploy-files-panel__header {
+/* RT-41 — FilePane(Panel/PanelHeader/PanelBody 위에 지은 슬롯 컴포넌트,
+   좌 "포함된 파일"/우 "누락된 의존성"이 공유). height:100% — SplitPane이
+   배정한 셀을 꽉 채운다(예전 .file-list-column과 같은 이유). */
+.file-pane {
+  height: 100%;
+}
+
+.file-pane__title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.file-pane__toolbar {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+}
+
+/* FileList가 자기 내부(.file-list__scroll)에서 가로+세로 스크롤을
+   전담하므로, PanelBody의 기본 padding/overflow는 여기서 끈다 — 두
+   스크롤 컨테이너가 겹치는 걸 막는다. */
+.file-pane__body {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* RT-15 — Popup 공용 primitive(백드롭 + 박스 + 헤더). ManualAddPopup을
@@ -618,13 +630,13 @@ body,
   cursor: pointer;
 }
 
-/* 가로+세로 스크롤을 이 컨테이너 하나가 전담한다. body에 overflow-y:auto를
-   따로 주면(overflow-x:visible과 섞임) CSS 스펙상 visible이 auto로
-   강제 승격되어 body가 자기 자신만의 별도 가로 스크롤 컨텍스트가
-   되어버리고, 그러면 헤더(.deploy-files-panel__columns)와 스크롤이
-   따로 놀게 된다 — 실측으로 확인한 문제라 단일 스크롤 컨테이너 +
-   sticky 헤더 방식으로 바꿨다. */
-.deploy-files-panel__scroll {
+/* RT-41 — 가로+세로 스크롤을 이 컨테이너 하나가 전담한다(FileList.tsx의
+   루트). body에 overflow-y:auto를 따로 주면(overflow-x:visible과 섞임)
+   CSS 스펙상 visible이 auto로 강제 승격되어 body가 자기 자신만의 별도
+   가로 스크롤 컨텍스트가 되어버리고, 그러면 헤더(.file-list__header-row)와
+   스크롤이 따로 놀게 된다 — 실측으로 확인한 문제라 단일 스크롤 컨테이너 +
+   sticky 헤더 방식으로 바꿨다(예전 이름 .deploy-files-panel__scroll). */
+.file-list__scroll {
   flex: 1;
   min-height: 100px;
   overflow: auto;
@@ -632,23 +644,24 @@ body,
   flex-direction: column;
 }
 
-.deploy-files-panel__body {
+.file-list__body {
   flex: 1;
   min-height: 0;
 }
 
-/* 리사이즈는 최소 폭만 지정한다 — 실제 폭은 (최소 폭, 내용 폭) 중 큰
-   값으로 정해져서 아무리 좁혀도 텍스트가 잘리거나 옆 칸을 침범하지 않고,
-   넘치는 만큼은 .deploy-files-panel__scroll의 가로 스크롤로 해결된다.
-   내용 폭(--local-col-natural)은 CSS의 max-content가 아니라 JS가 실측해서
-   주입한 값이다 — 헤더와 각 행이 서로 별도의 grid 컨테이너라 max-content를
-   쓰면 행마다 독립적으로 계산되어 헤더/목록 폭이 어긋나는 문제가 있었다.
-   Server Path 열은 RISK_ISSUES.md §7.1로 삭제되어 컬럼이 하나로 줄었다. */
+/* 실제 폭은 (최소 폭, 내용 폭) 중 큰 값으로 정해져서 아무리 좁아도
+   텍스트가 잘리거나 옆 칸을 침범하지 않고, 넘치는 만큼은
+   .file-list__scroll의 가로 스크롤로 해결된다. 내용 폭
+   (--local-col-natural)은 CSS의 max-content가 아니라 JS(useMeasuredColumnWidth)
+   가 실측해서 주입한 값이다 — 헤더와 각 행이 서로 별도의 grid
+   컨테이너라 max-content를 쓰면 행마다 독립적으로 계산되어 헤더/목록
+   폭이 어긋나는 문제가 있었다. RT-41 — 컬럼 리사이즈 삭제로
+   --local-col-min 변수는 없어지고 최소 폭 100px을 직접 고정했다
+   (사용자 결정 2026-09-21: 컬럼이 하나뿐이고 헤더 텍스트도 없어져
+   수동으로 넓힐 이유가 없어짐). */
 .deploy-files-grid-row {
   display: grid;
-  grid-template-columns:
-    24px
-    minmax(var(--local-col-min, 100px), var(--local-col-natural, 100px));
+  grid-template-columns: 24px minmax(100px, var(--local-col-natural, 100px));
   align-items: center;
   gap: 8px;
   padding: 0 4px;
@@ -667,37 +680,17 @@ body,
   pointer-events: none;
 }
 
-.deploy-files-panel__columns {
+/* RT-41 — "전체 선택" TriStateCheckbox만 남은 헤더 행(예전 이름
+   .deploy-files-panel__columns). 리사이즈 핸들·"Local Path" 헤더 글자는
+   삭제됐다(컬럼이 하나뿐이고 행에 파일명만 보여 의미가 없어짐). */
+.file-list__header-row {
   position: sticky;
   top: 0;
   z-index: 1;
   flex: 0 0 auto;
   background: var(--color-background-soft);
-  font-weight: 600;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--ev-c-gray-3);
-}
-
-.deploy-files-panel__col-header {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  padding-right: 10px;
-}
-
-.deploy-files-resize-handle {
-  position: absolute;
-  right: -4px;
-  top: 0;
-  bottom: 0;
-  width: 8px;
-  cursor: col-resize;
-  z-index: 1;
-}
-
-.deploy-files-resize-handle:hover,
-.deploy-files-resize-handle:active {
-  background: var(--ev-c-gray-1);
 }
 
 .deploy-files-row {

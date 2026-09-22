@@ -6,6 +6,7 @@ export interface TriStateCheckboxProps {
   onChange: () => void
   disabled?: boolean
   'aria-label'?: string
+  title?: string
 }
 
 // RT-40(S5) — CommitListPanel과 FileListColumn이 각자 들고 있던

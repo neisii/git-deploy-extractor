@@ -3,7 +3,7 @@ import type { DeployFileEntry, DeployFilesFilter } from '../store/appStore'
 import type { ExcludePatternEntry } from './excludePatterns'
 import { matchesAnyActiveExcludePattern } from './excludePatternMatch'
 import { matchesFileName } from './matchesFileName'
-import type { FileListItem } from '../components/deployFiles/FileListColumn'
+import type { FileListItem } from '../components/deployFiles/FileList'
 
 export interface IncludedFilesView {
   items: FileListItem[]

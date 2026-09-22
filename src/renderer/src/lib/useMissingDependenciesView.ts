@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import type { DependencyCandidate } from '../../../shared/types'
 import { visibleMissingDependencies } from './visibleMissingDependencies'
 import { matchesFileName } from './matchesFileName'
-import type { FileListItem } from '../components/deployFiles/FileListColumn'
+import type { FileListItem } from '../components/deployFiles/FileList'
 
 export interface MissingDependenciesView {
   items: FileListItem[]
