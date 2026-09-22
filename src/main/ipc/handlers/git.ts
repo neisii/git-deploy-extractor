@@ -23,8 +23,8 @@ export function registerGitHandlers(): void {
   })
 
   // REQ-021: 배포 대상 파일 수동 추가 팝업의 자동완성 후보 풀 — 선택된
-  // Branch의 HEAD 트리 전체 파일 목록. §7.2(dependencyAnalysis.ts)가 이미
-  // 쓰는 것과 같은 함수를 pathPrefix 없이 호출한다(Java 한정 아님).
+  // Branch의 HEAD 트리 전체 파일 목록. §7.2(dependencyAnalysis/projectIndex.ts)가
+  // 이미 쓰는 것과 같은 함수를 pathPrefix 없이 호출한다(Java 한정 아님).
   handle(IPC_CHANNELS['git:listTrackedFiles'], (_event, repoPath, branch) => {
     return listTrackedFiles(repoPath, branch)
   })
