@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import { loadExportParentDir, saveExportParentDir } from '../../lib/exportPath'
-import { matchesAnyActiveExcludePattern } from '../../lib/excludePatternMatch'
+import { buildExportFiles } from '../../services/exportPlan'
 import { api } from '../../api'
 import type { AppState } from '../appStore'
 import { selectIsAnalysisStale } from './analysisSlice'
@@ -68,14 +68,9 @@ export const createExportSlice: StateCreator<AppState, [], [], ExportSlice> = (s
         branch: selectedBranch,
         mappingProfileName: selectedProfile,
         selectedCommits: commits.filter((c) => selectedHashes.has(c.hash)),
-        // REQ-019/DR-018: included=true인 것 중, 활성 제외 패턴에 매치되지
-        // 않는 것만 Export 대상이다 — deployFiles[].included 자체는 건드리지
-        // 않고(파생 계산), 여기서 최종적으로 한 번 더 걸러낸다.
-        files: deployFiles
-          .filter(
-            (f) => f.included && !matchesAnyActiveExcludePattern(f.localPath, excludePatterns)
-          )
-          .map((f) => ({ localPath: f.localPath, serverPath: f.serverPath, status: f.status })),
+        // 어떤 파일이 실제 Export 대상인지의 판정 로직(REQ-019/DR-018)은
+        // services/exportPlan.ts에 있다(RT-33).
+        files: buildExportFiles(deployFiles, excludePatterns),
         deletedServerPaths: deleteList.map((d) => d.path),
         warnings,
         exportParentDir: exportParentDir ?? undefined

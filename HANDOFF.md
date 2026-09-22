@@ -324,15 +324,24 @@ v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에 분리�
     `run()`을 명시적으로 불러야 한다**(스토어 setter 호출만으로는 더
     이상 자동 조회되지 않음, 새 필드를 추가할 때 잊지 마세요). 즉시
     조회 지점(Search 버튼·Ctrl/Cmd+Enter 등)은 4개 훅의 `cancel()`을
-    전부 불러 예전 `clearTimeout` 효과를 재현한다. **다음 착수 지점은
-    RT-33**입니다(`services/exportPlan.ts` — Export 대상 파일 계산을
-    순수 함수로, RT-51 이후 기준). RT-60(문서 정식 병합)은 P4까지 다
-    끝난 뒤 P5에서 한 번에 처리하는 게 이 계획의 순서라 아직 하지
-    마세요 — 지금까지는 `docs/refactoring/REFACTORING_TASKS.md` §6
-    표에 반영 대상만 계속 쌓아뒀습니다. P2/P3는 동작 불변이 원칙이라
-    RT-20~32 모두 `npm test`(111개)·`typecheck`·`lint`·`build`·
-    `test:e2e`(7개) 전부 통과로 확인했고, 이후 RT도 시작 전에 같은
-    기준선이 통과하는지 먼저 확인하세요.
+    전부 불러 예전 `clearTimeout` 효과를 재현한다. RT-33:
+    `exportSlice.ts`의 `runExport` 안에 인라인이던 REQ-019/DR-018 판정
+    (`included=true` 중 활성 제외 패턴에 안 걸리는 것만 Export 대상)을
+    `services/exportPlan.ts`의 `buildExportFiles(deployFiles,
+    excludePatterns)`로 추출. **이번엔 현재(`included` 불리언 기준)
+    로직만 순수 함수로 뽑았을 뿐** — RT-51(P4, Extract 목록 모델 도입)
+    에서 이 함수 내부가 "Extract 목록 − 활성 패턴 해당 항목" 기준으로
+    바뀔 예정이고, `exportSlice`의 호출부 계약은 유지되도록 설계해뒀다
+    (§5.1 RT-51 명세 참고 — RT-51 작업 시 이 파일부터 열어보세요).
+    **다음 착수 지점은 RT-34**입니다(파생 훅: `useIncludedFilesView`·
+    `useMissingDependenciesView`·`useAnalysisPhase` — 이게 끝나면 P3
+    완료). RT-60(문서 정식 병합)은 P4까지 다 끝난 뒤 P5에서 한 번에
+    처리하는 게 이 계획의 순서라 아직 하지 마세요 — 지금까지는
+    `docs/refactoring/REFACTORING_TASKS.md` §6 표에 반영 대상만 계속
+    쌓아뒀습니다. P2/P3는 동작 불변이 원칙이라 RT-20~33 모두
+    `npm test`(115개)·`typecheck`·`lint`·`build`·`test:e2e`(7개) 전부
+    통과로 확인했고, 이후 RT도 시작 전에 같은 기준선이 통과하는지 먼저
+    확인하세요.
   - RT-01에서 만든 `renderer/src/lib/filePattern.ts`(§3.1 글롭/패키지
     매칭 로직)는 **아직 UI에 배선되지 않았습니다** — RT-46(P4)에서
     기존 `excludePatternMatch.ts`(REQ-019 구버전, `*` 단일 세그먼트
