@@ -1,5 +1,6 @@
 import { useAppStore } from '../store/appStore'
 import type { CommitSearchMode } from '../../../shared/types'
+import { MaxCountField } from './MaxCountField'
 
 export function BranchSearchBar(): React.JSX.Element {
   const branches = useAppStore((s) => s.branches)
@@ -89,13 +90,7 @@ export function BranchSearchBar(): React.JSX.Element {
 
         <label>
           최대
-          <input
-            type="number"
-            min={1}
-            value={maxCount}
-            onChange={(e) => void setMaxCount(Number(e.target.value) || 1)}
-          />
-          개
+          <MaxCountField value={maxCount} onCommit={(v) => void setMaxCount(v)} />개
         </label>
 
         <label>
