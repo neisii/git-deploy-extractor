@@ -1,6 +1,7 @@
 import { isAbsolute, join, relative } from 'node:path'
 
-// RT-12(R3) — main/ipc/handlers.ts로 들어오는 IPC 파라미터 중, 검증 없이
+// RT-12(R3) — main/ipc/handlers/*.ts(RT-21로 채널 그룹별 분리)로 들어오는
+// IPC 파라미터 중, 검증 없이
 // 파일시스템 쓰기/삭제나 git 조회에 쓰이면 위험한 것들을 한곳에서
 // 검증한다. 여기서 던지는 에러는 핸들러가 그대로 렌더러에 돌려준다
 // (IPC 호출은 실패하면 Promise가 reject되므로 별도 처리가 필요 없다).
