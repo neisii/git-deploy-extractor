@@ -86,16 +86,22 @@ function Row({
       style={{ ...style, width: 'max-content' }}
       className="deploy-files-grid-row deploy-files-row"
     >
-      <input type="checkbox" checked={item.checked} onChange={() => onToggle(item.localPath)} />
-      <span
-        className="deploy-files-row__local deploy-files-row__local--clickable"
-        onClick={() => onToggle(item.localPath)}
-      >
-        {item.localPath}
-        {item.extraLabel && (
-          <span className="deploy-files-row__extra-label"> {item.extraLabel}</span>
-        )}
-      </span>
+      {/* RT-16(U8) — 예전엔 파일명이 <span onClick>이라 마우스로만 토글
+          가능했다(키보드로는 24px짜리 체크박스만 Tab으로 닿을 수 있었음).
+          checkbox와 텍스트를 <label>로 감싸면 네이티브 브라우저 동작으로
+          텍스트를 클릭해도 토글되고(기존 동작 유지), 체크박스에 포커스를
+          두고 Space로도 토글된다(키보드 접근성). `display: contents`라
+          .deploy-files-grid-row의 2열 grid(체크박스|경로)에는 그대로
+          checkbox/span이 직접 배치된다(label 자체는 박스를 만들지 않음). */}
+      <label className="deploy-files-row__label">
+        <input type="checkbox" checked={item.checked} onChange={() => onToggle(item.localPath)} />
+        <span className="deploy-files-row__local deploy-files-row__local--clickable">
+          {item.localPath}
+          {item.extraLabel && (
+            <span className="deploy-files-row__extra-label"> {item.extraLabel}</span>
+          )}
+        </span>
+      </label>
     </div>
   )
 }
@@ -135,11 +141,15 @@ export function FileListColumn({
   onOpenManualAdd
 }: FileListColumnProps): React.JSX.Element {
   const headerCheckboxRef = useRef<HTMLInputElement>(null)
+  // RT-16(U8) — bulkAction은 DeployFilesPanel이 매 렌더 새로 만드는 객체
+  // 리터럴이라 [bulkAction] 의존성 배열은 참조가 매번 달라져 이 effect가
+  // 렌더마다(값이 그대로여도) 재실행됐다. 실제로 쓰는 primitive 값
+  // (indeterminate)만 의존성으로 좁힌다.
   useEffect(() => {
     if (headerCheckboxRef.current) {
       headerCheckboxRef.current.indeterminate = bulkAction.indeterminate
     }
-  }, [bulkAction])
+  }, [bulkAction.indeterminate])
 
   const [newPattern, setNewPattern] = useState('')
 

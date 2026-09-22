@@ -159,7 +159,7 @@ interface AppState {
   setExcludeMerges: (excludeMerges: boolean) => Promise<void>
   setHashFilterText: (text: string) => void
   triggerSearch: () => Promise<void>
-  setDateRange: (startDate: string, endDate: string) => Promise<void>
+  setDateRange: (startDate: string, endDate: string) => void
   setMaxCount: (maxCount: number) => Promise<void>
   loadNextPage: () => Promise<void>
   toggleCommit: (hash: string) => void
@@ -254,6 +254,16 @@ const emptyDependencyState = {
 const emptyManualAddState = {
   headTreeFiles: [] as string[],
   manuallyAddedPaths: [] as string[]
+}
+
+// RT-16(U7) — "Export 완료: <경로>" 성공 메시지가 exportStatus를 바꾸는
+// runExport 안에서만 리셋됐다. 커밋 선택이 바뀐 뒤에도 지난 Export의
+// 완료 메시지가 그대로 남아있어 "방금 선택한 걸 내보냈다"처럼 보이는
+// 문제(toggleCommit/toggleAllCommits에서 재사용).
+const idleExportState = {
+  exportStatus: 'idle' as const,
+  exportError: null,
+  lastExportDir: null
 }
 
 export const useAppStore = create<AppState>((set, get) => {
@@ -658,9 +668,16 @@ export const useAppStore = create<AppState>((set, get) => {
       await loadCommitsFirstPage(true)
     },
 
-    setDateRange: async (startDate, endDate) => {
+    // RT-16(U6) — 예전엔 디바운스 없이 값이 바뀔 때마다(네이티브 date
+    // input이 년/월/일 하위 필드마다 change를 낼 수 있어 타이핑 중간값
+    // 포함) 즉시 재조회했다. searchTerm/authorFilter/hashFilterText와
+    // 같은 300ms 디바운스로 통일한다.
+    setDateRange: (startDate, endDate) => {
       set({ startDate, endDate })
-      await loadCommitsFirstPage(true)
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+      searchDebounceTimer = setTimeout(() => {
+        void loadCommitsFirstPage(true)
+      }, SEARCH_DEBOUNCE_MS)
     },
 
     setMaxCount: async (maxCount) => {
@@ -736,7 +753,7 @@ export const useAppStore = create<AppState>((set, get) => {
       } else {
         next.add(hash)
       }
-      set({ selectedHashes: next })
+      set({ selectedHashes: next, ...idleExportState })
 
       if (next.size === 0) {
         set({
@@ -768,7 +785,7 @@ export const useAppStore = create<AppState>((set, get) => {
         if (allSelected) next.delete(c.hash)
         else next.add(c.hash)
       }
-      set({ selectedHashes: next })
+      set({ selectedHashes: next, ...idleExportState })
 
       if (next.size === 0) {
         set({
