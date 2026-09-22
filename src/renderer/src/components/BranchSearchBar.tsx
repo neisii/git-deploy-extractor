@@ -1,6 +1,20 @@
+import type { KeyboardEvent } from 'react'
 import { useAppStore } from '../store/appStore'
 import type { CommitSearchMode } from '../../../shared/types'
 import { MaxCountField } from './MaxCountField'
+
+// RT-14(U4) — textarea에서는 Enter가 줄바꿈이라 검색 트리거로 못 쓴다.
+// Ctrl/Cmd+Enter는 디바운스(300ms)를 기다리지 않고 즉시 조회한다(그 외
+// 입력은 기존 300ms 디바운스 자동 조회 그대로 유지).
+function handleImmediateSearchShortcut(
+  e: KeyboardEvent<HTMLTextAreaElement>,
+  triggerSearch: () => Promise<void>
+): void {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault()
+    void triggerSearch()
+  }
+}
 
 export function BranchSearchBar(): React.JSX.Element {
   const branches = useAppStore((s) => s.branches)
@@ -109,8 +123,10 @@ export function BranchSearchBar(): React.JSX.Element {
           <textarea
             rows={2}
             placeholder="쉼표/공백/줄바꿈 구분, 여러 명이면 하나라도 일치 시 포함"
+            title="Ctrl/Cmd+Enter로 즉시 조회"
             value={authorFilter}
             onChange={(e) => setAuthorFilter(e.target.value)}
+            onKeyDown={(e) => handleImmediateSearchShortcut(e, triggerSearch)}
           />
         </label>
 
@@ -119,8 +135,10 @@ export function BranchSearchBar(): React.JSX.Element {
           <textarea
             rows={2}
             placeholder="쉼표/공백/줄바꿈 구분, 입력 시 다른 조건 무시"
+            title="Ctrl/Cmd+Enter로 즉시 조회"
             value={hashFilterText}
             onChange={(e) => setHashFilterText(e.target.value)}
+            onKeyDown={(e) => handleImmediateSearchShortcut(e, triggerSearch)}
           />
           {invalidHashFilter.length > 0 && (
             <span className="status-text status-text--error" title={invalidHashFilter.join(', ')}>
