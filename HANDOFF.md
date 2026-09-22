@@ -247,9 +247,63 @@ v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에 분리�
     수정. `lib/requestGuard.ts`(`createRequestGuard`)가 커밋 조회·분석
     요청 가드 둘 다에 재사용되는 공용 유틸로 자리잡았습니다 — 이후
     Reload/새 비동기 조회 계열 버그를 고칠 때도 이 패턴부터 찾아보세요.
-  - **P2(RT-20~24, main/shared 구조 정리, 동작 불변)가 다음 착수
-    지점**입니다. P2/P3는 동작 불변이 원칙이라 시작 전에 `npm test`가
-    전부 통과하는 기준선을 먼저 확인하세요.
+  - **P2(RT-20~24, main/shared 구조 정리, 동작 불변) 완료**(2026-09-22).
+    RT-20: `shared/ipc-channels.ts` 신규(채널명·params/result 타입 단일
+    정의), `preload/index.ts`·`preload/index.d.ts`·main IPC 핸들러가 전부
+    이걸 통해서만 채널을 참조. RT-21: 당시 196줄이던 `main/ipc/handlers.ts`
+    단일 파일을 `main/ipc/handlers/{app,repository,git,mapping,analysis,
+    package,update}.ts`(채널명 접두사별)로 분리하고 `index.ts`가 등록
+    함수를 모아 호출(호출부 `main/index.ts`는 `./ipc/handlers`를 그대로
+    import — 디렉터리로 바뀐 걸 몰라도 됨), `main/ipc/dialogs.ts` 신설
+    (폴더 선택·확인창 공용 헬퍼로 복붙 4곳 제거), `getRemoteProjectName`
+    설명이 엉뚱하게 `listTrackedFiles` 위에 붙어 있던 주석 버그(S7)도
+    같이 고침. RT-22: 332줄이던 `main/analysis/dependencyAnalysis.ts`를
+    `dependencyAnalysis/{projectIndex,resolve,implementations,index}.ts`로
+    분리(호출부는 무변경). **이 알고리즘은 분할 전까지 자동 테스트가
+    전혀 없었다**(v0.3.0 때 Playwright 수동 확인이 유일한 기록) — 분할과
+    함께 `index.test.ts`(Spring Boot 모양 fixture 5개)를 신설해 분할
+    전후 동작이 같음을 직접 증명했다. 다음에 이 모듈을 또 건드릴 일이
+    있으면 이 테스트부터 확인하세요(회귀 안전망이 이제 이것뿐임). RT-23:
+    `main/mapping/types.ts`(shared/types 재export뿐이던 껍데기) 삭제,
+    `main/git/types.ts`는 진짜 main 전용 타입(`GitCommandResult`)만 남기고
+    재export 줄 제거. `shared/` vs `renderer/src/lib/` 배치 기준을 처음
+    문서화(IPC DTO/채널 → `shared/types.ts`·`shared/ipc-channels.ts`,
+    main+renderer 둘 다 쓰는 순수 함수 → `shared/`, 그 외 Renderer 전용 →
+    `renderer/src/lib/`) — 기존 배치가 이미 이 기준을 만족해 파일 이동은
+    없었음. **RT-24**: `git/*.ts` 전체를 감사해 옵션 인젝션 방지 규약을
+    통일 — pathspec(파일 경로)은 이미 전부 `--` 뒤였지만, revision(브랜치명·
+    커밋 해시)은 `--`를 못 쓰는데도(재해석되어 무시됨, RT-10 주석에
+    재현 확인돼 있음) 검증이 없던 자리가 있었다. `git/exec.ts`에
+    `assertSafeRevisionArg`(`-`로 시작하면 거부) 신설 후 5개 함수(`commits.ts`
+    listCommits의 branch, lsTree.ts, grep.ts, showFile.ts, `diff.ts`의
+    commitHash/branch)에 적용 — **`diff.ts`의 commitHash는 `analysis:preview`
+    IPC의 commitHashes를 형식 검증 없이 그대로 타는 R1과 같은 유형의 실제
+    구멍이었고, 이번에 새로 발견해 막았다**(diff.ts엔 테스트가 아예
+    없어서 `diff.test.ts` 신규). `grep.ts` 패턴 인자에도 `-e` 명시(실제
+    저장소로 전/후 동작 동일함과 인젝션 케이스 둘 다 재현 확인). 상세는
+    `docs/refactoring/REFACTORING_TASKS.md` §5 RT-20~24 항목.
+  - **P3(RT-30~34, 스토어 분해, 동작 불변) 진행 중** — RT-30 완료
+    (2026-09-22). `renderer/src/api/index.ts` 신규: `export const api`는
+    안정된 Proxy 객체 하나로 고정, 내부적으로 `resolveApi()`(기본은 실제
+    `window.api`)에 위임하며 실제 메서드 호출 시점에만 `window.api`를
+    읽는다(모듈 최상단에서 읽으면 `window`를 세팅하지 않는 순수 함수
+    테스트가 이 모듈을 import하는 순간 throw하기 때문). `setApiForTesting`/
+    `resetApiForTesting`을 테스트 전용으로 export. `appStore.ts`의
+    `window.api.*` 17곳을 전부 `api.*`로 교체(동작 무변경).
+    `analysisGuard.test.ts`·`commitQueryGuard.test.ts`가 쓰던
+    `vi.stubGlobal('window', {...})`(전역 자체를 통째로 바꿔치기)를
+    `setApiForTesting(...)`(이 모듈만 교체)로 교체 — 다음에 스토어
+    액션에서 새 IPC 호출을 추가할 때는 `window.api`가 아니라 이 `api`를
+    import해서 쓰세요(그래야 나중에 그 액션을 테스트할 때도 같은 방식으로
+    목킹 가능). **다음 착수 지점은 RT-31**입니다(스토어를 `repository`·
+    `commitQuery`·`commits`·`analysis`·`deployFiles`·`export`·`update`
+    slice로 분리). RT-60(문서 정식 병합)은 P4까지 다 끝난 뒤 P5에서 한
+    번에 처리하는 게 이 계획의 순서라 아직 하지 마세요 — 지금까지는
+    `docs/refactoring/REFACTORING_TASKS.md` §6 표에 반영 대상만 계속
+    쌓아뒀습니다. P2/P3는 동작 불변이 원칙이라 RT-20~30 모두
+    `npm test`(108개)·`typecheck`·`lint`·`build`·`test:e2e`(7개) 전부
+    통과로 확인했고, 이후 RT도 시작 전에 같은 기준선이 통과하는지 먼저
+    확인하세요.
   - RT-01에서 만든 `renderer/src/lib/filePattern.ts`(§3.1 글롭/패키지
     매칭 로직)는 **아직 UI에 배선되지 않았습니다** — RT-46(P4)에서
     기존 `excludePatternMatch.ts`(REQ-019 구버전, `*` 단일 세그먼트

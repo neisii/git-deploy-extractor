@@ -1,10 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from './appStore'
+import { setApiForTesting, resetApiForTesting } from '../api'
+import type { Api } from '../api'
 import type { CommitEntry, ListCommitsResult } from '../../../shared/types'
 
-// RT-11(R2) — 커밋 조회 요청 순서 가드. window.api.git.listCommits를
-// 직접 제어 가능한 Promise로 목킹해, 응답이 요청 순서와 다르게(늦게)
-// 도착하는 상황을 재현한다.
+// RT-11(R2) — 커밋 조회 요청 순서 가드. api.git.listCommits를 직접 제어
+// 가능한 Promise로 목킹해(RT-30, setApiForTesting), 응답이 요청 순서와
+// 다르게(늦게) 도착하는 상황을 재현한다.
 
 function makeCommit(hash: string): CommitEntry {
   return { hash, author: 'Tester', date: '2026-01-01T00:00:00+09:00', message: hash }
@@ -31,7 +33,7 @@ describe('커밋 조회 요청 순서 가드 (RT-11/R2)', () => {
   })
 
   afterEach(() => {
-    vi.unstubAllGlobals()
+    resetApiForTesting()
   })
 
   it('늦게 도착한 이전 첫 페이지 응답이 최신 결과를 덮어쓰지 않는다', async () => {
@@ -41,7 +43,7 @@ describe('커밋 조회 요청 순서 가드 (RT-11/R2)', () => {
       calls.push(d)
       return d.promise
     }
-    vi.stubGlobal('window', { api: { git: { listCommits } } })
+    setApiForTesting({ git: { listCommits } } as unknown as Api)
 
     const first = useAppStore.getState().triggerSearch()
     // 검색 조건을 바꿔 첫 조회가 끝나기 전에 두 번째 조회를 시작(레이스 재현).
@@ -70,7 +72,7 @@ describe('커밋 조회 요청 순서 가드 (RT-11/R2)', () => {
       calls.push(d)
       return d.promise
     }
-    vi.stubGlobal('window', { api: { git: { listCommits } } })
+    setApiForTesting({ git: { listCommits } } as unknown as Api)
 
     const nextPage = useAppStore.getState().loadNextPage()
     // 다음 페이지 응답이 오기 전에 재조회(Reload/검색 조건 변경 등)가 시작된다.

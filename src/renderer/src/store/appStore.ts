@@ -19,6 +19,7 @@ import { loadExcludePatterns, saveExcludePatterns } from '../lib/excludePatterns
 import type { ExcludePatternEntry } from '../lib/excludePatterns'
 import { matchesAnyActiveExcludePattern } from '../lib/excludePatternMatch'
 import { createRequestGuard } from '../lib/requestGuard'
+import { api } from '../api'
 
 const PAGE_SIZE = 100
 const SEARCH_DEBOUNCE_MS = 300
@@ -325,7 +326,7 @@ export const useAppStore = create<AppState>((set, get) => {
     })
 
     try {
-      const result = await window.api.git.listCommits({
+      const result = await api.git.listCommits({
         repoPath: repository.path,
         branch: selectedBranch,
         startDate,
@@ -405,7 +406,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     set({ analyzing: true, analysisError: null, ...emptyDependencyState })
     try {
-      const plan = await window.api.analysis.preview({
+      const plan = await api.analysis.preview({
         repoPath: repository.path,
         branch: selectedBranch,
         commitHashes: hashes,
@@ -432,7 +433,7 @@ export const useAppStore = create<AppState>((set, get) => {
       // 가져온다. 의존성 체이닝과 같은 성격의 best-effort 후속 단계 —
       // 실패해도 팝업 후보가 비어 보일 뿐 나머지 Preview 결과엔 영향 없다.
       try {
-        const headTreeFiles = await window.api.git.listTrackedFiles(repository.path, selectedBranch)
+        const headTreeFiles = await api.git.listTrackedFiles(repository.path, selectedBranch)
         if (isCurrent()) {
           set({ headTreeFiles })
         }
@@ -445,7 +446,7 @@ export const useAppStore = create<AppState>((set, get) => {
       // 유효하다 — 우측 패널에만 영향을 주는 best-effort 후속 단계다.
       set({ dependencyAnalyzing: true })
       try {
-        const depResult = await window.api.analysis.dependencies({
+        const depResult = await api.analysis.dependencies({
           repoPath: repository.path,
           branch: selectedBranch,
           includedLocalPaths: plan.files.map((f) => f.localPath),
@@ -484,7 +485,7 @@ export const useAppStore = create<AppState>((set, get) => {
     if (get().updateChecking) return
     set({ updateChecking: true })
     try {
-      const result = await window.api.update.check()
+      const result = await api.update.check()
       if (result.ok) {
         saveUpdateCheckCache({
           checkedAt: Date.now(),
@@ -555,7 +556,7 @@ export const useAppStore = create<AppState>((set, get) => {
     appVersion: '',
 
     initProfiles: async () => {
-      const profiles = await window.api.mapping.listProfiles()
+      const profiles = await api.mapping.listProfiles()
       set((state) => ({
         profiles,
         selectedProfile: profiles.includes(state.selectedProfile)
@@ -565,18 +566,18 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     browseExportParentDir: async () => {
-      const path = await window.api.package.browseExportDir()
+      const path = await api.package.browseExportDir()
       if (!path) return
       saveExportParentDir(path)
       set({ exportParentDir: path })
     },
 
     browseRepository: async () => {
-      const path = await window.api.repository.browse()
+      const path = await api.repository.browse()
       if (!path) return
 
       set({ repository: { path, status: 'validating' } })
-      const validation = await window.api.repository.validate(path)
+      const validation = await api.repository.validate(path)
       if (!validation.valid) {
         set({ repository: { path, status: 'invalid', error: validation.error } })
         return
@@ -588,8 +589,8 @@ export const useAppStore = create<AppState>((set, get) => {
       // getRemoteProjectName 자체가 null을 반환하므로 이 조회가 저장소
       // 전환 흐름을 막지 않는다.
       const [branches, remoteProjectName] = await Promise.all([
-        window.api.git.listBranches(path),
-        window.api.git.getRemoteProjectName(path)
+        api.git.listBranches(path),
+        api.git.getRemoteProjectName(path)
       ])
       const selectedBranch = pickDefaultBranch(branches)
       set({ branches, selectedBranch, remoteProjectName })
@@ -603,7 +604,7 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!repository.path) return
 
       set({ repository: { path: repository.path, status: 'validating' } })
-      const validation = await window.api.repository.validate(repository.path)
+      const validation = await api.repository.validate(repository.path)
       if (!validation.valid) {
         set({ repository: { path: repository.path, status: 'invalid', error: validation.error } })
         return
@@ -611,8 +612,8 @@ export const useAppStore = create<AppState>((set, get) => {
 
       set({ repository: { path: repository.path, status: 'valid' } })
       const [branches, remoteProjectName] = await Promise.all([
-        window.api.git.listBranches(repository.path),
-        window.api.git.getRemoteProjectName(repository.path)
+        api.git.listBranches(repository.path),
+        api.git.getRemoteProjectName(repository.path)
       ])
       const currentBranch = get().selectedBranch
       const selectedBranch =
@@ -735,7 +736,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
       set({ commitPagination: { ...commitPagination, loading: true } })
       try {
-        const result = await window.api.git.listCommits({
+        const result = await api.git.listCommits({
           repoPath: repository.path,
           branch: selectedBranch,
           startDate,
@@ -888,7 +889,7 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!repository.path || !selectedBranch) return
       if (deployFiles.some((f) => f.localPath === localPath)) return
 
-      const entry = await window.api.analysis.resolveManualFile({
+      const entry = await api.analysis.resolveManualFile({
         repoPath: repository.path,
         branch: selectedBranch,
         profileName: selectedProfile,
@@ -1034,7 +1035,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
       set({ exportStatus: 'exporting', exportError: null })
       try {
-        const result = await window.api.package.export({
+        const result = await api.package.export({
           repoPath: repository.path,
           branch: selectedBranch,
           mappingProfileName: selectedProfile,
@@ -1080,7 +1081,7 @@ export const useAppStore = create<AppState>((set, get) => {
     clickUpdateBadge: () => {
       if (!updateDialogOpen) {
         updateDialogOpen = true
-        void window.api.update.confirmAndOpen().finally(() => {
+        void api.update.confirmAndOpen().finally(() => {
           updateDialogOpen = false
         })
       }
@@ -1090,7 +1091,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     loadAppVersion: async () => {
-      const version = await window.api.app.getVersion()
+      const version = await api.app.getVersion()
       set({ appVersion: version })
     }
   }

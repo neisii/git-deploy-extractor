@@ -1,10 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from './appStore'
+import { setApiForTesting, resetApiForTesting } from '../api'
+import type { Api } from '../api'
 import type { DependencyAnalysisResult, DeployPlan } from '../../../shared/types'
 
 // RT-17(R4·R5) — 분석(Preview + 의존성 분석) 요청 경쟁 상태 방지.
-// window.api를 직접 제어 가능한 Promise로 목킹해 응답이 요청 순서와
-// 다르게(늦게) 도착하는 상황을 재현한다.
+// api를 직접 제어 가능한 Promise로 목킹해(RT-30, setApiForTesting) 응답이
+// 요청 순서와 다르게(늦게) 도착하는 상황을 재현한다.
 
 function makePlan(fileName: string): DeployPlan {
   return {
@@ -57,25 +59,23 @@ describe('분석 요청 경쟁 상태 방지 (RT-17/R4·R5)', () => {
   })
 
   afterEach(() => {
-    vi.unstubAllGlobals()
+    resetApiForTesting()
   })
 
   it('선택이 잠깐 바뀌었다 되돌아온 사이 두 번 Preview하면 먼저 시작한 요청의 늦은 응답이 무시된다', async () => {
     const previewCalls: Array<{ resolve: (r: DeployPlan) => void }> = []
-    vi.stubGlobal('window', {
-      api: {
-        analysis: {
-          preview: (): Promise<DeployPlan> => {
-            const d = deferred<DeployPlan>()
-            previewCalls.push(d)
-            return d.promise
-          },
-          dependencies: (): Promise<DependencyAnalysisResult> =>
-            Promise.resolve(inapplicableDependencyResult)
+    setApiForTesting({
+      analysis: {
+        preview: (): Promise<DeployPlan> => {
+          const d = deferred<DeployPlan>()
+          previewCalls.push(d)
+          return d.promise
         },
-        git: { listTrackedFiles: (): Promise<string[]> => Promise.resolve([]) }
-      }
-    })
+        dependencies: (): Promise<DependencyAnalysisResult> =>
+          Promise.resolve(inapplicableDependencyResult)
+      },
+      git: { listTrackedFiles: (): Promise<string[]> => Promise.resolve([]) }
+    } as unknown as Api)
 
     const first = useAppStore.getState().runPreview()
     expect(previewCalls).toHaveLength(1)
@@ -107,23 +107,21 @@ describe('분석 요청 경쟁 상태 방지 (RT-17/R4·R5)', () => {
   it('무효화된 이전 요청의 의존성 분석 완료가 최신 요청의 dependencyAnalyzing을 끄지 않는다', async () => {
     const previewCalls: Array<{ resolve: (r: DeployPlan) => void }> = []
     const dependencyCalls: Array<{ resolve: (r: DependencyAnalysisResult) => void }> = []
-    vi.stubGlobal('window', {
-      api: {
-        analysis: {
-          preview: (): Promise<DeployPlan> => {
-            const d = deferred<DeployPlan>()
-            previewCalls.push(d)
-            return d.promise
-          },
-          dependencies: (): Promise<DependencyAnalysisResult> => {
-            const d = deferred<DependencyAnalysisResult>()
-            dependencyCalls.push(d)
-            return d.promise
-          }
+    setApiForTesting({
+      analysis: {
+        preview: (): Promise<DeployPlan> => {
+          const d = deferred<DeployPlan>()
+          previewCalls.push(d)
+          return d.promise
         },
-        git: { listTrackedFiles: (): Promise<string[]> => Promise.resolve([]) }
-      }
-    })
+        dependencies: (): Promise<DependencyAnalysisResult> => {
+          const d = deferred<DependencyAnalysisResult>()
+          dependencyCalls.push(d)
+          return d.promise
+        }
+      },
+      git: { listTrackedFiles: (): Promise<string[]> => Promise.resolve([]) }
+    } as unknown as Api)
 
     useAppStore.getState().runPreview() // request1 — {a1}
     await flushUntil(() => previewCalls.length === 1)
@@ -162,24 +160,22 @@ describe('분석 요청 경쟁 상태 방지 (RT-17/R4·R5)', () => {
 
   it('첫 페이지 재조회(Reload 등) 도중 도착한 분석 응답이 초기화된 상태를 되살리지 못한다', async () => {
     const previewCalls: Array<{ resolve: (r: DeployPlan) => void }> = []
-    vi.stubGlobal('window', {
-      api: {
-        analysis: {
-          preview: (): Promise<DeployPlan> => {
-            const d = deferred<DeployPlan>()
-            previewCalls.push(d)
-            return d.promise
-          },
-          dependencies: (): Promise<DependencyAnalysisResult> =>
-            Promise.resolve(inapplicableDependencyResult)
+    setApiForTesting({
+      analysis: {
+        preview: (): Promise<DeployPlan> => {
+          const d = deferred<DeployPlan>()
+          previewCalls.push(d)
+          return d.promise
         },
-        git: {
-          listTrackedFiles: (): Promise<string[]> => Promise.resolve([]),
-          listCommits: (): Promise<{ commits: never[]; hasMore: boolean }> =>
-            Promise.resolve({ commits: [], hasMore: false })
-        }
+        dependencies: (): Promise<DependencyAnalysisResult> =>
+          Promise.resolve(inapplicableDependencyResult)
+      },
+      git: {
+        listTrackedFiles: (): Promise<string[]> => Promise.resolve([]),
+        listCommits: (): Promise<{ commits: never[]; hasMore: boolean }> =>
+          Promise.resolve({ commits: [], hasMore: false })
       }
-    })
+    } as unknown as Api)
     useAppStore.setState({ branches: ['main'] })
 
     useAppStore.getState().runPreview()
