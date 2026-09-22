@@ -282,8 +282,8 @@ v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에 분리�
     없어서 `diff.test.ts` 신규). `grep.ts` 패턴 인자에도 `-e` 명시(실제
     저장소로 전/후 동작 동일함과 인젝션 케이스 둘 다 재현 확인). 상세는
     `docs/refactoring/REFACTORING_TASKS.md` §5 RT-20~24 항목.
-  - **P3(RT-30~34, 스토어 분해, 동작 불변) 진행 중** — RT-30 완료
-    (2026-09-22). `renderer/src/api/index.ts` 신규: `export const api`는
+  - **P3(RT-30~34, 스토어 분해, 동작 불변) 진행 중** — RT-30·31 완료
+    (2026-09-22). RT-30: `renderer/src/api/index.ts` 신규: `export const api`는
     안정된 Proxy 객체 하나로 고정, 내부적으로 `resolveApi()`(기본은 실제
     `window.api`)에 위임하며 실제 메서드 호출 시점에만 `window.api`를
     읽는다(모듈 최상단에서 읽으면 `window`를 세팅하지 않는 순수 함수
@@ -295,12 +295,28 @@ v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에 분리�
     `setApiForTesting(...)`(이 모듈만 교체)로 교체 — 다음에 스토어
     액션에서 새 IPC 호출을 추가할 때는 `window.api`가 아니라 이 `api`를
     import해서 쓰세요(그래야 나중에 그 액션을 테스트할 때도 같은 방식으로
-    목킹 가능). **다음 착수 지점은 RT-31**입니다(스토어를 `repository`·
-    `commitQuery`·`commits`·`analysis`·`deployFiles`·`export`·`update`
-    slice로 분리). RT-60(문서 정식 병합)은 P4까지 다 끝난 뒤 P5에서 한
-    번에 처리하는 게 이 계획의 순서라 아직 하지 마세요 — 지금까지는
+    목킹 가능). RT-31: 1098줄이던 `appStore.ts`를 `store/slices/
+    {repository,commitQuery,commits,analysis,deployFiles,export,update}
+    Slice.ts` 7개로 분리, `appStore.ts`는 56줄짜리 조립 전용 루트로
+    축소(`AppState` = 7개 슬라이스 인터페이스 교집합). **슬라이스끼리
+    다른 슬라이스의 액션을 부를 때는 파일을 직접 import하지 않고 zustand
+    공유 `get()`으로만 부른다**(예: `get().loadCommitsFirstPage()`) —
+    이 패턴을 앞으로도 유지하세요, 안 그러면 슬라이스 파일 사이에 순환
+    import가 생깁니다. 리셋 상수(`emptyDependencyState`·
+    `emptyManualAddState`·`idleExportState`)와 `analysisGuard`처럼
+    "상태가 아니라 순수 값"인 것만 예외적으로 그 값을 정의한 슬라이스
+    파일에서 export해 다른 슬라이스가 직접 import한다(전부 한 방향:
+    commitsSlice ← analysisSlice/deployFilesSlice/exportSlice,
+    analysisSlice ← deployFilesSlice — 순환 없음). `useAppStore`·
+    `selectIsAnalysisStale`·`DeployFilesFilter` 등 기존 공개 API는 전부
+    `./appStore`에서 재export해 컴포넌트·테스트 import 경로는 무변경.
+    **다음 착수 지점은 RT-32**입니다(`services/commitQueryParams.ts`로
+    파라미터 조립 단일화, `useDebouncedAction` 훅으로 타이머 분리 — 지금
+    이 디바운스 타이머는 `commitQuerySlice.ts` 모듈 스코프에 있음).
+    RT-60(문서 정식 병합)은 P4까지 다 끝난 뒤 P5에서 한 번에 처리하는
+    게 이 계획의 순서라 아직 하지 마세요 — 지금까지는
     `docs/refactoring/REFACTORING_TASKS.md` §6 표에 반영 대상만 계속
-    쌓아뒀습니다. P2/P3는 동작 불변이 원칙이라 RT-20~30 모두
+    쌓아뒀습니다. P2/P3는 동작 불변이 원칙이라 RT-20~31 모두
     `npm test`(108개)·`typecheck`·`lint`·`build`·`test:e2e`(7개) 전부
     통과로 확인했고, 이후 RT도 시작 전에 같은 기준선이 통과하는지 먼저
     확인하세요.
