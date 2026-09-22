@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import type { MappingProfile } from './types'
+import type { MappingProfile } from '../../shared/types'
 import { validateMappingProfile } from './resolveServerPath'
 
 const JSON_EXT = '.json'

@@ -1,4 +1,4 @@
-import type { MappingProfile } from './types'
+import type { MappingProfile } from '../../shared/types'
 
 // Spring 표준 구조 접두사 (DR-011, DR-012) — 사용자 설정이 아니라 하드 규칙이며,
 // 이 접두사에 해당하면 Mapping Profile을 아예 조회하지 않는다.

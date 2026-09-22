@@ -7,7 +7,7 @@ import { listBranches, pickDefaultBranch } from '../git/repository'
 import { listCommits, getDefaultDateRange } from '../git/commits'
 import { computeDeployPlan } from '../analysis/computeDeployPlan'
 import { buildPackage } from './buildPackage'
-import type { MappingProfile } from '../mapping/types'
+import type { MappingProfile } from '../../shared/types'
 import { cleanupRepo, commitAll, initRepo, writeFixtureFile } from '../testSupport/gitFixture'
 
 // scripts/verify-phase3.ts (a)~(d)의 이식 — Package Builder.

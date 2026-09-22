@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveServerPath, validateMappingProfile } from './resolveServerPath'
-import type { MappingProfile } from './types'
+import type { MappingProfile } from '../../shared/types'
 
 // scripts/verify-phase2.ts 케이스 5의 이식 — Mapping Profile override
 // (REQ-008, DR-010~012).

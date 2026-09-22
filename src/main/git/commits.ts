@@ -1,7 +1,6 @@
 import { runGit } from './exec'
 import { listTrackedFiles } from './lsTree'
-import type { CommitEntry } from './types'
-import type { ListCommitsParams, ListCommitsResult } from '../../shared/types'
+import type { CommitEntry, ListCommitsParams, ListCommitsResult } from '../../shared/types'
 import { getDefaultDateRange } from '../../shared/dateRange'
 
 export type { ListCommitsParams, ListCommitsResult }
