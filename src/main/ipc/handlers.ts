@@ -37,6 +37,12 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('repository:browse', async () => {
+    // RT-02(E2E 테스트 전용 우회) — Playwright는 OS 네이티브 폴더
+    // 다이얼로그를 열 수 없다. 이 환경변수가 있을 때만 다이얼로그 없이
+    // 바로 반환하고, 설정하지 않으면(일반 실행) 원래 동작 그대로다.
+    if (process.env.GDE_E2E_REPO_PATH) {
+      return process.env.GDE_E2E_REPO_PATH
+    }
     const window = BrowserWindow.getFocusedWindow()
     const result = window
       ? await dialog.showOpenDialog(window, { properties: ['openDirectory'] })

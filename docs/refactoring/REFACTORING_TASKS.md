@@ -408,7 +408,7 @@ D1 AppShell                         레이아웃만
 - [x] **RT-00** ~~문서 변경 5개 파일 먼저 커밋~~ → **변경**: 5개 파일의 미커밋 수정(REQ-026 등)을 `git checkout`으로 되돌림(v0.6.0 기준선 유지). 대체 설계는 이 문서(U-계열)에만 기록 · `.DETAILED_DESIGN.md.swp`는 커밋 제외
 - [x] **RT-00b** 본 문서·목업(`docs/refactoring/`)과 기존 5개 문서 안내 문구를 먼저 커밋 (P0 시작 전, 동작 변경 없음) — 커밋 `7b0a4cb`·`d52a578`(체크박스 갱신 누락, 2026-09-22 정정)
 - [x] **RT-01** vitest 도입, 순수 함수부터 테스트: 글롭 변환·`interpret`(종류 파생)·`matchPattern`·`hiddenByPatterns`·`parseMultiValueFilter`·`selectionMatches`. **§3.1의 19개 케이스를 이식** — `src/renderer/src/lib/filePattern.ts`(신규, component-playground.html의 globToRe/interpret/matchPattern/hiddenByPatterns를 이식, 아직 어디서도 import 안 함 — 배선은 RT-46)·`appStore.ts`의 `parseMultiValueFilter`/`selectionMatches`는 export만 추가(타입은 `SelectionSnapshot`으로 최소화, 동작 불변). 테스트 36개 전부 통과(`npm test`)
-- [ ] **RT-02** Playwright(또는 Electron 테스트 러너) 핵심 시나리오 3개: ① 커밋 검색→선택→Preview→Export ② 파일 패턴 추가/토글/삭제 ③ 파일 수동 추가·팝업
+- [x] **RT-02 (부분)** Playwright(`_electron`) 도입, 시나리오 ①·③ 완료: ① 커밋 선택→Preview→Export(내보낸 파일까지 검증) ③ 파일 수동 추가 팝업(검색→추가→칩→포함된 파일 반영). **②(파일 패턴 추가/토글/삭제)는 보류** — 지금 UI는 RT-46에서 §3.1 규칙으로 교체될 예정인 REQ-019 구버전(`excludePatternMatch.ts`, `*` 단일 세그먼트 한정)이라 RT-46 완료 후 새 UI 기준으로 작성하기로 사용자와 합의(2026-09-22). `e2e/`(fixture·launchApp 헬퍼 포함) 신규, `playwright.config.ts` 신규, `npm run test:e2e`. `main/ipc/handlers.ts`의 `repository:browse`에 `GDE_E2E_REPO_PATH` 환경변수 우회 추가(설정 안 하면 기존 동작 그대로 — OS 네이티브 다이얼로그를 Playwright가 조작할 수 없어서 필요)
 - [ ] **RT-03** CI에 `typecheck`·`lint`·`test`를 push/PR 트리거로 추가(`release.yml`과 분리된 워크플로우)
 - [ ] **RT-04** `scripts/verify-phase*.ts`를 테스트로 승격하거나 명확히 폐기 결정
 
