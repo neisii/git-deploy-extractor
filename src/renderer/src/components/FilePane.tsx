@@ -8,7 +8,7 @@ export interface FilePaneProps {
 }
 
 // RT-41 — RT-40의 Panel/PanelHeader/PanelBody 위에 지은 슬롯 컴포넌트.
-// "좌측 전용 prop 없음"(§5.1 RT-41/42 명세) — excludePatterns나
+// "좌측 전용 prop 없음"(§5.1 RT-41/42 명세) — filePatterns나
 // onOpenManualAdd 같은 도메인 지식은 이 컴포넌트가 모른다. 호출부
 // (지금은 DeployFilesPanel.tsx, RT-42 이후 IncludedFilesPane 등)가
 // toolbar/body에 원하는 내용을 그대로 조립해서 넘긴다.

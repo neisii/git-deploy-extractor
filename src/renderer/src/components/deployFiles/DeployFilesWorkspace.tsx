@@ -13,8 +13,8 @@ export interface DeployFilesWorkspaceProps {
 // 260px, 드래그 리사이즈, 비율 localStorage 영속) — DeployFilesPanel.tsx가
 // 갖고 있던 좌우 조립 로직이 전부 이 두 Pane으로 옮겨가서, 여기 남는 건
 // 순수 레이아웃 조립뿐이다. onOpenManualAdd 하나만 그대로 통과시킨다 —
-// ManualAddPopup 자체는 두 Pane을 감싸는 부모(DeployFilesPanel의
-// .deploy-files-panel) 중앙에 떠야 해서 이 워크스페이스 밖에서 렌더링된다.
+// RT-43부터 실제 팝업은 WorkArea가 소유한 PopupHost가 렌더링한다(이
+// 워크스페이스도, 그 부모인 DeployFilesPanel도 팝업 자체를 그리지 않는다).
 export function DeployFilesWorkspace({
   onOpenManualAdd
 }: DeployFilesWorkspaceProps): React.JSX.Element {

@@ -67,6 +67,19 @@ export function matchPattern(pattern: string, localPath: string): boolean {
   return globToRegExp(interpreted.glob).test(target)
 }
 
+// RT-46 — 한 번에 여러 패턴 입력: 쉼표·줄바꿈을 모두 구분자로 취급하고
+// 앞뒤 공백 제거·빈 항목 무시·같은 입력 안 중복은 한 번만 남긴다.
+export function parsePatternList(raw: string): string[] {
+  return Array.from(
+    new Set(
+      raw
+        .split(/[,\n]+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+    )
+  )
+}
+
 // 제외가 항상 우선. 활성 포함 패턴이 하나라도 있으면 그중 하나 이상에
 // 매치되는 파일만 남는다(활성 포함 패턴이 없으면 포함 조건 없이 전부 통과).
 export function hiddenByPatterns(localPath: string, patterns: FilePattern[]): boolean {

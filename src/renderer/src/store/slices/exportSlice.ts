@@ -52,7 +52,7 @@ export const createExportSlice: StateCreator<AppState, [], [], ExportSlice> = (s
       commits,
       selectedHashes,
       deployFiles,
-      excludePatterns,
+      filePatterns,
       deleteList,
       warnings,
       exportParentDir
@@ -70,7 +70,7 @@ export const createExportSlice: StateCreator<AppState, [], [], ExportSlice> = (s
         selectedCommits: commits.filter((c) => selectedHashes.has(c.hash)),
         // 어떤 파일이 실제 Export 대상인지의 판정 로직(REQ-019/DR-018)은
         // services/exportPlan.ts에 있다(RT-33).
-        files: buildExportFiles(deployFiles, excludePatterns),
+        files: buildExportFiles(deployFiles, filePatterns),
         deletedServerPaths: deleteList.map((d) => d.path),
         warnings,
         exportParentDir: exportParentDir ?? undefined

@@ -21,7 +21,7 @@ describe('buildExportFiles', () => {
   it('included=true라도 활성 제외 패턴에 매치되면 제외한다', () => {
     const result = buildExportFiles(
       [file({ localPath: 'a.txt' }), file({ localPath: 'b.log' })],
-      [{ pattern: '*.log', enabled: true }]
+      [{ pattern: '*.log', mode: 'exclude', enabled: true }]
     )
     expect(result.map((f) => f.localPath)).toEqual(['a.txt'])
   })
@@ -29,7 +29,7 @@ describe('buildExportFiles', () => {
   it('비활성 제외 패턴은 적용하지 않는다', () => {
     const result = buildExportFiles(
       [file({ localPath: 'b.log' })],
-      [{ pattern: '*.log', enabled: false }]
+      [{ pattern: '*.log', mode: 'exclude', enabled: false }]
     )
     expect(result.map((f) => f.localPath)).toEqual(['b.log'])
   })

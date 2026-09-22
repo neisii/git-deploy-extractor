@@ -232,6 +232,20 @@ body,
   border: 0;
 }
 
+/* RT-43(§2.1·§5.1) — openPopup의 유일한 앵커(position:relative) + Preview
+   요약과 DeployFilesWorkspace의 공통 부모(WorkArea). app-shell의 flex
+   column 안에서 vertical-main-split이 쓰던 flex:1/min-height:0을 이제
+   이 컴포넌트가 대신 갖고, vertical-main-split은 그 안에서 남은 공간을
+   그대로 이어받는다(자신도 flex:1/min-height:0이라 한 겹 더 감싸도
+   동작은 그대로). */
+.work-area {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 /* MainGrid(커밋 목록↔분석 요약)와 DeployFilesPanel(포함된 파일↔누락된
    의존성) 둘 다, 이제 그 위를 감싸는 세로 SplitPane(.vertical-main-split)의
    grid row 안에 놓인다 — 그래서 자기 자신의 flex-basis/min-height를
@@ -411,21 +425,16 @@ body,
 
 /* 이제 이 패널은 세로 SplitPane(.vertical-main-split)의 grid cell(.split-pane__end)
    안에 놓인다 — flex-basis/min-height는 그 SplitPane의 minEndPx가 담당하고,
-   여기서는 그 cell을 꽉 채우면서(height:100%) 제목/경고배너/내부 분할을
-   세로로 쌓는 역할만 한다. */
+   여기서는 그 cell을 꽉 채우면서(height:100%) 내부 분할을 세로로 쌓는
+   역할만 한다. RT-43부터 팝업 앵커(position:relative)는 이 컴포넌트가
+   아니라 그 조상인 .work-area가 가진다(제목·경고 배너도 RT-44에서
+   PreviewSummary/ManualAddPopup으로 옮겨져 이 컴포넌트에는 더 이상
+   없음). */
 .deploy-files-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  /* REQ-021/DR-019 — 수동 추가 팝업(.popup-backdrop, RT-15)이 좌우 두 컬럼을
-     감싸는 이 영역 중앙에 뜨도록 하는 위치 기준점. */
-  position: relative;
-}
-
-.deploy-files-panel__title {
-  font-weight: 600;
-  margin-bottom: 8px;
 }
 
 /* §7.2 — 좌우 분할(SplitPane)이 패널의 남은 세로 공간을 전부 채운다. */
@@ -446,68 +455,63 @@ body,
   flex: 1;
 }
 
-/* REQ-019/DR-018 — 제외 패턴 입력 행(검색 아래) + 등록된 패턴 칩 목록.
-   "포함된 파일" 쪽 toolbar에만 렌더링된다(DeployFilesPanel.tsx가 조립). */
-.file-list-column__exclude-patterns {
+/* RT-46(§3.1·§5.1) — 파일 패턴(제외/포함) 입력 줄. "포함된 파일" 쪽
+   toolbar에만 렌더링된다(IncludedFilesPane.tsx가 조립). 예전
+   .file-list-column__exclude-patterns/.exclude-pattern-chip*(제외 전용,
+   REQ-019)를 대체 — 등록된 패턴 자체는 이제 이 바가 아니라 'patterns'
+   팝업(FilterPatternsPopup)의 Chip 목록에 있다. */
+.filter-pattern-bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.file-list-column__exclude-pattern-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-direction: column;
+  gap: 2px;
   width: 100%;
 }
 
-/* REQ-024 — 토글용 버튼(패턴 텍스트)과 삭제용 버튼(×) 두 개를 나란히
-   담는 래퍼로 바뀌었다(button 안에 button을 중첩할 수 없어 칩 자체는
-   더 이상 button이 아니다). 테두리/배경/모양은 이 래퍼가 갖고, 안쪽 두
-   button은 그 모양을 상속만 받도록 투명하게 만든다. */
-.exclude-pattern-chip {
-  display: inline-flex;
+.filter-pattern-bar__row {
+  display: flex;
   align-items: center;
-  border: 1px solid var(--ev-c-gray-3);
-  border-radius: 999px;
-  padding: 2px 4px 2px 8px;
-  background: transparent;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-pattern-bar__row input {
+  flex: 1;
+  min-width: 160px;
+}
+
+/* 입력창 바로 아래 겹쳐 뜨는 해석 미리보기 — 레이아웃(아래 목록 높이)에
+   영향을 주지 않도록 입력에 포커스가 있고 값이 있을 때만 보인다. */
+.filter-pattern-bar__overlay {
+  font-size: 12px;
   color: var(--ev-c-text-2);
+  max-height: 80px;
+  overflow-y: auto;
+}
+
+.filter-pattern-bar__summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
 }
 
-/* 활성 패턴만 강조 — 비활성(꺼진) 패턴은 이력에는 남아있지만 흐리게
-   표시해 "지금 적용 안 됨"을 구분한다. */
-.exclude-pattern-chip--active {
-  background: var(--ev-c-gray-3);
-  color: var(--color-text);
-  border-color: var(--ev-c-gray-2);
+.filter-pattern-bar__badge {
+  cursor: help;
+  color: var(--ev-c-text-2);
+  white-space: pre-line;
 }
 
-.exclude-pattern-chip__label {
-  border: none;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  padding: 0;
-  cursor: pointer;
+/* 'patterns' 팝업(FilterPatternsPopup) — 제외/포함 두 구역. */
+.filter-patterns-popup__section-title {
+  font-weight: 600;
+  margin-bottom: 4px;
 }
 
-.exclude-pattern-chip__remove {
-  border: none;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  opacity: 0.6;
-  padding: 0 0 0 4px;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.exclude-pattern-chip__remove:hover {
-  opacity: 1;
+.filter-patterns-popup__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 /* RT-41 — FilePane(Panel/PanelHeader/PanelBody 위에 지은 슬롯 컴포넌트,
@@ -730,14 +734,29 @@ body,
   margin-bottom: 8px;
 }
 
-.delete-list-panel {
-  flex: 0 0 auto;
-  max-height: 120px;
+/* RT-44(U-1·U-2) — PreviewSummary의 Deleted/⚠ HEAD에 없음 버튼이 여는
+   팝업(DeletedFilesPopup/WarningsPopup) 본문. 평탄한 목록으로 우선
+   구현했다(RT-53의 TreeList가 만들어지면 교체 예정). */
+.popup-plain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
 }
 
-.delete-list-panel__header {
-  font-weight: 600;
-  margin-bottom: 4px;
+.popup-plain-list li {
+  padding: 2px 0;
+  font-size: 12px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-summary__warning-button {
+  color: #f0c674;
+  border-color: #f0c674;
 }
 
 label {

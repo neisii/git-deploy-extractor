@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { hiddenByPatterns, interpret, matchPattern, type FilePattern } from './filePattern'
+import {
+  hiddenByPatterns,
+  interpret,
+  matchPattern,
+  parsePatternList,
+  type FilePattern
+} from './filePattern'
 
 // docs/refactoring/REFACTORING_TASKS.md §3.1 "매칭 검증: 19개 케이스(종류
 // 판별 6, 패키지 변환 매치 8, 경로/파일명 5) 직접 실행 통과"의 이식.
@@ -118,5 +124,32 @@ describe('hiddenByPatterns — 제외 우선, 포함은 화이트리스트', () 
       { pattern: 'src/test/**', mode: 'exclude', enabled: true }
     ]
     expect(hiddenByPatterns('src/test/java/FooTest.java', patterns)).toBe(true)
+  })
+})
+
+describe('parsePatternList — RT-46 한 번에 여러 패턴 입력', () => {
+  it('쉼표로 구분한 여러 패턴을 나눈다', () => {
+    expect(parsePatternList('*.png, *.md, target/**')).toEqual(['*.png', '*.md', 'target/**'])
+  })
+
+  it('줄바꿈도 구분자로 취급한다(붙여 넣은 여러 줄)', () => {
+    expect(parsePatternList('*.png\n*.md\ntarget/**')).toEqual(['*.png', '*.md', 'target/**'])
+  })
+
+  it('앞뒤 공백을 제거한다', () => {
+    expect(parsePatternList(' *.png ,  *.md ')).toEqual(['*.png', '*.md'])
+  })
+
+  it('빈 항목은 무시한다', () => {
+    expect(parsePatternList('*.png, ,,*.md')).toEqual(['*.png', '*.md'])
+  })
+
+  it('빈 항목만 있으면 빈 배열을 반환한다', () => {
+    expect(parsePatternList(', ,,')).toEqual([])
+    expect(parsePatternList('   ')).toEqual([])
+  })
+
+  it('같은 입력 안의 중복은 한 번만 남긴다', () => {
+    expect(parsePatternList('*.png, *.png, *.md')).toEqual(['*.png', '*.md'])
   })
 })

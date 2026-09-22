@@ -9,14 +9,17 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
 이미 구현 완료 후 v0.6.0으로 릴리스된 상태입니다 — 처음부터 만드는 게 아니라
 기존 앱을 확장하는 작업입니다.
 
-**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 + P4의 RT-40~42 구현
+**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 + P4의 RT-40~44·46 구현
 완료 — 2026-09-22).** v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에
-분리해 뒀습니다. **다음 착수 지점은 P4의 RT-43(`openPopup`을 `WorkArea`로
-이동, `PopupHost` 도입 — `'manual'|'patterns'|'deleted'|'warnings'`)입니다.
-착수 전에 §5.1의 RT-43 명세가 아직 없는 다른 RT(번호가 더 큰 것 포함)를
-전제하고 있는지부터 확인하세요 — RT-41/42에서 실제로 이런 순서 문제가
-있었습니다. P4는 실제 UI 변경 단계라 P0~P3의 "동작 불변" 원칙이 더 이상
-적용되지 않습니다** — §3 확정 UI
+분리해 뒀습니다. **다음 착수 지점은 P4의 RT-45(U-3·U-5, StatusFilter·좌측
+검색 삭제·added 녹색·`+ 파일 추가` 제목 줄 우측)입니다. RT-43(PopupHost)·
+RT-44(PreviewSummary/Deleted·경고 팝업)·RT-46(FilterPatternBar/패턴 팝업)은
+2026-09-22에 한 번에 구현 완료됐습니다(RT-43 명세가 RT-44/46을 전제해
+AskUserQuestion으로 범위를 확인한 뒤 셋을 같이 진행 — §5 RT-43/44/46 항목의
+구현 요약 참고). 착수 전에 §5.1의 RT-45 명세가 아직 없는 다른 RT(번호가 더
+큰 것 포함)를 전제하고 있는지부터 확인하세요 — RT-41/42/43에서 실제로 이런
+순서 문제가 있었습니다. P4는 실제 UI 변경 단계라 P0~P3의 "동작 불변" 원칙이
+더 이상 적용되지 않습니다** — §3 확정 UI
 변경(U-1~U-22)·목업(`component-playground.html`)·§5.1 각 RT 상세 명세를 따르고,
 관련 §7 미결 사항(M-x)이 미확정이면 구현 전에 먼저 확인하세요. 이번 작업이
 새 기능이 아니라 이 리팩토링의
@@ -420,8 +423,6 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
     때문입니다(Playwright 스크린샷으로 실제 확인). 앞으로 이 영역에
     컴포넌트를 더 쪼갤 때도 새 레이어에 `position:relative`를 실수로
     추가하면 팝업 앵커가 깨지니 주의하세요.
-    **다음 착수 지점은 RT-43**입니다(`openPopup`을 `WorkArea`로 이동,
-    `PopupHost` 도입 — `'manual'|'patterns'|'deleted'|'warnings'`).
     **P4부터는 P2/P3와 원칙이 다릅니다** — 실제 UI 변경 단계라 "동작
     불변" 검증(테스트 그린만으로 충분)이 더 이상 적용되지 않고, §3
     확정 UI 변경(U-1~U-22)·목업(`component-playground.html`)·§5.1 각
@@ -439,10 +440,42 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
     불변"을 의미하지 않습니다 — §5.1 수용 기준과 목업을 기준으로
     판단하세요.
   - RT-01에서 만든 `renderer/src/lib/filePattern.ts`(§3.1 글롭/패키지
-    매칭 로직)는 **아직 UI에 배선되지 않았습니다** — RT-46(P4)에서
-    기존 `excludePatternMatch.ts`(REQ-019 구버전, `*` 단일 세그먼트
-    한정)를 이걸로 교체할 예정이니, 그 전까지는 죽은 코드처럼 보여도
-    정상입니다.
+    매칭 로직)는 RT-46에서 실제로 배선됐습니다(아래 항목) — 이 문단은
+    RT-42 시점 기록이라 남겨둡니다.
+  - **RT-43/44/46(2026-09-22, 한 번에 진행)**: 착수 전 RT-43 §5.1 명세를
+    보니 `PreviewSummary`(RT-44 몫)·`FilterPatternBar`의 "보기" 버튼(RT-46
+    몫)처럼 아직 없는 RT를 전제하고 있어(RT-41/42와 같은 순서 문제),
+    AskUserQuestion으로 "RT-44/46을 앞당겨 함께 진행"을 확인받아 셋을
+    한 번에 구현했습니다. 그 과정에서 RT-44 자신도 RT-53(TreeList)·
+    RT-52(AddFilesPopup)를 전제하고 있는 걸 발견해 또 한 번
+    AskUserQuestion: Deleted/경고 팝업 본문은 **평탄한 목록으로 우선
+    구현**(RT-53이 TreeList를 만들면 교체), 파싱 실패 배너는 **지금의
+    `ManualAddPopup` 상단에 임시로 유지**(RT-52가 `AddFilesPopup`으로
+    바뀔 때 함께 이전)로 확정했습니다. `WorkArea.tsx`(신규, `openPopup`
+    로컬 상태 소유 + `position:relative` 앵커) + `workAreaPopupContext.ts`
+    (신규, React Context — `PreviewSummary`와 `DeployFilesPanel`이
+    SplitPane의 서로 다른 셀에 있는 형제라 프롭 스레딩 대신 컨텍스트를
+    씀) + `PopupHost.tsx`(신규, openPopup 값에 따라 팝업 하나만 렌더링).
+    닫힘 조건(Esc/Preview 재실행/Reload)은 `useEffect` 안 `setState`가
+    `react-hooks/set-state-in-effect` 린트에 걸려 React 공식 "렌더 중
+    이전 값과 비교" 패턴으로 구현. `PreviewSummary.tsx`(신규, 기존
+    `DeploymentPreviewPanel.tsx` 대체) — `Deleted`/`⚠ HEAD에 없음` 버튼
+    추가. `DeletedFilesPopup.tsx`/`WarningsPopup.tsx`(신규, 평탄한 목록).
+    `filePattern.ts`에 `parsePatternList` 추가(쉼표+줄바꿈 구분),
+    `excludePatterns.ts`/`excludePatternMatch.ts` 삭제 →
+    `filePatterns.ts`(신규, 저장 키는 유지하되 `mode` 필드 추가 + 기존
+    데이터 마이그레이션)로 교체. `deployFilesSlice.ts`의
+    `excludePatterns`→`filePatterns`, `addExcludePattern`→
+    `addFilePatterns`(쉼표 다중 입력 + 모드, 피드백용 `{added,
+    activated}` 반환). `FilterPatternBar.tsx`/`FilterPatternsPopup.tsx`
+    (신규) — 모드 선택+다중 입력+해석 오버레이+"활성 K개"+"보기" /
+    제외·포함 두 구역 Chip 목록. 검증: `npm test`(137개, 신규 15개 —
+    `parsePatternList` 6건 + `deployFilesSlice.patterns.test.ts` 9건)·
+    `typecheck`·`lint`·`build`·`test:e2e`(11개, 신규 `work-area-popups.spec.ts`
+    4건 — Deleted 팝업, HEAD에 없음 경고, Reload 시 팝업 닫힘, 패턴
+    추가→숨김→토글/삭제) 전부 통과. **다음 착수 지점은 RT-45**(U-3·U-5,
+    StatusFilter·좌측 검색 삭제·added 녹색·`+ 파일 추가` 제목 줄 우측)
+    입니다.
 
 먼저 이 순서로 읽어주세요 (짐작하지 말고 실제로 읽어야 합니다):
 
