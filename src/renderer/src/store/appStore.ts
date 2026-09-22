@@ -18,6 +18,7 @@ import {
 import { loadExcludePatterns, saveExcludePatterns } from '../lib/excludePatterns'
 import type { ExcludePatternEntry } from '../lib/excludePatterns'
 import { matchesAnyActiveExcludePattern } from '../lib/excludePatternMatch'
+import { createRequestGuard } from '../lib/requestGuard'
 
 const PAGE_SIZE = 100
 const SEARCH_DEBOUNCE_MS = 300
@@ -217,6 +218,16 @@ export function selectIsAnalysisStale(state: AppState): boolean {
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
+// RT-11(R2) — 커밋 조회 요청 순서 가드. loadCommitsFirstPage가 새 조회를
+// 시작할 때마다 start()로 새 세대를 발급한다. loadNextPage는 시작 시점의
+// 세대를 current()로 캡처해 두고, 응답이 왔을 때 그 세대가 여전히
+// 최신인지 비교한다 — runAnalysis의 selectionMatches/analyzedSelection과
+// 같은 개념이다. loadCommitsFirstPage 자기 자신도 이 세대를 비교해,
+// 검색 조건을 빠르게 여러 번 바꿔 여러 첫 페이지 조회가 겹쳐도 가장
+// 나중에 시작한 것만 결과를 반영한다. RT-17의 분석 요청 가드도 같은
+// 유틸(createRequestGuard)을 쓴다.
+const commitQueryGuard = createRequestGuard()
+
 // 연속 클릭 가드(DR-016) — Electron 네이티브 확인창이 이미 떠 있는 동안
 // 다시 클릭해도 새 확인창을 띄우지 않는다. 모듈 레벨 변수로 두는 이유는
 // searchDebounceTimer와 같다: 이 값 자체는 UI에 표시되지 않는 순수 가드용
@@ -268,6 +279,7 @@ export const useAppStore = create<AppState>((set, get) => {
     if (repository.status !== 'valid' || !selectedBranch || !repository.path) return
     const hashFilter = parseMultiValueFilter(hashFilterText)
     const authors = parseMultiValueFilter(authorFilter)
+    const requestId = commitQueryGuard.start()
 
     set({
       commits: [],
@@ -300,12 +312,17 @@ export const useAppStore = create<AppState>((set, get) => {
         excludeMerges,
         hashFilter: hashFilter.length > 0 ? hashFilter : undefined
       })
+      // RT-11(R2): 이 조회가 시작된 뒤 더 최신 조회가 시작됐다면(검색
+      // 조건을 빠르게 여러 번 바꾼 경우) 이 응답은 버린다 — 늦게 도착한
+      // 이전 응답이 최신 결과를 덮어쓰는 걸 막는다.
+      if (!commitQueryGuard.isCurrent(requestId)) return
       set({
         commits: result.commits,
         commitPagination: { hasMore: result.hasMore, loading: false },
         invalidHashFilter: result.invalidHashes ?? []
       })
     } catch (error) {
+      if (!commitQueryGuard.isCurrent(requestId)) return
       set({
         commitPagination: { hasMore: false, loading: false },
         commitListError: error instanceof Error ? error.message : String(error)
@@ -670,6 +687,12 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!commitPagination.hasMore || commitPagination.loading) return
       const hashFilter = parseMultiValueFilter(hashFilterText)
       const authors = parseMultiValueFilter(authorFilter)
+      // RT-11(R2): 이 다음 페이지 요청이 속한 "세대"를 캡처해 둔다 —
+      // 응답이 오기 전에 loadCommitsFirstPage가 새 조회를 시작하면(세대가
+      // 증가하면) 이 요청은 무효가 된다. 호출 시점의 commits 스냅샷에
+      // 이어붙이는 대신 응답 처리 시점에 get().commits를 다시 읽어 붙인다
+      // (세대가 안 바뀌었다는 보장과 별개로, 최신 상태를 기준으로 한다).
+      const requestId = commitQueryGuard.current()
 
       set({ commitPagination: { ...commitPagination, loading: true } })
       try {
@@ -687,11 +710,17 @@ export const useAppStore = create<AppState>((set, get) => {
           excludeMerges,
           hashFilter: hashFilter.length > 0 ? hashFilter : undefined
         })
+        // 첫 페이지 재조회(Reload/검색 조건 변경/Branch 전환 등)가 이 요청
+        // 도중에 시작됐다면, 이 응답을 초기화된 목록에 이어붙이면 안 된다
+        // — 응답을 통째로 버린다(R2: "재조회 후 초기화된 목록이 되살아날
+        // 수 있음" 재현 방지).
+        if (!commitQueryGuard.isCurrent(requestId)) return
         set({
-          commits: [...commits, ...result.commits],
+          commits: [...get().commits, ...result.commits],
           commitPagination: { hasMore: result.hasMore, loading: false }
         })
       } catch (error) {
+        if (!commitQueryGuard.isCurrent(requestId)) return
         set({
           commitPagination: { ...commitPagination, loading: false },
           commitListError: error instanceof Error ? error.message : String(error)

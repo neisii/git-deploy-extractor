@@ -415,7 +415,7 @@ D1 AppShell                         레이아웃만
 ### P1 — 긴급 버그 (각각 별도 커밋, 동작 변경)
 
 - [x] **RT-10 (R1)** 해시 입력 검증 — **M-5 확정(사용자 결정, 2026-09-22): 16진수만 허용 + 무효 입력은 화면에 표시**. `main/git/commits.ts`에 `partitionHashFilter`(4~64자 16진수만 valid) 신규, `listCommitsByHash`는 valid만 git 인자로 넘기고 invalid는 `ListCommitsResult.invalidHashes`로 보고. **`--` 구분자는 도입하지 않음** — 해시는 revision 인자라 `--` 뒤에 두면 git이 pathspec으로 재해석해 아무 것도 안 걸림(직접 재현 후 되돌림); 16진수 전용 검증 자체가 `-`로 시작하는 입력을 이미 차단해 별도 구분자가 불필요. `BranchSearchBar`가 해시 필터 아래에 무시된 토큰을 표시(`invalidHashFilter` 스토어 필드). 테스트: `--output=<path>`를 해시로 넣어도 파일이 안 생기는 것 확인(재현 방지) + `partitionHashFilter` 단위 테스트 + 유효/무효 혼합 케이스
-- [ ] **RT-11 (R2)** 커밋 조회 요청 ID 가드: 첫 페이지·다음 페이지 모두, 응답 도착 시점에 최신 요청인지 비교. `runAnalysis`의 `selectionMatches`와 동일 개념
+- [x] **RT-11 (R2)** 커밋 조회 요청 ID 가드 — `renderer/src/lib/requestGuard.ts` 신규(`createRequestGuard`: start/current/isCurrent, RT-17과 공유 예정인 공용 유틸). `loadCommitsFirstPage`는 매번 `start()`로 새 세대 발급 후 응답 시점에 `isCurrent`로 검증(늦게 도착한 이전 조회 결과가 최신을 덮어쓰지 못함), `loadNextPage`는 시작 시점 `current()`를 캡처해 두고 첫 페이지 재조회가 그사이 시작되면(세대 불일치) 응답을 버림(재조회 후 초기화된 목록이 되살아나는 문제 해소) — `commits`는 응답 처리 시점에 `get().commits`를 다시 읽어 이어붙임. `store/commitQueryGuard.test.ts`(window.api 목킹으로 레이스 재현) + `lib/requestGuard.test.ts` 신규
 - [ ] **RT-12 (R3)** IPC 입력 검증 계층(`main/ipc/validate.ts`): 경로 정규화·`..` 차단, `exportParentDir` 검증, 수동 추가 `localPath`가 HEAD 트리에 있는지 확인
 - [ ] **RT-13 (U3)** `MaxCountField`: 로컬 문자열, blur/Enter에서 확정, 유효 범위 검증
 - [ ] **RT-14 (U4)** 키워드 등 텍스트 영역에서 **Ctrl/Cmd+Enter로 즉시 조회**(텍스트 영역에서는 Enter가 줄바꿈이므로) + `Search` 버튼(왼쪽 그룹 Branch 옆). 입력 후 300ms 디바운스 자동 조회는 유지
