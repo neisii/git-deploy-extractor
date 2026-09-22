@@ -9,13 +9,14 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
 이미 구현 완료 후 v0.6.0으로 릴리스된 상태입니다 — 처음부터 만드는 게 아니라
 기존 앱을 확장하는 작업입니다.
 
-**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 + P4의 RT-40·41 구현
+**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 + P4의 RT-40~42 구현
 완료 — 2026-09-22).** v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에
-분리해 뒀습니다. **다음 착수 지점은 P4의 RT-42(`IncludedFilesPane` 조립,
-`DeployFilesWorkspace`에서 로직 제거)입니다 — §5.1이 RT-41/42를 한 절에 같이
-적어뒀으니 RT-41이 이미 어디까지 했는지(FileListColumn 해체만, 좌우 패널
-이름·Extract 모델 전환은 아직) 먼저 확인하고 시작하세요. P4는 실제 UI 변경
-단계라 P0~P3의 "동작 불변" 원칙이 더 이상 적용되지 않습니다** — §3 확정 UI
+분리해 뒀습니다. **다음 착수 지점은 P4의 RT-43(`openPopup`을 `WorkArea`로
+이동, `PopupHost` 도입 — `'manual'|'patterns'|'deleted'|'warnings'`)입니다.
+착수 전에 §5.1의 RT-43 명세가 아직 없는 다른 RT(번호가 더 큰 것 포함)를
+전제하고 있는지부터 확인하세요 — RT-41/42에서 실제로 이런 순서 문제가
+있었습니다. P4는 실제 UI 변경 단계라 P0~P3의 "동작 불변" 원칙이 더 이상
+적용되지 않습니다** — §3 확정 UI
 변경(U-1~U-22)·목업(`component-playground.html`)·§5.1 각 RT 상세 명세를 따르고,
 관련 §7 미결 사항(M-x)이 미확정이면 구현 전에 먼저 확인하세요. 이번 작업이
 새 기능이 아니라 이 리팩토링의
@@ -395,23 +396,48 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
     배치이니 "제자리가 아니다"라고 되돌리지 마세요). Playwright로 실제
     렌더링을 스크린샷 확인(레이아웃 안 깨짐, `PanelState kind="na"`
     문구 정확) — 커밋 대상 아닌 임시 파일이라 삭제했습니다.
-    **다음 착수 지점은 RT-42**입니다(`IncludedFilesPane` 조립,
-    `DeployFilesWorkspace`에서 로직 제거 — "누락된 의존성"을 RT-52의
-    팝업 HEAD 트리로 옮기는 것까지는 RT-52가 있어야 하니, RT-42 착수
-    시 그 경계를 다시 한번 명확히 하고 시작하세요). **P4부터는 P2/P3와
-    원칙이 다릅니다** — 실제 UI 변경 단계라 "동작 불변" 검증(테스트
-    그린만으로 충분)이 더 이상 적용되지 않고, §3 확정 UI 변경(U-1~U-22)·
-    목업(`component-playground.html`)·§5.1 각 RT 상세 명세를 따라야
-    합니다. 각 RT 착수 전에 그 §5.1 명세와 관련 §7 미결 사항(M-x)이
-    확정됐는지 먼저 확인하세요 — 미확정이면 임의 판단하지 말고 먼저
-    물어보라는 게 이 리팩토링 전체의 규칙입니다. RT-60(문서 정식 병합)은
-    P4까지 다 끝난 뒤 P5에서 한 번에 처리하는 게 이 계획의 순서라 아직
-    하지 마세요 — 지금까지는 `docs/refactoring/REFACTORING_TASKS.md`
-    §6 표에 반영 대상만 계속 쌓아뒀습니다. RT-40·41 둘 다 `npm test`
-    (122개)·`typecheck`·`lint`·`build`·`test:e2e`(7개) 전부 통과로
-    검증했지만, RT-41부터는 실제 화면이 바뀌므로 이 테스트들이
-    그린이어도 "동작 불변"을 의미하지 않습니다 — §5.1 수용 기준과
-    목업을 기준으로 판단하세요.
+    RT-42: **착수 전 사용자에게 범위부터 확인했습니다** — §5.1은
+    RT-42가 우측을 `ExtractTargetsPane`으로 바꾸고 "누락된 의존성"을
+    RT-52의 `AddFilesPopup`으로 옮기라고 하지만, RT-51(Extract 상태
+    모델)·RT-52(그 팝업) 둘 다 아직 없어서 그대로 하면 대체 기능
+    없이 회귀가 됩니다 — "구조 정리만(우측은 지금 이름·내용 그대로)"
+    vs "RT-51/52까지 앞당겨서 같이" vs "RT-51 먼저" 중 **"구조
+    정리만"으로 확정**돼 그렇게 진행했습니다. `deployFiles/
+    IncludedFilesPane.tsx`(좌측 조립을 그대로 옮김, CommitListPanel
+    등과 같은 방식으로 스토어를 직접 구독) · `deployFiles/
+    MissingDependenciesPane.tsx`(우측, **이름·동작 전부 그대로** —
+    RT-52 전까지 존치) · `deployFiles/DeployFilesWorkspace.tsx`(조립만
+    담당, 제목 없음) · `deployFiles/FilePaneCountTitle.tsx`(제목 문구
+    공유) · `lib/includedPathsSet.ts`(`includedSet`을 `useIncludedFilesView`
+    전체 없이 저렴하게 구함 — 이제 세 곳이 필요로 함). `DeployFilesPanel.tsx`는
+    제목·경고 배너·`ManualAddPopup` 배치만 남은 얇은 껍데기(RT-44가
+    마저 정리). **`+ 파일 추가` 트리거가 `IncludedFilesPane`(좌측 셀)
+    안으로 들어갔는데도 팝업은 여전히 `DeployFilesPanel`이 부모
+    레벨에서 렌더링해 좌우 두 Pane 전체 중앙에 뜹니다** — `Panel`/
+    `FilePane`/`SplitPane` 전부 `position` 속성이 없어서 CSS
+    `position:absolute`가 DOM 중첩 깊이와 무관하게 `.deploy-files-panel`
+    (가장 가까운 `position:relative` 조상)을 그대로 기준으로 삼기
+    때문입니다(Playwright 스크린샷으로 실제 확인). 앞으로 이 영역에
+    컴포넌트를 더 쪼갤 때도 새 레이어에 `position:relative`를 실수로
+    추가하면 팝업 앵커가 깨지니 주의하세요.
+    **다음 착수 지점은 RT-43**입니다(`openPopup`을 `WorkArea`로 이동,
+    `PopupHost` 도입 — `'manual'|'patterns'|'deleted'|'warnings'`).
+    **P4부터는 P2/P3와 원칙이 다릅니다** — 실제 UI 변경 단계라 "동작
+    불변" 검증(테스트 그린만으로 충분)이 더 이상 적용되지 않고, §3
+    확정 UI 변경(U-1~U-22)·목업(`component-playground.html`)·§5.1 각
+    RT 상세 명세를 따라야 합니다. **각 RT 착수 전에 그 §5.1 명세가
+    아직 존재하지 않는 다른 RT(번호가 더 큰 것 포함)를 전제하고
+    있는지부터 확인하세요** — RT-41/42에서 실제로 이런 순서 문제가
+    있었습니다. 관련 §7 미결 사항(M-x)이 미확정이거나 이런 순서
+    충돌이 있으면 임의 판단하지 말고 먼저 물어보라는 게 이 리팩토링
+    전체의 규칙입니다. RT-60(문서 정식 병합)은 P4까지 다 끝난 뒤
+    P5에서 한 번에 처리하는 게 이 계획의 순서라 아직 하지 마세요 —
+    지금까지는 `docs/refactoring/REFACTORING_TASKS.md` §6 표에 반영
+    대상만 계속 쌓아뒀습니다. RT-40~42 모두 `npm test`(122개)·
+    `typecheck`·`lint`·`build`·`test:e2e`(7개) 전부 통과로 검증했지만,
+    RT-41부터는 실제 화면이 바뀌므로 이 테스트들이 그린이어도 "동작
+    불변"을 의미하지 않습니다 — §5.1 수용 기준과 목업을 기준으로
+    판단하세요.
   - RT-01에서 만든 `renderer/src/lib/filePattern.ts`(§3.1 글롭/패키지
     매칭 로직)는 **아직 UI에 배선되지 않았습니다** — RT-46(P4)에서
     기존 `excludePatternMatch.ts`(REQ-019 구버전, `*` 단일 세그먼트

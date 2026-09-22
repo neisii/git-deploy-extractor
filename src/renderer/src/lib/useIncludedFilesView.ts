@@ -3,6 +3,7 @@ import type { DeployFileEntry, DeployFilesFilter } from '../store/appStore'
 import type { ExcludePatternEntry } from './excludePatterns'
 import { matchesAnyActiveExcludePattern } from './excludePatternMatch'
 import { matchesFileName } from './matchesFileName'
+import { includedPathsSet } from './includedPathsSet'
 import type { FileListItem } from '../components/deployFiles/FileList'
 
 export interface IncludedFilesView {
@@ -48,7 +49,10 @@ export function useIncludedFilesView(
     [deployFiles, excludePatterns]
   )
 
-  const includedSet = useMemo(() => new Set(deployFiles.map((f) => f.localPath)), [deployFiles])
+  // RT-42 — 이 값은 filter/검색어/제외패턴과 무관해서(원본 deployFiles만
+  // 있으면 됨) 다른 컴포넌트(MissingDependenciesPane 등)도 이 훅 전체를
+  // 호출하지 않고 lib/includedPathsSet.ts로 저렴하게 따로 구한다.
+  const includedSet = useMemo(() => includedPathsSet(deployFiles), [deployFiles])
 
   return { items, allChecked, someChecked, selectedCount, includedSet }
 }
