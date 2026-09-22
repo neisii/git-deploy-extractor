@@ -1,6 +1,15 @@
+import { existsSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { listCommits, getDefaultDateRange } from './commits'
-import { cleanupRepo, commitAt, initRepo } from '../testSupport/gitFixture'
+import { listCommits, getDefaultDateRange, partitionHashFilter } from './commits'
+import {
+  cleanupRepo,
+  commitAll,
+  commitAt,
+  initRepo,
+  writeFixtureFile
+} from '../testSupport/gitFixture'
 
 // scripts/verify-phase1.ts (c)(d)(e)의 이식 — 기본 조회 기간 경계값,
 // 검색어 필터링, 페이지네이션.
@@ -92,5 +101,79 @@ describe('listCommits — 기본 기간/검색/페이지네이션', () => {
     }
     expect(collected).toHaveLength(maxCount)
     expect(new Set(collected).size).toBe(maxCount)
+  })
+})
+
+// RT-10(R1/M-5) — 해시 필터 옵션 주입 방지.
+
+describe('partitionHashFilter', () => {
+  it('16진수(4~64자)만 valid로 분류한다', () => {
+    expect(partitionHashFilter(['a1b2c3d', 'ABCDEF12'])).toEqual({
+      valid: ['a1b2c3d', 'ABCDEF12'],
+      invalid: []
+    })
+  })
+
+  it('16진수가 아니거나 너무 짧은 토큰은 invalid로 분류한다', () => {
+    expect(partitionHashFilter(['abc', '--output=/tmp/pwned', 'zzzzzzz'])).toEqual({
+      valid: [],
+      invalid: ['abc', '--output=/tmp/pwned', 'zzzzzzz']
+    })
+  })
+})
+
+describe('listCommits — 해시 필터 옵션 주입 방지', () => {
+  let dir: string
+
+  beforeAll(() => {
+    dir = initRepo('gde-hash-injection-')
+    writeFixtureFile(dir, 'a.txt', 'v1')
+    commitAll(dir, 'init')
+  })
+
+  afterAll(() => cleanupRepo(dir))
+
+  it('`--output=<path>`를 해시로 넣어도 그 경로에 파일이 생기지 않는다', async () => {
+    const maliciousPath = join(tmpdir(), `gde-r1-poc-${Date.now()}.txt`)
+    const result = await listCommits({
+      repoPath: dir,
+      branch: 'main',
+      startDate: '2020-01-01',
+      endDate: '2030-01-01',
+      maxCount: 100,
+      skip: 0,
+      pageSize: 100,
+      hashFilter: [`--output=${maliciousPath}`]
+    })
+    expect(existsSync(maliciousPath)).toBe(false)
+    expect(result.commits).toHaveLength(0)
+    expect(result.invalidHashes).toEqual([`--output=${maliciousPath}`])
+  })
+
+  it('유효한 해시와 잘못된 토큰이 섞이면 유효한 것만 조회되고 나머지는 invalidHashes로 보고된다', async () => {
+    const head = (
+      await listCommits({
+        repoPath: dir,
+        branch: 'main',
+        startDate: '2020-01-01',
+        endDate: '2030-01-01',
+        maxCount: 100,
+        skip: 0,
+        pageSize: 100
+      })
+    ).commits[0].hash
+
+    const result = await listCommits({
+      repoPath: dir,
+      branch: 'main',
+      startDate: '2020-01-01',
+      endDate: '2030-01-01',
+      maxCount: 100,
+      skip: 0,
+      pageSize: 100,
+      hashFilter: [head, '--not-a-hash']
+    })
+    expect(result.commits.map((c) => c.hash)).toEqual([head])
+    expect(result.invalidHashes).toEqual(['--not-a-hash'])
   })
 })

@@ -86,6 +86,10 @@ interface AppState {
   authorFilter: string // REQ-022 — 원본 텍스트(줄바꿈/쉼표 구분, 2026-09-14부터 여러 작성자 지원). searchTerm과 독립적으로 AND 결합
   excludeMerges: boolean // REQ-022 — Merge 커밋 제외, 기본 true(제외) — 2026-09-14 사용자 요청으로 기본값 변경
   hashFilterText: string // REQ-023 — 원본 텍스트(줄바꿈/쉼표 구분). 값이 있으면 다른 모든 조회 조건을 무시
+  // RT-10(M-5) — hashFilterText 중 16진수 형식이 아니라서 git에 넘기지
+  // 않고 걸러낸 토큰들(git.listCommits 응답의 invalidHashes를 그대로
+  // 보관). 조회할 때마다 새로 채워진다.
+  invalidHashFilter: string[]
 
   commits: CommitEntry[]
   selectedHashes: Set<string>
@@ -270,6 +274,7 @@ export const useAppStore = create<AppState>((set, get) => {
       ...(keepSelection ? {} : { selectedHashes: new Set<string>() }),
       commitPagination: { hasMore: false, loading: true },
       commitListError: null,
+      invalidHashFilter: [],
       summary: null,
       deployFiles: [],
       deleteList: [],
@@ -297,7 +302,8 @@ export const useAppStore = create<AppState>((set, get) => {
       })
       set({
         commits: result.commits,
-        commitPagination: { hasMore: result.hasMore, loading: false }
+        commitPagination: { hasMore: result.hasMore, loading: false },
+        invalidHashFilter: result.invalidHashes ?? []
       })
     } catch (error) {
       set({
@@ -459,6 +465,7 @@ export const useAppStore = create<AppState>((set, get) => {
     authorFilter: '',
     excludeMerges: true,
     hashFilterText: '',
+    invalidHashFilter: [],
 
     commits: [],
     selectedHashes: new Set(),

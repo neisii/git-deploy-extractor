@@ -21,6 +21,7 @@ export function BranchSearchBar(): React.JSX.Element {
   const setExcludeMerges = useAppStore((s) => s.setExcludeMerges)
   const hashFilterText = useAppStore((s) => s.hashFilterText)
   const setHashFilterText = useAppStore((s) => s.setHashFilterText)
+  const invalidHashFilter = useAppStore((s) => s.invalidHashFilter)
 
   return (
     <section className="panel branch-search-bar">
@@ -126,6 +127,11 @@ export function BranchSearchBar(): React.JSX.Element {
             value={hashFilterText}
             onChange={(e) => setHashFilterText(e.target.value)}
           />
+          {invalidHashFilter.length > 0 && (
+            <span className="status-text status-text--error" title={invalidHashFilter.join(', ')}>
+              올바른 해시 형식이 아니라 무시됨: {invalidHashFilter.join(', ')}
+            </span>
+          )}
         </label>
       </div>
     </section>

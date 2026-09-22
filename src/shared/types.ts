@@ -83,6 +83,9 @@ export interface ListCommitsParams {
 export interface ListCommitsResult {
   commits: CommitEntry[]
   hasMore: boolean
+  // RT-10(M-5) — hashFilter 중 16진수 형식이 아니라 걸러진 항목들. 해시
+  // 필터를 쓰지 않았거나 전부 유효하면 undefined.
+  invalidHashes?: string[]
 }
 
 export interface BuildPackageParams {
