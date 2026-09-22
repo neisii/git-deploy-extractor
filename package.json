@@ -28,10 +28,7 @@
     "build:mac": "npm run build && electron-builder --mac --publish never",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "electron-vite build && playwright test",
-    "verify:phase1": "tsx scripts/verify-phase1.ts",
-    "verify:phase2": "tsx scripts/verify-phase2.ts",
-    "verify:phase3": "tsx scripts/verify-phase3.ts"
+    "test:e2e": "electron-vite build && playwright test"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -59,7 +56,6 @@
     "prettier": "^3.7.4",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "tsx": "^4.23.5",
     "typescript": "^5.9.3",
     "vite": "^7.2.6",
     "vitest": "^5.0.1"
