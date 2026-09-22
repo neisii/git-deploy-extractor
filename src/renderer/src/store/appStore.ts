@@ -26,7 +26,8 @@ const SEARCH_DEBOUNCE_MS = 300
 // 필터도 재사용한다 — 쉼표/공백/줄바꿈 어느 것으로 구분해 붙여넣어도
 // 동일하게 처리한다. 빈 입력이면 빈 배열(호출부에서 undefined로 변환해
 // 해당 필터 없는 일반 조회로 취급).
-function parseMultiValueFilter(text: string): string[] {
+// export: RT-01(vitest 안전망)에서 직접 테스트하기 위함 — 동작 변경 없음.
+export function parseMultiValueFilter(text: string): string[] {
   return text
     .split(/[\s,]+/)
     .map((token) => token.trim())
@@ -62,7 +63,7 @@ export type DeployFilesFilter = 'all' | 'added' | 'modified'
 // 계산 결과가 현재 선택과 실제로 일치하는가"를 파생 계산하기 위함이다 —
 // Preview를 유일한 분석 트리거로 삼으면서, 선택이 바뀐 뒤 Preview를 다시
 // 누르기 전까지 Export가 옛 결과로 나가는 걸 막는 안전장치.
-interface AnalyzedSelection {
+export interface AnalyzedSelection {
   hashes: string[]
   branch: string
   profileName: string
@@ -178,11 +179,21 @@ interface AppState {
   loadAppVersion: () => Promise<void>
 }
 
+// selectionMatches가 실제로 읽는 필드만 뽑은 최소 형태. AppState는 구조적으로
+// 이 타입을 만족하므로(TS structural typing) 아래 실제 호출부는 그대로
+// AppState를 넘길 수 있다 — RT-01에서 vitest로 직접 테스트하기 위해
+// 파라미터 타입만 좁혔고, 동작은 바뀌지 않는다.
+export interface SelectionSnapshot {
+  selectedBranch: string | null
+  selectedProfile: string
+  selectedHashes: Set<string>
+}
+
 // 어떤 선택(a)이 현재 state의 선택과 정확히 같은지 비교하는 공용 함수.
 // selectIsAnalysisStale과 runAnalysis()의 레이스 컨디션 가드(§6.1 케이스 C)가
 // 이 함수를 공유한다 — 비교 기준이 둘로 갈라지면 나중에 한쪽만 고치는
 // 실수가 생기기 쉬우므로 하나로 합쳤다.
-function selectionMatches(a: AnalyzedSelection, state: AppState): boolean {
+export function selectionMatches(a: AnalyzedSelection, state: SelectionSnapshot): boolean {
   if (a.branch !== state.selectedBranch) return false
   if (a.profileName !== state.selectedProfile) return false
   if (a.hashes.length !== state.selectedHashes.size) return false

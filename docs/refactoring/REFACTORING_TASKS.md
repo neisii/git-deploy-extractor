@@ -406,8 +406,8 @@ D1 AppShell                         레이아웃만
 ### P0 — 안전망
 
 - [x] **RT-00** ~~문서 변경 5개 파일 먼저 커밋~~ → **변경**: 5개 파일의 미커밋 수정(REQ-026 등)을 `git checkout`으로 되돌림(v0.6.0 기준선 유지). 대체 설계는 이 문서(U-계열)에만 기록 · `.DETAILED_DESIGN.md.swp`는 커밋 제외
-- [ ] **RT-00b** 본 문서·목업(`docs/refactoring/`)과 기존 5개 문서 안내 문구를 먼저 커밋 (P0 시작 전, 동작 변경 없음)
-- [ ] **RT-01** vitest 도입, 순수 함수부터 테스트: 글롭 변환·`interpret`(종류 파생)·`matchPattern`·`hiddenByPatterns`·`parseMultiValueFilter`·`selectionMatches`. **§3.1의 19개 케이스를 이식**
+- [x] **RT-00b** 본 문서·목업(`docs/refactoring/`)과 기존 5개 문서 안내 문구를 먼저 커밋 (P0 시작 전, 동작 변경 없음) — 커밋 `7b0a4cb`·`d52a578`(체크박스 갱신 누락, 2026-09-22 정정)
+- [x] **RT-01** vitest 도입, 순수 함수부터 테스트: 글롭 변환·`interpret`(종류 파생)·`matchPattern`·`hiddenByPatterns`·`parseMultiValueFilter`·`selectionMatches`. **§3.1의 19개 케이스를 이식** — `src/renderer/src/lib/filePattern.ts`(신규, component-playground.html의 globToRe/interpret/matchPattern/hiddenByPatterns를 이식, 아직 어디서도 import 안 함 — 배선은 RT-46)·`appStore.ts`의 `parseMultiValueFilter`/`selectionMatches`는 export만 추가(타입은 `SelectionSnapshot`으로 최소화, 동작 불변). 테스트 36개 전부 통과(`npm test`)
 - [ ] **RT-02** Playwright(또는 Electron 테스트 러너) 핵심 시나리오 3개: ① 커밋 검색→선택→Preview→Export ② 파일 패턴 추가/토글/삭제 ③ 파일 수동 추가·팝업
 - [ ] **RT-03** CI에 `typecheck`·`lint`·`test`를 push/PR 트리거로 추가(`release.yml`과 분리된 워크플로우)
 - [ ] **RT-04** `scripts/verify-phase*.ts`를 테스트로 승격하거나 명확히 폐기 결정
