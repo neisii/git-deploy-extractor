@@ -404,7 +404,7 @@ body,
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  /* REQ-021/DR-019 — 수동 추가 팝업(.manual-add-backdrop)이 좌우 두 컬럼을
+  /* REQ-021/DR-019 — 수동 추가 팝업(.popup-backdrop, RT-15)이 좌우 두 컬럼을
      감싸는 이 영역 중앙에 뜨도록 하는 위치 기준점. */
   position: relative;
 }
@@ -514,25 +514,30 @@ body,
   margin-bottom: 8px;
 }
 
-/* REQ-021/DR-019 — 배포 대상 파일 수동 추가 팝업. 정정(2026-08-22): 원래는
-   "포함된 파일" 목록을 안 가리는 위치/높이를 실측해서 띄웠으나, 목록을
-   가려도 상관없다는 결정으로 부모(.deploy-files-panel, 좌우 두 컬럼을
-   감싸는 영역) 중앙에 고정 크기 모달로 단순화됐다. 배경(backdrop) 클릭
-   또는 팝업 안 클릭 이벤트 버블링 차단(stopPropagation)으로 닫기/유지를
-   구분한다. */
-.manual-add-backdrop {
+/* RT-15 — Popup 공용 primitive(백드롭 + 박스 + 헤더). ManualAddPopup을
+   포함해 부모(가장 가까운 position:relative 조상, 지금은
+   .deploy-files-panel) 중앙에 뜨는 모든 팝업이 공유한다. 배경(backdrop)
+   클릭 또는 팝업 안 클릭 이벤트 버블링 차단(stopPropagation, Popup.tsx가
+   처리)으로 닫기/유지를 구분한다.
+   U2 정정: 예전엔 `max-height: 60vh`(뷰포트 기준)라 세로 SplitPane을
+   최소 높이로 줄이면 팝업이 넘쳐 헤더 `×`가 잘렸다. `.popup-backdrop`의
+   padding을 뺀 content box가 실제 부모 높이이므로, `.popup`의
+   `max-height: 100%`는 그 실제 높이에 맞춰 클램프된다(뷰포트와 무관). */
+.popup-backdrop {
   position: absolute;
   inset: 0;
   z-index: 30;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
   background: rgba(0, 0, 0, 0.35);
 }
 
-.manual-add-popup {
+.popup {
   width: 480px;
-  max-height: 60vh;
+  max-width: 100%;
+  max-height: 100%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -544,11 +549,11 @@ body,
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
-.manual-add-popup input {
+.popup input {
   width: 100%;
 }
 
-.manual-add-popup__header {
+.popup__header {
   display: flex;
   justify-content: space-between;
   align-items: center;

@@ -38,7 +38,9 @@ test('파일 추가 팝업에서 검색 → 추가 → 칩 표시 → 포함된 
   await expect(window.locator('.deploy-files-row', { hasText: 'src/FileA.txt' })).toHaveCount(0)
 
   await window.getByRole('button', { name: '+ 파일 추가' }).click()
-  const popup = window.locator('.manual-add-popup')
+  // RT-15: 백드롭·박스 클래스가 공용 Popup 컴포넌트로 옮겨지며
+  // .manual-add-popup → .popup으로 바뀌었다.
+  const popup = window.locator('.popup')
   await expect(popup).toBeVisible()
 
   await popup.locator('input[type="text"]').fill('FileA')
@@ -50,7 +52,7 @@ test('파일 추가 팝업에서 검색 → 추가 → 칩 표시 → 포함된 
   await expect(popup.locator('.manual-add-popup__chip', { hasText: 'src/FileA.txt' })).toBeVisible()
 
   // 닫기 버튼의 글자 내용은 "×"이고 title="닫기"라 접근성 이름은 "×"다.
-  await popup.locator('.manual-add-popup__header button').click()
+  await popup.locator('.popup__header button').click()
   await expect(popup).toHaveCount(0)
 
   // 팝업을 닫은 뒤 좌측 "포함된 파일"에 FileA가 체크된 채로 반영돼 있어야 한다.

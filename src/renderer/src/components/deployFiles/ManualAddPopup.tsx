@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent } from 'react'
+import { Popup } from '../Popup'
 
 // REQ-021/DR-019 — 배포 대상 파일 수동 추가 팝업. 좌우 두 FileListColumn을
 // 감싸는 부모(.deploy-files-panel) 중앙에 고정 크기로 뜬다. 정정
@@ -7,6 +7,10 @@ import type { MouseEvent as ReactMouseEvent } from 'react'
 // 띄우는 형태였으나, 목록을 가려도 상관없다는 결정으로 단순화됐다 — 대신
 // 이 팝업 안의 "수동 추가 이력" 칩이 무엇을 추가했는지 강조색으로 보여주는
 // 역할을 대신한다(RISK_ISSUES.md 결정 이력 참고).
+//
+// RT-15 — 백드롭·박스·닫기 버튼·Esc·포커스 트랩은 공용 Popup 컴포넌트로
+// 옮겨졌다(U5). 이 컴포넌트는 이제 Popup의 children으로 들어갈 내용만
+// 담당한다.
 
 const RESULT_LIMIT = 50
 
@@ -33,52 +37,42 @@ export function ManualAddPopup({
     return candidates.filter((path) => path.toLowerCase().includes(trimmed)).slice(0, RESULT_LIMIT)
   }, [candidates, query])
 
-  const stopPropagation = (e: ReactMouseEvent): void => e.stopPropagation()
-
   return (
-    <div className="manual-add-backdrop" onClick={onClose}>
-      <div className="manual-add-popup" onClick={stopPropagation}>
-        <div className="manual-add-popup__header">
-          <span>파일 추가</span>
-          <button type="button" onClick={onClose} title="닫기">
-            ×
-          </button>
-        </div>
-        <input
-          type="text"
-          autoFocus
-          value={query}
-          placeholder="경로 일부 입력..."
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        {results.length > 0 && (
-          <ul className="manual-add-popup__results">
-            {results.map((path) => (
-              <li key={path} title={path}>
-                <span className="manual-add-popup__result-path">{path}</span>
-                <button type="button" onClick={() => onAdd(path)}>
-                  추가
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {addedPaths.length > 0 && (
-          <div className="manual-add-popup__chips">
-            {addedPaths.map((path) => (
-              <button
-                key={path}
-                type="button"
-                className="manual-add-popup__chip"
-                onClick={() => onRemove(path)}
-                title="클릭하면 배포 대상에서 뺍니다"
-              >
-                {path} ×
+    <Popup title="파일 추가" onClose={onClose}>
+      <input
+        type="text"
+        autoFocus
+        value={query}
+        placeholder="경로 일부 입력..."
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      {results.length > 0 && (
+        <ul className="manual-add-popup__results">
+          {results.map((path) => (
+            <li key={path} title={path}>
+              <span className="manual-add-popup__result-path">{path}</span>
+              <button type="button" onClick={() => onAdd(path)}>
+                추가
               </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {addedPaths.length > 0 && (
+        <div className="manual-add-popup__chips">
+          {addedPaths.map((path) => (
+            <button
+              key={path}
+              type="button"
+              className="manual-add-popup__chip"
+              onClick={() => onRemove(path)}
+              title="클릭하면 배포 대상에서 뺍니다"
+            >
+              {path} ×
+            </button>
+          ))}
+        </div>
+      )}
+    </Popup>
   )
 }
