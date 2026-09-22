@@ -1,59 +1,54 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type {
-  BuildPackageParams,
-  BuildPackageResult,
-  CheckUpdateResult,
-  DependencyAnalysisRequest,
-  DependencyAnalysisResult,
-  DeployPlan,
-  ListCommitsParams,
-  ListCommitsResult,
-  ManualFileEntry,
-  PreviewRequest,
-  RepositoryValidation,
-  ResolveManualFileRequest
-} from '../shared/types'
+import { IPC_CHANNELS, type IpcChannelMap } from '../shared/ipc-channels'
+
+// RT-20(S6): 채널명 인자는 `IpcChannelMap`의 키로 제약되고 반환값도
+// 채널별 result 타입으로 고정되므로, handlers.ts와 시그니처가 어긋나면
+// 여기서 컴파일 타임에 잡힌다.
+function invoke<C extends keyof IpcChannelMap>(
+  channel: C,
+  ...args: IpcChannelMap[C]['params']
+): Promise<IpcChannelMap[C]['result']> {
+  return ipcRenderer.invoke(channel, ...args)
+}
 
 // Custom APIs for renderer
 const api = {
   app: {
-    getVersion: (): Promise<string> => ipcRenderer.invoke('app:getVersion')
+    getVersion: () => invoke(IPC_CHANNELS['app:getVersion'])
   },
   repository: {
-    browse: (): Promise<string | null> => ipcRenderer.invoke('repository:browse'),
-    validate: (repoPath: string): Promise<RepositoryValidation> =>
-      ipcRenderer.invoke('repository:validate', repoPath)
+    browse: () => invoke(IPC_CHANNELS['repository:browse']),
+    validate: (repoPath: string) => invoke(IPC_CHANNELS['repository:validate'], repoPath)
   },
   git: {
-    listBranches: (repoPath: string): Promise<string[]> =>
-      ipcRenderer.invoke('git:listBranches', repoPath),
-    listCommits: (params: ListCommitsParams): Promise<ListCommitsResult> =>
-      ipcRenderer.invoke('git:listCommits', params),
-    getRemoteProjectName: (repoPath: string): Promise<string | null> =>
-      ipcRenderer.invoke('git:getRemoteProjectName', repoPath),
-    listTrackedFiles: (repoPath: string, branch: string): Promise<string[]> =>
-      ipcRenderer.invoke('git:listTrackedFiles', repoPath, branch)
+    listBranches: (repoPath: string) => invoke(IPC_CHANNELS['git:listBranches'], repoPath),
+    listCommits: (params: IpcChannelMap['git:listCommits']['params'][0]) =>
+      invoke(IPC_CHANNELS['git:listCommits'], params),
+    getRemoteProjectName: (repoPath: string) =>
+      invoke(IPC_CHANNELS['git:getRemoteProjectName'], repoPath),
+    listTrackedFiles: (repoPath: string, branch: string) =>
+      invoke(IPC_CHANNELS['git:listTrackedFiles'], repoPath, branch)
   },
   mapping: {
-    listProfiles: (): Promise<string[]> => ipcRenderer.invoke('mapping:listProfiles')
+    listProfiles: () => invoke(IPC_CHANNELS['mapping:listProfiles'])
   },
   analysis: {
-    preview: (req: PreviewRequest): Promise<DeployPlan> =>
-      ipcRenderer.invoke('analysis:preview', req),
-    dependencies: (req: DependencyAnalysisRequest): Promise<DependencyAnalysisResult> =>
-      ipcRenderer.invoke('analysis:dependencies', req),
-    resolveManualFile: (req: ResolveManualFileRequest): Promise<ManualFileEntry> =>
-      ipcRenderer.invoke('analysis:resolveManualFile', req)
+    preview: (req: IpcChannelMap['analysis:preview']['params'][0]) =>
+      invoke(IPC_CHANNELS['analysis:preview'], req),
+    dependencies: (req: IpcChannelMap['analysis:dependencies']['params'][0]) =>
+      invoke(IPC_CHANNELS['analysis:dependencies'], req),
+    resolveManualFile: (req: IpcChannelMap['analysis:resolveManualFile']['params'][0]) =>
+      invoke(IPC_CHANNELS['analysis:resolveManualFile'], req)
   },
   package: {
-    browseExportDir: (): Promise<string | null> => ipcRenderer.invoke('package:browseExportDir'),
-    export: (params: BuildPackageParams): Promise<BuildPackageResult | null> =>
-      ipcRenderer.invoke('package:export', params)
+    browseExportDir: () => invoke(IPC_CHANNELS['package:browseExportDir']),
+    export: (params: IpcChannelMap['package:export']['params'][0]) =>
+      invoke(IPC_CHANNELS['package:export'], params)
   },
   update: {
-    check: (): Promise<CheckUpdateResult> => ipcRenderer.invoke('update:check'),
-    confirmAndOpen: (): Promise<boolean> => ipcRenderer.invoke('update:confirmAndOpen')
+    check: () => invoke(IPC_CHANNELS['update:check']),
+    confirmAndOpen: () => invoke(IPC_CHANNELS['update:confirmAndOpen'])
   }
 }
 

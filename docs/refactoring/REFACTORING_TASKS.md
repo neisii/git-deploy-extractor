@@ -425,7 +425,7 @@ D1 AppShell                         레이아웃만
 
 ### P2 — main / shared 정리 (동작 불변)
 
-- [ ] **RT-20 (S6)** `shared/ipc-channels.ts`에 채널명·타입 맵 단일 정의 → preload·handlers·d.ts가 참조
+- [x] **RT-20 (S6)** `shared/ipc-channels.ts`에 채널명·타입 맵 단일 정의 → preload·handlers·d.ts가 참조 — `IpcChannelMap`(채널별 `params`/`result`) + `IPC_CHANNELS`(채널명 상수, 오타 시 컴파일 에러) 신규. `preload/index.ts`는 제네릭 `invoke()` 래퍼로, `main/ipc/handlers.ts`는 제네릭 `handle()` 래퍼(`ipcMain.handle`을 감쌈)로 각각 채널명·타입을 이 맵에서만 가져오도록 교체 — 두 파일 모두 `../shared/types`의 DTO를 더 이상 직접 import하지 않는다(맵을 거쳐 간접 참조). `preload/index.d.ts`의 `Api` 인터페이스도 `IpcChannelMap` 인덱싱으로 재작성. 동작 불변 확인: `npm test`(97개)·`npm run typecheck`·`npm run lint`·`npm run build`(main/preload/renderer 전부)·`npm run test:e2e`(7개, 실제 IPC 왕복 경유) 전부 통과
 - [ ] **RT-21 (S7)** `handlers.ts`를 채널 그룹별 파일로 분리, `dialogs.ts` 공용 헬퍼(폴더 선택·확인창), 어긋난 주석 정리
 - [ ] **RT-22 (S7)** `dependencyAnalysis.ts` 분할: `projectIndex` · `resolve` · `implementations` · `index`
 - [ ] **RT-23 (L1·L2)** 껍데기 `types.ts` 제거, `shared/`와 `renderer/lib` 배치 기준 문서화

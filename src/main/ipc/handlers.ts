@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import type { IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
 import { validateRepository, listBranches, getRemoteProjectName } from '../git/repository'
 import { listCommits } from '../git/commits'
@@ -14,16 +15,7 @@ import {
   assertNonEmptyAbsolutePath,
   assertServerPathsWithinDir
 } from './validate'
-import type {
-  BuildPackageParams,
-  BuildPackageResult,
-  CheckUpdateResult,
-  DependencyAnalysisRequest,
-  ListCommitsParams,
-  ManualFileEntry,
-  PreviewRequest,
-  ResolveManualFileRequest
-} from '../../shared/types'
+import { IPC_CHANNELS, type IpcChannelMap } from '../../shared/ipc-channels'
 
 // REQ-017: 클릭 시 항상 이 고정 인덱스 URL만 연다 — 특정 릴리스 태그로
 // 딥링크하지 않는다(DETAILED_DESIGN.md §10.5).
@@ -33,15 +25,28 @@ export function getProfilesDir(): string {
   return join(app.getPath('userData'), 'profiles')
 }
 
+// RT-20(S6): ipcMain.handle을 채널명·타입 둘 다 IpcChannelMap으로
+// 제약하는 얇은 래퍼로 감싼다. 채널명 오타, preload와의 params/result
+// 불일치는 이 래퍼를 거치는 순간 컴파일 타임에 잡힌다.
+function handle<C extends keyof IpcChannelMap>(
+  channel: C,
+  listener: (
+    event: IpcMainInvokeEvent,
+    ...args: IpcChannelMap[C]['params']
+  ) => IpcChannelMap[C]['result'] | Promise<IpcChannelMap[C]['result']>
+): void {
+  ipcMain.handle(channel, listener)
+}
+
 export function registerIpcHandlers(): void {
   // REQ-017: 버전 배지에 항상 표시할 현재 앱 버전. update:check는 캐시가
   // 신선하면 아예 호출되지 않으므로, 배지 텍스트 자체는 이 별도 채널로
   // 가져온다.
-  ipcMain.handle('app:getVersion', () => {
+  handle(IPC_CHANNELS['app:getVersion'], () => {
     return app.getVersion()
   })
 
-  ipcMain.handle('repository:browse', async () => {
+  handle(IPC_CHANNELS['repository:browse'], async () => {
     // RT-02(E2E 테스트 전용 우회) — Playwright는 OS 네이티브 폴더
     // 다이얼로그를 열 수 없다. 이 환경변수가 있을 때만 다이얼로그 없이
     // 바로 반환하고, 설정하지 않으면(일반 실행) 원래 동작 그대로다.
@@ -56,11 +61,11 @@ export function registerIpcHandlers(): void {
     return result.filePaths[0]
   })
 
-  ipcMain.handle('repository:validate', (_event, repoPath: string) => {
+  handle(IPC_CHANNELS['repository:validate'], (_event, repoPath) => {
     return validateRepository(repoPath)
   })
 
-  ipcMain.handle('git:listBranches', (_event, repoPath: string) => {
+  handle(IPC_CHANNELS['git:listBranches'], (_event, repoPath) => {
     return listBranches(repoPath)
   })
 
@@ -70,30 +75,30 @@ export function registerIpcHandlers(): void {
   // REQ-021: 배포 대상 파일 수동 추가 팝업의 자동완성 후보 풀 — 선택된
   // Branch의 HEAD 트리 전체 파일 목록. §7.2(dependencyAnalysis.ts)가 이미
   // 쓰는 것과 같은 함수를 pathPrefix 없이 호출한다(Java 한정 아님).
-  ipcMain.handle('git:listTrackedFiles', (_event, repoPath: string, branch: string) => {
+  handle(IPC_CHANNELS['git:listTrackedFiles'], (_event, repoPath, branch) => {
     return listTrackedFiles(repoPath, branch)
   })
 
-  ipcMain.handle('git:getRemoteProjectName', (_event, repoPath: string) => {
+  handle(IPC_CHANNELS['git:getRemoteProjectName'], (_event, repoPath) => {
     return getRemoteProjectName(repoPath)
   })
 
-  ipcMain.handle('git:listCommits', (_event, params: ListCommitsParams) => {
+  handle(IPC_CHANNELS['git:listCommits'], (_event, params) => {
     return listCommits(params)
   })
 
-  ipcMain.handle('mapping:listProfiles', () => {
+  handle(IPC_CHANNELS['mapping:listProfiles'], () => {
     return listProfileNames(getProfilesDir())
   })
 
-  ipcMain.handle('analysis:preview', async (_event, req: PreviewRequest) => {
+  handle(IPC_CHANNELS['analysis:preview'], async (_event, req) => {
     const profile = await loadProfile(getProfilesDir(), req.profileName)
     return computeDeployPlan(req.repoPath, req.branch, req.commitHashes, profile)
   })
 
   // RISK_ISSUES.md §7.2: Preview 완료 직후 Renderer가 체이닝 호출한다
   // (별도 트리거 버튼 없음 — UI_UX_SPEC.md §2.6a 참고).
-  ipcMain.handle('analysis:dependencies', async (_event, req: DependencyAnalysisRequest) => {
+  handle(IPC_CHANNELS['analysis:dependencies'], async (_event, req) => {
     const profile = await loadProfile(getProfilesDir(), req.profileName)
     return analyzeDependencies(req.repoPath, req.branch, req.includedLocalPaths, profile)
   })
@@ -102,29 +107,26 @@ export function registerIpcHandlers(): void {
   // (§7.2 의존성 후보와 동일하게 Mapping Rule 엔진을 그대로 재사용). status는
   // 항상 'added'로 고정 — 사용자가 지정한 경로라 diff 기반 Added/Modified
   // 구분 개념이 없다(DETAILED_DESIGN.md §13.4).
-  ipcMain.handle(
-    'analysis:resolveManualFile',
-    async (_event, req: ResolveManualFileRequest): Promise<ManualFileEntry> => {
-      // RT-12(R3): 렌더러가 보낸 localPath가 실제로 HEAD 트리에 있는지
-      // 먼저 확인한다 — 팝업 후보 자체가 HEAD 트리 조회 결과라 정상
-      // 경로면 항상 통과하지만, 오래된/조작된 값이 와도 존재하지 않는
-      // 파일을 조용히 "added"로 만들지 않는다.
-      const headTreeFiles = await listTrackedFiles(req.repoPath, req.branch)
-      assertManualFileInHeadTree(req.localPath, headTreeFiles)
+  handle(IPC_CHANNELS['analysis:resolveManualFile'], async (_event, req) => {
+    // RT-12(R3): 렌더러가 보낸 localPath가 실제로 HEAD 트리에 있는지
+    // 먼저 확인한다 — 팝업 후보 자체가 HEAD 트리 조회 결과라 정상
+    // 경로면 항상 통과하지만, 오래된/조작된 값이 와도 존재하지 않는
+    // 파일을 조용히 "added"로 만들지 않는다.
+    const headTreeFiles = await listTrackedFiles(req.repoPath, req.branch)
+    assertManualFileInHeadTree(req.localPath, headTreeFiles)
 
-      const profile = await loadProfile(getProfilesDir(), req.profileName)
-      return {
-        localPath: req.localPath,
-        serverPath: resolveServerPath(req.localPath, profile),
-        status: 'added'
-      }
+    const profile = await loadProfile(getProfilesDir(), req.profileName)
+    return {
+      localPath: req.localPath,
+      serverPath: resolveServerPath(req.localPath, profile),
+      status: 'added'
     }
-  )
+  })
 
   // RISK_ISSUES.md §7.1: Export 결과물을 저장할 부모 디렉터리 선택.
   // repository:browse와 동일한 방식(OS 네이티브 폴더 다이얼로그)이지만
   // 의미가 다른 별도 채널로 분리한다(저장소 선택 vs Export 위치 선택).
-  ipcMain.handle('package:browseExportDir', async () => {
+  handle(IPC_CHANNELS['package:browseExportDir'], async () => {
     const window = BrowserWindow.getFocusedWindow()
     const result = window
       ? await dialog.showOpenDialog(window, { properties: ['openDirectory'] })
@@ -133,50 +135,47 @@ export function registerIpcHandlers(): void {
     return result.filePaths[0]
   })
 
-  ipcMain.handle(
-    'package:export',
-    async (_event, params: BuildPackageParams): Promise<BuildPackageResult | null> => {
-      // RT-12(R3): exportParentDir이 지정됐다면 절대 경로인지 먼저
-      // 확인한다(빈 문자열/상대 경로면 getDeployDir이 예상 밖의 위치를
-      // 가리킬 수 있음). files[].serverPath도 Mapping Profile override가
-      // deployDir 밖을 가리키지 않는지 전부 쓰기 전에 확인한다.
-      if (params.exportParentDir) {
-        assertNonEmptyAbsolutePath(params.exportParentDir, 'Export 위치')
-      }
-      const deployDir = getDeployDir(params.repoPath, params.exportParentDir)
-      assertServerPathsWithinDir(deployDir, [
-        ...params.files.map((f) => f.serverPath),
-        ...params.deletedServerPaths
-      ])
-
-      // §7.1 안전장치: 대상 폴더에 이미 내용이 있으면 확인 없이 덮어쓰지 않는다.
-      if (await deployDirHasContent(deployDir)) {
-        const window = BrowserWindow.getFocusedWindow()
-        const options = {
-          type: 'warning' as const,
-          buttons: ['취소', '계속'],
-          defaultId: 0,
-          cancelId: 0,
-          message: '이미 있는 git-deploy-extracted를 덮어씁니다, 계속할까요?',
-          detail: deployDir
-        }
-        const confirm = window
-          ? await dialog.showMessageBox(window, options)
-          : await dialog.showMessageBox(options)
-        if (confirm.response === 0) return null
-      }
-      return buildPackage(params)
+  handle(IPC_CHANNELS['package:export'], async (_event, params) => {
+    // RT-12(R3): exportParentDir이 지정됐다면 절대 경로인지 먼저
+    // 확인한다(빈 문자열/상대 경로면 getDeployDir이 예상 밖의 위치를
+    // 가리킬 수 있음). files[].serverPath도 Mapping Profile override가
+    // deployDir 밖을 가리키지 않는지 전부 쓰기 전에 확인한다.
+    if (params.exportParentDir) {
+      assertNonEmptyAbsolutePath(params.exportParentDir, 'Export 위치')
     }
-  )
+    const deployDir = getDeployDir(params.repoPath, params.exportParentDir)
+    assertServerPathsWithinDir(deployDir, [
+      ...params.files.map((f) => f.serverPath),
+      ...params.deletedServerPaths
+    ])
 
-  ipcMain.handle('update:check', async (): Promise<CheckUpdateResult> => {
+    // §7.1 안전장치: 대상 폴더에 이미 내용이 있으면 확인 없이 덮어쓰지 않는다.
+    if (await deployDirHasContent(deployDir)) {
+      const window = BrowserWindow.getFocusedWindow()
+      const options = {
+        type: 'warning' as const,
+        buttons: ['취소', '계속'],
+        defaultId: 0,
+        cancelId: 0,
+        message: '이미 있는 git-deploy-extracted를 덮어씁니다, 계속할까요?',
+        detail: deployDir
+      }
+      const confirm = window
+        ? await dialog.showMessageBox(window, options)
+        : await dialog.showMessageBox(options)
+      if (confirm.response === 0) return null
+    }
+    return buildPackage(params)
+  })
+
+  handle(IPC_CHANNELS['update:check'], async () => {
     return checkForUpdate()
   })
 
   // REQ-017: 클릭 시 뜨는 확인창. update:check(강제 재확인)와는 독립된
   // 흐름이라 그 응답을 기다리지 않는다(DETAILED_DESIGN.md §10.3) — Renderer가
   // 두 IPC를 동시에 호출한다.
-  ipcMain.handle('update:confirmAndOpen', async (): Promise<boolean> => {
+  handle(IPC_CHANNELS['update:confirmAndOpen'], async () => {
     const window = BrowserWindow.getFocusedWindow()
     const options = {
       type: 'question' as const,
