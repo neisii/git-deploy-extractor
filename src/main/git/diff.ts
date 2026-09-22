@@ -1,4 +1,4 @@
-import { runGit } from './exec'
+import { runGit, assertSafeRevisionArg } from './exec'
 
 export interface FileChange {
   path: string
@@ -28,6 +28,13 @@ export async function getCommitFileChanges(
   repoPath: string,
   commitHash: string
 ): Promise<FileChange[]> {
+  // RT-24(exec.ts 규약) — commitHash는 revision 인자(`${commitHash}^1`
+  // 형태로도 쓰임)라 '-' 시작 여부를 미리 막는다. 이 값은 analysis:preview
+  // IPC의 commitHashes를 거쳐 들어와 아직 IPC 경계에서 형식 검증이 없다
+  // (hashFilter처럼 partitionHashFilter를 거치지 않음) — 여기가 유일한
+  // 방어선이다.
+  assertSafeRevisionArg(commitHash, '커밋 해시')
+
   let result = await runGit(repoPath, [
     'diff-tree',
     '--no-commit-id',
@@ -63,6 +70,9 @@ export async function headFileExists(
   branch: string,
   path: string
 ): Promise<boolean> {
+  // RT-24(exec.ts 규약) — showFile.ts의 getHeadFileContent와 동일한 이유.
+  assertSafeRevisionArg(branch, '브랜치')
+
   const result = await runGit(repoPath, ['cat-file', '-e', `${branch}:${path}`])
   return result.exitCode === 0
 }

@@ -1,4 +1,4 @@
-import { runGit } from './exec'
+import { runGit, assertSafeRevisionArg } from './exec'
 import { listTrackedFiles } from './lsTree'
 import type { CommitEntry, ListCommitsParams, ListCommitsResult } from '../../shared/types'
 import { getDefaultDateRange } from '../../shared/dateRange'
@@ -75,12 +75,17 @@ async function listCommitsByHash(
     return { commits: [], hasMore: false, invalidHashes }
   }
 
+  // RT-24(exec.ts 규약) — partitionHashFilter의 16진수 전용 검증(`-`로
+  // 시작 불가)만으로 이미 안전하지만, git에 넘기기 직전 지점에서 한 번 더
+  // 막아 "revision 인자는 여기를 반드시 거친다"는 불변 조건을 명시적으로
+  // 만든다.
+  for (const hash of unique) assertSafeRevisionArg(hash, '해시 필터')
+
   const pretty = `--pretty=format:%H${FIELD_SEP}%an${FIELD_SEP}%ad${FIELD_SEP}%s${RECORD_SEP}`
   // 여기서는 `--`(pathspec 구분자)를 넣지 않는다 — 이 해시들은 revision
   // 인자라 `--` 뒤에 두면 git이 경로로 재해석해 아무 것도 안 걸린다(재현
   // 확인됨, git이 pathspec 매치로 취급). 옵션 주입 방지는 위
-  // partitionHashFilter의 16진수 전용 검증만으로 충분하다 — 그 형식은
-  // `-`로 시작할 수 없다.
+  // partitionHashFilter의 16진수 전용 검증 + assertSafeRevisionArg로 충분하다.
   const baseArgs = ['log', '--no-walk', '--encoding=UTF-8', '--date=iso-strict', pretty]
 
   let result = await runGit(repoPath, [...baseArgs, ...unique])
@@ -131,6 +136,10 @@ export async function listCommits(params: ListCommitsParams): Promise<ListCommit
   if (hashFilter && hashFilter.length > 0) {
     return listCommitsByHash(repoPath, hashFilter, skip, pageSize, maxCount)
   }
+
+  // RT-24(exec.ts 규약) — branch는 revision 인자라 `--` 뒤에 못 두므로
+  // (아래 pathspecArgs와 달리) 여기서 '-' 시작 여부만 미리 막는다.
+  assertSafeRevisionArg(branch, '브랜치')
 
   if (skip >= maxCount) {
     return { commits: [], hasMore: false }

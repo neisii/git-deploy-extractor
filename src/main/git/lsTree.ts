@@ -1,4 +1,4 @@
-import { runGit } from './exec'
+import { runGit, assertSafeRevisionArg } from './exec'
 
 // RISK_ISSUES.md §7.2용 — 특정 경로 접두사 아래 HEAD 트리에 존재하는 파일
 // 목록만 조회한다. `-- <pathPrefix>`는 와일드카드 없이도 디렉터리 접두사
@@ -9,6 +9,11 @@ export async function listTrackedFiles(
   branch: string,
   pathPrefix?: string
 ): Promise<string[]> {
+  // RT-24(exec.ts 규약) — branch는 revision 인자, pathPrefix는 pathspec이라
+  // 서로 다른 방식으로 막는다: branch는 '-' 시작 검증, pathPrefix는 이미
+  // 아래처럼 `--` 뒤에 둔다.
+  assertSafeRevisionArg(branch, '브랜치')
+
   const args = ['ls-tree', '-r', branch, '--name-only']
   if (pathPrefix) args.push('--', pathPrefix)
 

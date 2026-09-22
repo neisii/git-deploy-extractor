@@ -1,4 +1,4 @@
-import { runGit } from './exec'
+import { runGit, assertSafeRevisionArg } from './exec'
 
 // RISK_ISSUES.md §7.2용 — HEAD 트리(작업트리 아님)에서 고정 문자열을 담고
 // 있는 파일 경로만 찾는다. `git grep -l <pattern> <branch> -- <pathspecs>`
@@ -11,10 +11,17 @@ export async function grepTree(
   fixedString: string,
   pathspecs: string[]
 ): Promise<string[]> {
+  // RT-24(exec.ts 규약) — branch는 revision 인자라 '-' 시작 검증. fixedString은
+  // 현재 호출부 둘 다 하드코딩 문자열이거나 Java 식별자(`-`로 시작 불가)라
+  // 구조적으로 이미 안전하지만, `-e`를 명시해 어떤 값이 와도 git이 옵션이
+  // 아니라 패턴으로만 해석하게 고정한다(git grep 공식 관용구).
+  assertSafeRevisionArg(branch, '브랜치')
+
   const result = await runGit(repoPath, [
     'grep',
     '-l',
     '-F',
+    '-e',
     fixedString,
     branch,
     '--',

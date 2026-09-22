@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { listCommits, getDefaultDateRange, partitionHashFilter } from './commits'
+import { GitArgumentError } from './exec'
 import {
   cleanupRepo,
   commitAll,
@@ -175,5 +176,36 @@ describe('listCommits — 해시 필터 옵션 주입 방지', () => {
     })
     expect(result.commits.map((c) => c.hash)).toEqual([head])
     expect(result.invalidHashes).toEqual(['--not-a-hash'])
+  })
+})
+
+// RT-24 — hashFilter와 별개로, branch 자체도 `git log <branch> ...`의
+// 첫 positional 인자라 같은 유형의 옵션 인젝션에 노출돼 있었다(R1과 같은
+// 유형, hashFilter처럼 형식 검증이 없었음).
+describe('listCommits — branch 옵션 주입 방지', () => {
+  let dir: string
+
+  beforeAll(() => {
+    dir = initRepo('gde-branch-injection-')
+    writeFixtureFile(dir, 'a.txt', 'v1')
+    commitAll(dir, 'init')
+  })
+
+  afterAll(() => cleanupRepo(dir))
+
+  it("branch가 '--output=<path>'면 git을 호출하지 않고 즉시 거부한다", async () => {
+    const maliciousPath = join(tmpdir(), `gde-r1-branch-poc-${Date.now()}.txt`)
+    await expect(
+      listCommits({
+        repoPath: dir,
+        branch: `--output=${maliciousPath}`,
+        startDate: '2020-01-01',
+        endDate: '2030-01-01',
+        maxCount: 100,
+        skip: 0,
+        pageSize: 100
+      })
+    ).rejects.toThrow(GitArgumentError)
+    expect(existsSync(maliciousPath)).toBe(false)
   })
 })
