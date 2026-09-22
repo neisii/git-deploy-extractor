@@ -1,10 +1,15 @@
 import type { CSSProperties } from 'react'
 import type { RowComponentProps } from 'react-window'
+import type { DeployFileStatus } from '../../../../shared/types'
 
 export interface FileListItem {
   localPath: string
   checked: boolean
   extraLabel?: string // 예: "(인터페이스)" / "(구현체)" — 우측 패널 전용
+  // RT-45(M-2) — "포함된 파일" 전용(좌측만 넘겨준다, 우측은 undefined로
+  // 둬 아래 색·마커가 적용되지 않는다). added는 색만으로 구분하지 않도록
+  // 녹색 + "+" 마커를 병행한다(색각 이상·흑백 캡처 대응).
+  status?: DeployFileStatus
 }
 
 // RT-41 — FileListColumn.tsx의 Row/VirtualRow를 그대로 옮겼다(동작 무변경).
@@ -17,6 +22,15 @@ export function FileRow({
   onToggle: (localPath: string) => void
   style?: CSSProperties
 }): React.JSX.Element {
+  const isAdded = item.status === 'added'
+  const textClassName = [
+    'deploy-files-row__local',
+    'deploy-files-row__local--clickable',
+    isAdded && 'deploy-files-row__local--added'
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
     <div
       style={{ ...style, width: 'max-content' }}
@@ -31,7 +45,12 @@ export function FileRow({
           checkbox/span이 직접 배치된다(label 자체는 박스를 만들지 않음). */}
       <label className="deploy-files-row__label">
         <input type="checkbox" checked={item.checked} onChange={() => onToggle(item.localPath)} />
-        <span className="deploy-files-row__local deploy-files-row__local--clickable">
+        <span className={textClassName}>
+          {isAdded && (
+            <span className="deploy-files-row__status-marker" aria-hidden="true">
+              +{' '}
+            </span>
+          )}
           {item.localPath}
           {item.extraLabel && (
             <span className="deploy-files-row__extra-label"> {item.extraLabel}</span>

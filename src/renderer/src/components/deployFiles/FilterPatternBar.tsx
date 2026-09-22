@@ -39,6 +39,11 @@ export function FilterPatternBar({ hiddenCount }: FilterPatternBarProps): React.
   const { open } = useWorkAreaPopup()
 
   const [mode, setMode] = useState<FilePattern['mode']>('exclude')
+  // RT-45(M-1) — 좌측 파일명 검색(REQ-025)을 삭제한 대체 안전장치: 화면
+  // 필터링에만 적용되고 Export 대상 계산은 건드리지 않는 패턴. 기본은
+  // 꺼짐(기존 exclude 패턴과 동일하게 Export까지 반영)이라 이 체크박스는
+  // "검색하듯 잠깐 걸러보고 싶을 때"만 명시적으로 켠다.
+  const [screenOnly, setScreenOnly] = useState(false)
   const [input, setInput] = useState('')
   const [focused, setFocused] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -55,7 +60,7 @@ export function FilterPatternBar({ hiddenCount }: FilterPatternBarProps): React.
   const submit = (): void => {
     const inputs = parsePatternList(input)
     if (inputs.length === 0) return
-    const { added, activated } = addFilePatterns(input, mode)
+    const { added, activated } = addFilePatterns(input, mode, screenOnly)
     setInput('')
     setFeedback(buildFeedback(added, activated))
     if (feedbackTimer.current) clearTimeout(feedbackTimer.current)
@@ -110,6 +115,17 @@ export function FilterPatternBar({ hiddenCount }: FilterPatternBarProps): React.
         <button type="button" onClick={submit}>
           +추가
         </button>
+        <label
+          className="filter-pattern-bar__screen-only"
+          title="켜면 이 패턴은 화면 표시에만 적용되고 Export 대상에는 영향을 주지 않습니다(검색 대용)"
+        >
+          <input
+            type="checkbox"
+            checked={screenOnly}
+            onChange={(e) => setScreenOnly(e.target.checked)}
+          />
+          화면만
+        </label>
         {feedback && (
           <span className="status-text" role="status" aria-live="polite">
             {feedback}

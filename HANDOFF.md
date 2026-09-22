@@ -9,17 +9,18 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
 이미 구현 완료 후 v0.6.0으로 릴리스된 상태입니다 — 처음부터 만드는 게 아니라
 기존 앱을 확장하는 작업입니다.
 
-**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 + P4의 RT-40~44·46 구현
+**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 + P4의 RT-40~46 구현
 완료 — 2026-09-22).** v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에
-분리해 뒀습니다. **다음 착수 지점은 P4의 RT-45(U-3·U-5, StatusFilter·좌측
-검색 삭제·added 녹색·`+ 파일 추가` 제목 줄 우측)입니다. RT-43(PopupHost)·
-RT-44(PreviewSummary/Deleted·경고 팝업)·RT-46(FilterPatternBar/패턴 팝업)은
-2026-09-22에 한 번에 구현 완료됐습니다(RT-43 명세가 RT-44/46을 전제해
-AskUserQuestion으로 범위를 확인한 뒤 셋을 같이 진행 — §5 RT-43/44/46 항목의
-구현 요약 참고). 착수 전에 §5.1의 RT-45 명세가 아직 없는 다른 RT(번호가 더
-큰 것 포함)를 전제하고 있는지부터 확인하세요 — RT-41/42/43에서 실제로 이런
-순서 문제가 있었습니다. P4는 실제 UI 변경 단계라 P0~P3의 "동작 불변" 원칙이
-더 이상 적용되지 않습니다** — §3 확정 UI
+분리해 뒀습니다. **다음 착수 지점은 P4의 RT-47(U-6, `CollapsibleSection`
+적용 3곳·`section:hide/show` 이벤트·`WorkArea` grid 행 재분배)입니다.
+RT-43(PopupHost)·RT-44(PreviewSummary/Deleted·경고 팝업)·RT-46
+(FilterPatternBar/패턴 팝업)은 2026-09-22에 한 번에(RT-43 명세가 RT-44/46을
+전제해 AskUserQuestion으로 범위를 확인한 뒤), RT-45(StatusFilter·좌측 검색
+삭제·added 녹색·`+ 파일 추가` 제목 줄 우측)는 그 직후 같은 날 구현
+완료됐습니다 — §5 RT-43/44/45/46 각 항목의 구현 요약 참고. 착수 전에 §5.1의
+RT-47 명세가 아직 없는 다른 RT(번호가 더 큰 것 포함)를 전제하고 있는지부터
+확인하세요 — RT-41/42/43에서 실제로 이런 순서 문제가 있었습니다. P4는 실제
+UI 변경 단계라 P0~P3의 "동작 불변" 원칙이 더 이상 적용되지 않습니다** — §3 확정 UI
 변경(U-1~U-22)·목업(`component-playground.html`)·§5.1 각 RT 상세 명세를 따르고,
 관련 §7 미결 사항(M-x)이 미확정이면 구현 전에 먼저 확인하세요. 이번 작업이
 새 기능이 아니라 이 리팩토링의
@@ -473,9 +474,36 @@ AskUserQuestion으로 범위를 확인한 뒤 셋을 같이 진행 — §5 RT-43
     `parsePatternList` 6건 + `deployFilesSlice.patterns.test.ts` 9건)·
     `typecheck`·`lint`·`build`·`test:e2e`(11개, 신규 `work-area-popups.spec.ts`
     4건 — Deleted 팝업, HEAD에 없음 경고, Reload 시 팝업 닫힘, 패턴
-    추가→숨김→토글/삭제) 전부 통과. **다음 착수 지점은 RT-45**(U-3·U-5,
-    StatusFilter·좌측 검색 삭제·added 녹색·`+ 파일 추가` 제목 줄 우측)
-    입니다.
+    추가→숨김→토글/삭제) 전부 통과.
+  - **RT-45(같은 날 이어서 진행)**: §5.1 RT-45 명세에 인용된 M-1(좌측 검색
+    삭제의 위험)·M-2(added 색 구분)·M-11(좁은 폭 줄바꿈)이 전부 이미
+    결정돼 있어(§7 표) 추가 확인 없이 바로 구현. `deployFilesFilter`
+    (상태 Filter)·`deployFilesSearchTerm`(좌측 파일명 검색, REQ-025)과
+    그 액션·타입을 전부 삭제. **M-1 안전장치**: `FilePattern`에
+    `screenOnly?: boolean` 추가 — true면 화면 필터링에는 적용되지만
+    Export 대상 계산(`exportPlan.buildExportFiles`)에서는 제외한다(두
+    호출부가 각자 `filter(p => !p.screenOnly)`로 걸러내고 `hiddenByPatterns`를
+    부름 — 그 함수 자체는 screenOnly를 모름). `FilterPatternBar.tsx`에
+    "화면만" 체크박스, `FilterPatternsPopup.tsx`의 칩마다 "화면만" 토글
+    버튼, 스토어에 `togglePatternScreenOnly` 액션 신설. **M-2**:
+    `FileListItem.status`(좌측만 채움), `FileRow.tsx`가 added면 녹색
+    (`#67c090`, Chip manual 변형과 동일 색 재사용) + `+` 마커 병행.
+    **제목 줄 우측**: `IncludedFilesPane.tsx`의 `title`을
+    `FilePaneCountTitle` + `+ 파일 추가` 버튼 flex row로 재구성(버튼
+    고정, 카운터 텍스트 쪽이 좁은 폭에서 줄바꿈). REQ-020의 3숫자
+    표기는 §5.1 RT-45 프로즈의 "남은 N개/전체 M개"(2숫자)와 다르지만
+    수용 기준엔 문구 자체가 없고 REQ-020은 이미 확정된 결정이라 표기는
+    바꾸지 않고 버튼 위치만 옮겼다. **e2e 상태 오염을 실제로 겪고
+    고침**: 파일 패턴은 저장소 구분 없이 `localStorage`에 전역
+    저장되는데, e2e Electron 인스턴스가 테스트 실행 사이에도 같은
+    userData를 공유해 한 테스트가 정리 없이 남긴 패턴이 무관한 다른
+    spec 파일의 테스트 5개를 한꺼번에 실패시키는 걸 재현했다 — 패턴을
+    추가하는 e2e 테스트는 시작·종료 시 항상 정리(`clearAllPatterns`
+    같은 헬퍼)하는 게 이 저장소의 필수 관례임을 기록해 둔다. 검증:
+    `npm test`(140개)·`typecheck`·`lint`·`build`·`test:e2e`(15개,
+    신규 `e2e/included-files-pane.spec.ts` 4건) 전부 통과. **다음 착수
+    지점은 RT-47**(U-6, `CollapsibleSection` 적용 3곳·`section:hide/show`
+    이벤트·`WorkArea` grid 행 재분배)입니다.
 
 먼저 이 순서로 읽어주세요 (짐작하지 말고 실제로 읽어야 합니다):
 

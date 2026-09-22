@@ -13,8 +13,6 @@ export interface DeployFileEntry {
   included: boolean
 }
 
-export type DeployFilesFilter = 'all' | 'added' | 'modified'
-
 // REQ-021/DR-019 — deployFiles가 통째로 교체/초기화되는 지점(새 Preview
 // 결과 반영, 선택 비움 등)마다 같이 초기화한다. 별도 영속 상태를 두지
 // 않기로 한 결정(DETAILED_DESIGN.md §13.5)에 따라 analysisSlice의
@@ -32,12 +30,11 @@ export const emptyManualAddState = {
 // 같은 이유로 두 배열 사이에 상태를 중복 저장하지 않는다).
 export interface DeployFilesSlice {
   deployFiles: DeployFileEntry[]
-  deployFilesFilter: DeployFilesFilter
-  deployFilesSearchTerm: string // §7.2 point 8 — 좌측 "포함된 파일" 파일명 검색(부분 일치)
   // REQ-019/DR-018 + RT-46(§3.1) — "포함된 파일"에만 적용(누락된 의존성은
   // 항상 .java만 나와 무의미). localStorage(gde:excludePatterns)로 동기
   // 초기화. 제외/포함 두 모드를 갖는다(예전 ExcludePatternEntry는 제외
-  // 전용이었음).
+  // 전용이었음). RT-45 — 좌측 파일명 검색(REQ-025) 삭제로 상태 Filter/검색
+  // 상태는 없어지고, 그 대체 안전장치로 screenOnly 플래그가 추가됐다.
   filePatterns: FilePattern[]
   // REQ-021/DR-019 — 배포 대상 파일 수동 추가. headTreeFiles는 팝업
   // 자동완성 후보 풀(선택된 Branch의 HEAD 트리 전체, Preview 성공 시
@@ -47,16 +44,20 @@ export interface DeployFilesSlice {
   headTreeFiles: string[]
   manuallyAddedPaths: string[]
 
-  setDeployFilesFilter: (filter: DeployFilesFilter) => void
-  setDeployFilesSearchTerm: (term: string) => void
   // RT-46 — 쉼표·줄바꿈으로 구분한 여러 패턴을 한 번에 추가한다(모드는
   // 입력 전체에 동일 적용). 이미 있는 (pattern, mode)는 새로 만들지 않고
-  // enabled만 켠다. 피드백 문구용으로 추가/활성화 개수를 반환한다.
+  // enabled만 켠다(screenOnly는 새로 추가되는 항목에만 적용 — 이미 있는
+  // 항목의 screenOnly는 togglePatternScreenOnly로 따로 바꾼다). 피드백
+  // 문구용으로 추가/활성화 개수를 반환한다.
   addFilePatterns: (
     rawInput: string,
-    mode: FilePattern['mode']
+    mode: FilePattern['mode'],
+    screenOnly: boolean
   ) => { added: number; activated: number }
   toggleFilePattern: (pattern: string, mode: FilePattern['mode']) => void
+  // RT-45(M-1) — 화면 필터링에만 적용되고 Export 대상 계산에는 영향을
+  // 주지 않는 패턴으로 전환/복귀한다.
+  togglePatternScreenOnly: (pattern: string, mode: FilePattern['mode']) => void
   removeFilePattern: (pattern: string, mode: FilePattern['mode']) => void
   addManualFile: (localPath: string) => Promise<void>
   removeManualFile: (localPath: string) => void
@@ -71,19 +72,14 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
   get
 ) => ({
   deployFiles: [],
-  deployFilesFilter: 'all',
-  deployFilesSearchTerm: '',
   filePatterns: loadFilePatterns(),
   ...emptyManualAddState,
-
-  setDeployFilesFilter: (filter) => set({ deployFilesFilter: filter }),
-  setDeployFilesSearchTerm: (term) => set({ deployFilesSearchTerm: term }),
 
   // RT-46(§3.1) — 빈 입력·빈 항목은 무시. 같은 (pattern, mode)가 이미
   // 있으면 새로 추가하지 않고 enabled만 켠다(중복 방지 — 예전에 껐던
   // 패턴을 다시 입력했을 때 자연스럽게 "다시 켜기"로 동작). 모드는 입력
   // 전체(쉼표·줄바꿈으로 나뉜 여러 패턴)에 동일하게 적용된다.
-  addFilePatterns: (rawInput, mode) => {
+  addFilePatterns: (rawInput, mode, screenOnly) => {
     const inputs = parsePatternList(rawInput)
     if (inputs.length === 0) return { added: 0, activated: 0 }
 
@@ -100,7 +96,7 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
           }
         } else {
           added += 1
-          next = [...next, { pattern, mode, enabled: true }]
+          next = [...next, { pattern, mode, enabled: true, screenOnly }]
         }
       }
       saveFilePatterns(next)
@@ -113,6 +109,16 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
     set((state) => {
       const next = state.filePatterns.map((p) =>
         p.pattern === pattern && p.mode === mode ? { ...p, enabled: !p.enabled } : p
+      )
+      saveFilePatterns(next)
+      return { filePatterns: next }
+    })
+  },
+
+  togglePatternScreenOnly: (pattern, mode) => {
+    set((state) => {
+      const next = state.filePatterns.map((p) =>
+        p.pattern === pattern && p.mode === mode ? { ...p, screenOnly: !p.screenOnly } : p
       )
       saveFilePatterns(next)
       return { filePatterns: next }
@@ -173,12 +179,11 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
     }))
   },
 
-  // 정정(RISK_ISSUES.md 결정 이력 #33): 상태 Filter만 자체적으로 다시
-  // 계산하고 검색어는 무시하던 버그를 고쳤다 — 이제 필터 로직을 여기서
-  // 다시 계산하지 않고, 화면에 실제로 표시 중인 목록(DeployFilesPanel.tsx의
-  // includedItems, 상태 Filter+검색어 둘 다 반영됨)의 경로를 그대로
-  // 파라미터로 받는다(단일 진실 공급원). 받은 목록이 전부 included면
-  // 전체 해제, 그 외(일부만/전혀 없음)면 전체 선택.
+  // 정정(RISK_ISSUES.md 결정 이력 #33): 필터 로직을 여기서 다시 계산하지
+  // 않고, 화면에 실제로 표시 중인 목록(RT-45 이후: 파일 패턴만 반영됨,
+  // 상태 Filter·검색은 삭제됨)의 경로를 그대로 파라미터로 받는다(단일
+  // 진실 공급원). 받은 목록이 전부 included면 전체 해제, 그 외(일부만/
+  // 전혀 없음)면 전체 선택.
   toggleAllDeployFiles: (visibleLocalPaths) => {
     set((state) => {
       const visibleSet = new Set(visibleLocalPaths)

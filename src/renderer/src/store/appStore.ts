@@ -19,7 +19,7 @@ import type { UpdateSlice } from './slices/updateSlice'
 // 나눴다: repository · commitQuery · commits · analysis · deployFiles ·
 // export · update(각 src/store/slices/*.ts). 이 파일은 그 슬라이스들을
 // 합쳐 하나의 zustand 스토어로 조립하는 역할만 한다 — 컴포넌트가 보는
-// `useAppStore`/`selectIsAnalysisStale`/`DeployFilesFilter` 등 공개 API는
+// `useAppStore`/`selectIsAnalysisStale`/`DeployFileEntry` 등 공개 API는
 // 예전과 동일한 경로(`./appStore`)로 그대로 재export한다.
 //
 // 슬라이스끼리 서로의 액션을 부를 때는 (예: repositorySlice가 Branch
@@ -55,4 +55,4 @@ export const useAppStore = create<AppState>()((...a) => ({
 export { parseMultiValueFilter } from '../services/commitQueryParams'
 export { selectionMatches, selectIsAnalysisStale } from './slices/analysisSlice'
 export type { AnalyzedSelection, SelectionSnapshot, DeleteEntry } from './slices/analysisSlice'
-export type { DeployFileEntry, DeployFilesFilter } from './slices/deployFilesSlice'
+export type { DeployFileEntry } from './slices/deployFilesSlice'

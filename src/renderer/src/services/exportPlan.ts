@@ -24,7 +24,11 @@ export function buildExportFiles(
   deployFiles: ExportableDeployFile[],
   filePatterns: FilePattern[]
 ): DeployPlanFile[] {
+  // RT-45(M-1) — screenOnly 패턴은 화면 필터링(검색 대용)에만 쓰이고
+  // Export 대상 계산에는 적용하지 않는다(useIncludedFilesView의
+  // selectedCount와 동일 기준).
+  const exportRelevantPatterns = filePatterns.filter((p) => !p.screenOnly)
   return deployFiles
-    .filter((f) => f.included && !hiddenByPatterns(f.localPath, filePatterns))
+    .filter((f) => f.included && !hiddenByPatterns(f.localPath, exportRelevantPatterns))
     .map((f) => ({ localPath: f.localPath, serverPath: f.serverPath, status: f.status }))
 }

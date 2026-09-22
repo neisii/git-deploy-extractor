@@ -474,9 +474,14 @@ body,
   flex-wrap: wrap;
 }
 
-.filter-pattern-bar__row input {
+.filter-pattern-bar__row input[type='text'] {
   flex: 1;
   min-width: 160px;
+}
+
+/* RT-45(M-1) — "화면만" 체크박스(검색 대체 안전장치). */
+.filter-pattern-bar__screen-only {
+  white-space: nowrap;
 }
 
 /* 입력창 바로 아래 겹쳐 뜨는 해석 미리보기 — 레이아웃(아래 목록 높이)에
@@ -514,6 +519,26 @@ body,
   margin-bottom: 8px;
 }
 
+/* RT-45(M-1) — Chip 옆에 붙는 "화면만" 토글. 한 쌍으로 줄바꿈되도록
+   inline-flex로 묶는다. */
+.filter-patterns-popup__chip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.filter-patterns-popup__screen-only-toggle {
+  font-size: 11px;
+  padding: 1px 6px;
+  opacity: 0.5;
+}
+
+.filter-patterns-popup__screen-only-toggle--on {
+  opacity: 1;
+  border-color: #67c090;
+  color: #67c090;
+}
+
 /* RT-41 — FilePane(Panel/PanelHeader/PanelBody 위에 지은 슬롯 컴포넌트,
    좌 "포함된 파일"/우 "누락된 의존성"이 공유). height:100% — SplitPane이
    배정한 셀을 꽉 채운다(예전 .file-list-column과 같은 이유). */
@@ -521,9 +546,28 @@ body,
   height: 100%;
 }
 
+/* RT-45(U-3) — "+ 파일 추가"를 toolbar 줄에서 제목 줄 우측으로 옮기면서
+   flex row가 됐다(MissingDependenciesPane은 버튼이 없어 텍스트 하나만
+   있는 채로 영향 없음). M-11: 버튼(add-file-button)은 flex-shrink:0으로
+   고정해 좁은 폭에서도 잘리지 않고, 카운터 텍스트(file-pane__title-text)
+   쪽이 자기 박스 안에서 줄바꿈된다(카운터가 "둘째 줄"로 넘어가는 효과 —
+   버튼과 별도의 flex 줄로 쪼개지 않고 텍스트 자체가 wrap됨). */
 .file-pane__title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
   font-weight: 600;
   margin-bottom: 6px;
+}
+
+.file-pane__title-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.add-file-button {
+  flex-shrink: 0;
 }
 
 .file-pane__toolbar {
@@ -724,6 +768,17 @@ body,
 /* §7.2 — 우측 "누락된 의존성" 목록에서 인터페이스/구현체 구분 라벨 */
 .deploy-files-row__extra-label {
   color: var(--ev-c-text-2);
+}
+
+/* RT-45(M-2) — added 파일은 색만으로 구분하지 않고 녹색 + "+" 마커를
+   병행한다(색각 이상·흑백 캡처 대응). Chip.chip--manual.chip--on과 같은
+   녹색(#67c090)을 재사용(새 색을 만들지 않는다). */
+.deploy-files-row__local--added {
+  color: #67c090;
+}
+
+.deploy-files-row__status-marker {
+  font-weight: 600;
 }
 
 .warning-banner {

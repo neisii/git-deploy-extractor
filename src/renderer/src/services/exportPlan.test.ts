@@ -41,4 +41,12 @@ describe('buildExportFiles', () => {
     )
     expect(result).toEqual([{ localPath: 'a.txt', serverPath: 'server/a.txt', status: 'modified' }])
   })
+
+  it('screenOnly 패턴은 매치돼도 Export에서 제외하지 않는다(RT-45 M-1)', () => {
+    const result = buildExportFiles(
+      [file({ localPath: 'a.txt' }), file({ localPath: 'b.log' })],
+      [{ pattern: '*.log', mode: 'exclude', enabled: true, screenOnly: true }]
+    )
+    expect(result.map((f) => f.localPath).sort()).toEqual(['a.txt', 'b.log'])
+  })
 })

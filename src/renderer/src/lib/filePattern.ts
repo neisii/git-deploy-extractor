@@ -18,6 +18,13 @@ export interface FilePattern {
   pattern: string
   mode: 'exclude' | 'include'
   enabled: boolean
+  // RT-45(M-1) — 좌측 "포함된 파일" 파일명 검색(REQ-025)을 삭제하면서
+  // 생긴 위험(검색 대신 포함 패턴을 쓰고 끄는 걸 잊으면 Export 대상이
+  // 조용히 줄어듦)에 대한 안전장치. true면 화면 필터링(useIncludedFilesView)
+  // 에는 적용되지만 Export 대상 계산(services/exportPlan.ts)에서는
+  // 제외한다 — 호출부가 이 패턴을 배열에서 미리 걸러내고 hiddenByPatterns를
+  // 부른다(이 함수 자체는 screenOnly를 모른다, 매칭 로직과 분리).
+  screenOnly?: boolean
 }
 
 const REGEX_SPECIAL_CHARS = /[.+^${}()|[\]\\]/g

@@ -23,6 +23,7 @@ export function FilterPatternsPopup({ onClose }: FilterPatternsPopupProps): Reac
   const deployFiles = useAppStore((s) => s.deployFiles)
   const toggleFilePattern = useAppStore((s) => s.toggleFilePattern)
   const removeFilePattern = useAppStore((s) => s.removeFilePattern)
+  const togglePatternScreenOnly = useAppStore((s) => s.togglePatternScreenOnly)
 
   useEffect(() => {
     if (filePatterns.length === 0) onClose()
@@ -51,18 +52,38 @@ export function FilterPatternsPopup({ onClose }: FilterPatternsPopupProps): Reac
           const { kind, glob } = interpret(p.pattern)
           const count = matchCount.get(`${p.mode}:${p.pattern}`) ?? 0
           return (
-            <Chip
-              key={`${p.mode}:${p.pattern}`}
-              label={p.pattern}
-              variant={p.mode}
-              on={p.enabled}
-              onToggle={() => toggleFilePattern(p.pattern, p.mode)}
-              onRemove={() => removeFilePattern(p.pattern, p.mode)}
-              removeLabel={`${p.pattern} 삭제`}
-              badge={KIND_LABEL[kind]}
-              secondaryText={`·${count}`}
-              title={`${p.mode === 'exclude' ? '제외' : '포함'} · ${KIND_LABEL[kind]} · ${glob} · 현재 ${count}개 매치 · 클릭하면 ${p.enabled ? '끕니다' : '켭니다'}`}
-            />
+            <span key={`${p.mode}:${p.pattern}`} className="filter-patterns-popup__chip-row">
+              <Chip
+                label={p.pattern}
+                variant={p.mode}
+                on={p.enabled}
+                onToggle={() => toggleFilePattern(p.pattern, p.mode)}
+                onRemove={() => removeFilePattern(p.pattern, p.mode)}
+                removeLabel={`${p.pattern} 삭제`}
+                badge={KIND_LABEL[kind]}
+                secondaryText={`·${count}`}
+                title={`${p.mode === 'exclude' ? '제외' : '포함'} · ${KIND_LABEL[kind]} · ${glob} · 현재 ${count}개 매치 · 클릭하면 ${p.enabled ? '끕니다' : '켭니다'}`}
+              />
+              {/* RT-45(M-1) — screenOnly면 이 패턴은 화면 표시에만 적용되고
+                  Export 대상 계산에서는 제외된다(exportPlan.buildExportFiles,
+                  useIncludedFilesView의 selectedCount와 동일 기준). */}
+              <button
+                type="button"
+                className={
+                  p.screenOnly
+                    ? 'filter-patterns-popup__screen-only-toggle filter-patterns-popup__screen-only-toggle--on'
+                    : 'filter-patterns-popup__screen-only-toggle'
+                }
+                onClick={() => togglePatternScreenOnly(p.pattern, p.mode)}
+                title={
+                  p.screenOnly
+                    ? '화면만 적용 중 — 클릭하면 Export 대상에도 적용합니다'
+                    : 'Export 대상에도 적용 중 — 클릭하면 화면 표시에만 적용합니다'
+                }
+              >
+                화면만
+              </button>
+            </span>
           )
         })}
       </div>

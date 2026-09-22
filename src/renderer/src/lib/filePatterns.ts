@@ -23,7 +23,8 @@ export function loadFilePatterns(): FilePattern[] {
       .map((entry) => ({
         pattern: entry.pattern as string,
         enabled: entry.enabled as boolean,
-        mode: entry.mode === 'include' ? 'include' : 'exclude'
+        mode: entry.mode === 'include' ? 'include' : 'exclude',
+        screenOnly: entry.screenOnly === true
       }))
   } catch {
     return []
