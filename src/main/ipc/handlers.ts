@@ -9,6 +9,11 @@ import { computeDeployPlan } from '../analysis/computeDeployPlan'
 import { analyzeDependencies } from '../analysis/dependencyAnalysis'
 import { buildPackage, getDeployDir, deployDirHasContent } from '../package/buildPackage'
 import { checkForUpdate } from '../update/checkForUpdate'
+import {
+  assertManualFileInHeadTree,
+  assertNonEmptyAbsolutePath,
+  assertServerPathsWithinDir
+} from './validate'
 import type {
   BuildPackageParams,
   BuildPackageResult,
@@ -100,6 +105,13 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     'analysis:resolveManualFile',
     async (_event, req: ResolveManualFileRequest): Promise<ManualFileEntry> => {
+      // RT-12(R3): 렌더러가 보낸 localPath가 실제로 HEAD 트리에 있는지
+      // 먼저 확인한다 — 팝업 후보 자체가 HEAD 트리 조회 결과라 정상
+      // 경로면 항상 통과하지만, 오래된/조작된 값이 와도 존재하지 않는
+      // 파일을 조용히 "added"로 만들지 않는다.
+      const headTreeFiles = await listTrackedFiles(req.repoPath, req.branch)
+      assertManualFileInHeadTree(req.localPath, headTreeFiles)
+
       const profile = await loadProfile(getProfilesDir(), req.profileName)
       return {
         localPath: req.localPath,
@@ -124,8 +136,20 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     'package:export',
     async (_event, params: BuildPackageParams): Promise<BuildPackageResult | null> => {
-      // §7.1 안전장치: 대상 폴더에 이미 내용이 있으면 확인 없이 덮어쓰지 않는다.
+      // RT-12(R3): exportParentDir이 지정됐다면 절대 경로인지 먼저
+      // 확인한다(빈 문자열/상대 경로면 getDeployDir이 예상 밖의 위치를
+      // 가리킬 수 있음). files[].serverPath도 Mapping Profile override가
+      // deployDir 밖을 가리키지 않는지 전부 쓰기 전에 확인한다.
+      if (params.exportParentDir) {
+        assertNonEmptyAbsolutePath(params.exportParentDir, 'Export 위치')
+      }
       const deployDir = getDeployDir(params.repoPath, params.exportParentDir)
+      assertServerPathsWithinDir(deployDir, [
+        ...params.files.map((f) => f.serverPath),
+        ...params.deletedServerPaths
+      ])
+
+      // §7.1 안전장치: 대상 폴더에 이미 내용이 있으면 확인 없이 덮어쓰지 않는다.
       if (await deployDirHasContent(deployDir)) {
         const window = BrowserWindow.getFocusedWindow()
         const options = {
