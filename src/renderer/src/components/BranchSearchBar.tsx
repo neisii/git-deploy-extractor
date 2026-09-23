@@ -108,8 +108,12 @@ export function BranchSearchBar(): React.JSX.Element {
     >
       <SplitPane
         className="commit-query-bar__groups"
+        // 조회 조건 왼쪽(검색 조건)·오른쪽(필터) 패널 높이를 맞추기 위한
+        // 조정(2026-09-23 후속, commitQueryBar.css의 날짜 입력창/필터
+        // 필드 폭 축소와 함께 적용) — 50:50이면 "조회 기간" 행이 줄바꿈돼
+        // 왼쪽이 더 높아진다. 상세 근거는 commitQueryBar.css 주석 참고.
         storageKey="gde:splitRatio:queryGroups"
-        defaultRatio={0.5}
+        defaultRatio={0.67}
         minStartPx={320}
         minEndPx={330}
         start={

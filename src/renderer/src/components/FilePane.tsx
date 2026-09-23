@@ -19,7 +19,7 @@ export interface FilePaneProps {
 // 조건 없이 항상 렌더링할 뿐이다).
 export function FilePane({ title, toolbar, body }: FilePaneProps): React.JSX.Element {
   return (
-    <Panel className="file-pane">
+    <Panel className="file-pane fill">
       <PanelHeader className="file-pane__header">
         <div className="file-pane__title">{title}</div>
         {toolbar != null && <div className="file-pane__toolbar">{toolbar}</div>}

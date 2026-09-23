@@ -171,7 +171,7 @@ export function AddFilesPopup({ onClose }: AddFilesPopupProps): React.JSX.Elemen
           보이는 항목 모두 추가 ({visibleDependencies.length})
         </button>
       </div>
-      <div className="add-files-popup__tree">{treeBody}</div>
+      <div className="add-files-popup__tree fill-scroll">{treeBody}</div>
       {manuallyAddedPaths.length > 0 && (
         <div className="manual-add-popup__chips">
           {manuallyAddedPaths.map((path) => (

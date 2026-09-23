@@ -79,12 +79,12 @@ export function WorkArea({
   }, [])
 
   return (
-    <div className="work-area">
+    <div className="work-area fill-scroll">
       <WorkAreaPopupContext.Provider
         value={{ openPopup, open: setOpenPopup, close: () => setOpenPopup(null) }}
       >
         <SplitPane
-          className="vertical-main-split"
+          className="vertical-main-split fill-scroll"
           direction="vertical"
           storageKey="gde:splitRatio:commitsVsFiles"
           defaultRatio={0.45}

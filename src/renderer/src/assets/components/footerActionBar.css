@@ -1,0 +1,22 @@
+/* FooterActionBar.tsx */
+.footer-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  /* 우측 하단 고정 이미지(.credit-link, 50px)와 겹치지 않도록 그만큼
+     오른쪽 여백을 확보한다. */
+  padding-right: 60px;
+}
+
+/* RISK_ISSUES.md §7.1 — 현재 선택된 Export 부모 디렉터리 표시.
+   repository-panel__path와 같은 monospace 스타일, 넘치면 ellipsis. */
+.footer-action-bar__export-path {
+  flex: 1;
+  min-width: 120px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--ev-c-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

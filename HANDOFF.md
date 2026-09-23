@@ -9,11 +9,15 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
 이미 구현 완료 후 v0.6.0으로 릴리스된 상태입니다 — 처음부터 만드는 게 아니라
 기존 앱을 확장하는 작업입니다.
 
-**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 + P4의 RT-40~49·51~57·59
-구현 완료 — 2026-09-22/23).** v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에
-분리해 뒀습니다. **다음 착수 지점은 P4의 RT-50(S8, `main.css` 컴포넌트별
-분할 + `WorkArea` 채움 규칙(`.fill`) 공용화)입니다 — RT-50이 끝나면 P4
-전체가 완료되고 P5(RT-60~63)로 넘어갑니다.**
+**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P4 구현 완료 —
+2026-09-22/23).** v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에
+분리해 뒀습니다. **P4(RT-40~50)가 전부 끝났습니다 — 다음 착수 지점은
+P5(RT-60 문서 동기화 → RT-61 루트 html 이동 → RT-62 untracked 정리 →
+RT-63 릴리스)입니다.** RT-50(S8, `main.css` 컴포넌트별 분할 + `WorkArea`
+채움 규칙(`.fill`/`.fill-scroll`) 공용화)은 2026-09-23에 구현 완료됐습니다
+— 착수 전 §7 M-38(6)("간격·타이포 토큰화"가 RT-50 범위인지)이 유일한
+결정 대기 항목이라 AskUserQuestion으로 확인, "RT-50 스펙 그대로만"으로
+확정 후 진행했습니다(상세는 §5 RT-50 항목).
 RT-43(PopupHost)·RT-44(PreviewSummary/Deleted·경고 팝업)·RT-46
 (FilterPatternBar/패턴 팝업)은 2026-09-22에 한 번에(RT-43 명세가 RT-44/46을
 전제해 AskUserQuestion으로 범위를 확인한 뒤), RT-45(StatusFilter·좌측 검색
@@ -888,10 +892,71 @@ UI 변경 단계라 P0~P3의 "동작 불변" 원칙이 더 이상 적용되지 �
     그 밖에서 기존 위치·스타일 그대로 유지했습니다. `npm test`(238개)·
     `typecheck`·`lint`·`build`·`test:e2e`(24개) 전부 통과, Playwright
     스크린샷(넓은/좁은 폭)으로 오른쪽 정렬 유지까지 육안 확인 — 상세는
-    §5.1 RT-59 항목 참고. **P4의 다음 착수 지점은 RT-50**(S8,
-    `main.css` 컴포넌트별 분할 + `WorkArea` 채움 규칙(`.fill`) 공용화 —
-    §5.1 RT-50 명세 참고, 관련 §7 미결 사항 없음). RT-50이 끝나면 P4가
-    전부 완료되고 P5(RT-60~63, 문서 정식 병합·정리·릴리스)로 넘어갑니다.
+    §5.1 RT-59 항목 참고.
+    **RT-50(S8, `main.css` 컴포넌트별 분할 + `WorkArea` 채움 규칙 공용화)도
+    2026-09-23에 구현 완료됐습니다 — 이걸로 P4(RT-40~50)가 전부
+    끝났습니다.** 착수 전 §7 M-38(6)("간격·타이포 토큰화"가 RT-50
+    범위인지)이 유일한 결정 대기 항목이라 AskUserQuestion으로 확인 —
+    **"RT-50 스펙 그대로만"**(CSS 분할 + `.fill`/`.fill-scroll`, 토큰화는
+    제외)로 확정 후 진행했습니다(M-38 나머지 (1)~(5)와 함께 후속으로
+    남음, §7 표 참고). `assets/main.css`(1265줄)를 `assets/components/`
+    아래 17개 파일(공용 유틸 `fill.css` + 컴포넌트/컴포넌트-묶음별
+    16개 — repositoryPanel·footerActionBar·commitQueryBar·
+    commitListPanel·previewSummary·workArea·splitPane·deployFilesPanel·
+    filePane·filterPattern·popup·addFilesPopup·panel·chip·
+    collapsibleSection·treeList, 전역 primitive는 `shell.css`)로
+    분할했고, `main.css`는 `@import`만 남았습니다 — `fill.css`를 가장
+    먼저 import해서, 컴포넌트별 규칙이 같은 속성을 재정의할 때
+    (`.commit-query-bar__groups{height:auto}` 등) 커스케이드 순서상
+    뒤에 오는 쪽이 이기게 했습니다. `.fill{height:100%;min-height:0}`·
+    `.fill-scroll{flex:1;min-height:0}`을 신설해, 그동안 컴포넌트마다
+    따로 적던 동일 패턴(`.work-area`·`.vertical-main-split`·
+    `.split-pane`·`.commit-list-panel`+`__body`·`.deployment-preview-panel`·
+    `.deploy-files-panel`+`__split`·`.file-pane`·`.file-list__scroll`+
+    `__body`·`.panel-frame__body`·`.collapsible-section--fill`·
+    `.add-files-popup__tree`)를 유틸리티 클래스로 교체했습니다 —
+    `SplitPane.tsx`는 모든 인스턴스에 `fill`을 기본으로 얹고,
+    `Panel.tsx`의 `PanelBody`는 `fill-scroll`을 기본으로 얹어 `FilePane`
+    등 모든 소비자에 자동 전파됩니다(계산되는 최종 스타일은 교체 전과
+    동일 — 같은 속성·같은 값을 다른 selector로 옮겼을 뿐). 부수적으로
+    더 이상 어느 컴포넌트도 참조하지 않던 죽은 규칙
+    (`.file-list-column__search`, RT-41 이후 leftover)도 삭제했습니다.
+    검증: `npm test`(238개)·`typecheck`·`lint`·`build`(vite가 `@import`
+    체인을 문제없이 단일 CSS로 번들)·`test:e2e`(24개, 기존 스펙 전부
+    그대로 통과) 전부 통과. RT-50 자체 수용 기준(작업 영역 높이를
+    줄여도 자식이 밀려나지 않고 목록 내부에서만 스크롤)은 임시
+    Playwright 스크립트로 창을 900×420까지 줄여 헤더 4곳(저장소 바·조회
+    조건·커밋 목록 헤더·footer)이 전부 보이고 `.commit-list-panel__body`가
+    `.commit-list-panel` 경계를 넘지 않는 것을 스크린샷+bounding box로
+    확인 후 삭제(RT-41 이후 관례 — 커밋 대상 아님). 상세는 §5.1 RT-50
+    항목 참고.
+    **RT-50 직후, 계획에 없던 후속 요청 2건(M-45, 2026-09-23, 사용자가
+    화면을 직접 보고 요청)도 처리했습니다** — CommitQueryBar(§5.1 RT-49
+    산출물) 실사용 중 발견된 시각적 버그 둘입니다. (1) 키워드/작성자/
+    해시 필터 세 필드 사이 간격이 달라 보임 — 원인은 작성자/해시가
+    `<label>`이라 전역 `label{align-items:center}`(shell.css)가 새서
+    그 둘만 내용이 중앙 정렬·축소된 것(`gap`은 처음부터 12px로 동일했다)
+    — `.query-filter-group__field{align-items:stretch}` 명시로 해결.
+    (2) 조회 조건 왼쪽(검색 조건)·오른쪽(필터) 패널 높이가 다름 —
+    `input[type=date]` 브라우저 기본 폭(~158px)×2 때문에 "조회 기간" 행이
+    줄바꿈된 게 원인. **"SplitPane 비율만 옮기기"(78px 부족)→"오른쪽
+    텍스트영역만 줄이기"(45px 부족)를 차례로 실측해 불가능함을 확인한
+    뒤에야 "날짜 입력창도 같이 줄이기"로 확정**했습니다(AskUserQuestion
+    3회, 매 시도마다 실측 수치를 먼저 보여주고 다음 방향을 물었다) —
+    날짜 입력창 158→140px(122px 이하에서는 일자 숫자가 잘리는 걸
+    스크린샷으로 직접 확인), 오른쪽 필터 필드 110→68px(키워드는 라디오
+    버튼 때문에 150px 유지), `.query-filter-group__fields` gap 12→8px,
+    SplitPane `defaultRatio` 0.5→0.67 — 기본 창(1100px)에서 양쪽 다
+    줄바꿈 없이 77px vs 79px(2.2px 차이, 줄바꿈이 없는 넓은 창에서도 나는
+    반올림 오차와 동일)로 수렴했습니다. **M-42(a)의 "기본 비율 50:50"
+    결정을 대체합니다** — §7 M-45, §5.1 RT-49 항목(정정 표시)도 갱신해
+    뒀습니다. 검증은 RT-50과 동일하게 `npm test`(238개)·`typecheck`·
+    `lint`·`build`·`test:e2e`(24개) 전부 통과 + 임시 Playwright
+    스크린샷(날짜 값 잘림 여부·좌우 높이 비교) 육안 확인 후 삭제.
+    **이 두 건은 계획 밖 요청이라 아직 커밋 안 했습니다** — RT-50과
+    함께 워킹 트리에만 있습니다.
+    **다음 착수 지점은 P5(RT-60 문서 동기화 → RT-61 루트
+    html 이동 → RT-62 untracked 정리 → RT-63 릴리스)입니다.**
 
 먼저 이 순서로 읽어주세요 (짐작하지 말고 실제로 읽어야 합니다):
 

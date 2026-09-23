@@ -89,7 +89,7 @@ export function CommitListPanel(): React.JSX.Element {
   }
 
   return (
-    <div className="panel commit-list-panel">
+    <div className="panel commit-list-panel fill">
       <div className="commit-list-panel__header">
         <div className="commit-list-panel__header-left">
           <label>
@@ -125,7 +125,7 @@ export function CommitListPanel(): React.JSX.Element {
           Preview
         </button>
       </div>
-      <div className="commit-list-panel__body">{body}</div>
+      <div className="commit-list-panel__body fill-scroll">{body}</div>
       {pagination.loading && commits.length > 0 && (
         <div className="status-text">다음 페이지 불러오는 중...</div>
       )}

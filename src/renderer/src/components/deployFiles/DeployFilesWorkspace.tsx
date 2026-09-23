@@ -21,7 +21,7 @@ export function DeployFilesWorkspace({
 }: DeployFilesWorkspaceProps): React.JSX.Element {
   return (
     <SplitPane
-      className="deploy-files-panel__split"
+      className="deploy-files-panel__split fill-scroll"
       storageKey="gde:splitRatio:deployFiles"
       defaultRatio={0.5}
       minStartPx={SPLIT_MIN_PX}

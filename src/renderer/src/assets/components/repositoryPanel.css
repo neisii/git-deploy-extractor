@@ -1,0 +1,92 @@
+/* RepositoryPanel.tsx */
+.repository-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+/* RT-59(U-21) — Browse.../Reload/버전 배지를 저장소 바 오른쪽 끝에 한
+   그룹으로 묶는다(margin-left:auto). 폭이 좁아 .repository-panel의
+   flex-wrap이 이 그룹 전체를 다음 줄로 내려도, 그룹 자체의 margin-left:
+   auto가 그 줄 안에서도 오른쪽 정렬을 유지시킨다(M-44 — 저장소 전체
+   경로 텍스트 .repository-panel__path는 이 그룹 밖, 라벨과의 사이에서
+   flex:1로 남은 공간을 채우는 자리 그대로 유지). */
+.repository-panel__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  flex-wrap: nowrap;
+}
+
+.repository-panel__actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* REQ-018/DR-017 — 원래 별도 행(TitleBar)이었으나, 경로 텍스트 왼쪽으로
+   합쳐서 세로 공간을 아꼈다(RISK_ISSUES.md 결정 이력 #38). flex:0 0 auto라
+   경로 텍스트(flex:1)의 truncation을 방해하지 않는다. */
+.repository-panel__title {
+  flex: 0 0 auto;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* remote 프로젝트 이름과 구분되는 로컬 폴더명 — 기존 "보조 정보" 색
+   토큰(repository-panel__path, footer-action-bar__export-path와 동일)을
+   재사용해 본문(remote 이름)보다 격을 낮춘다. */
+.repository-panel__title-local {
+  color: var(--ev-c-text-2);
+  font-weight: 400;
+}
+
+/* 라벨이 왼쪽에 새로 붙으면서 이 행이 붐빌 수 있어(결정 이력 #38),
+   footer-action-bar__export-path와 동일하게 잘리면 ellipsis + title
+   툴팁으로 전체 경로를 보여준다. */
+.repository-panel__path {
+  flex: 1;
+  min-width: 200px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--ev-c-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* REQ-017/DR-016 — 버전 배지. 평시엔 배경 없이 일반 버튼과 구분되는
+   최소한의 스타일만, 새 버전이 있을 때만 강조색으로 눈에 띄게 한다. */
+.repository-panel__update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--ev-c-text-2);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  cursor: pointer;
+}
+
+.repository-panel__update-badge--available {
+  background: #d4ff00;
+  color: #1a1a1a;
+  border-color: #d4ff00;
+}
+
+.repository-panel__update-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: repository-panel__update-spin 0.7s linear infinite;
+}
+
+@keyframes repository-panel__update-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

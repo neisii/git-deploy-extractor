@@ -1,0 +1,17 @@
+/* WorkArea.tsx — `.fill-scroll`(flex:1+min-height:0, fill.css)을
+   className으로 덧붙여 쓴다(둘 다 app-shell/work-area 자신의 flex column
+   안에서 남은 세로 공간을 전부 가져가야 하는 자식). */
+
+/* RT-43(§2.1·§5.1) — openPopup의 유일한 앵커(position:relative) + Preview
+   요약과 DeployFilesWorkspace의 공통 부모(WorkArea). */
+.work-area {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* MainGrid(커밋 목록↔분석 요약)와 DeployFilesPanel(포함된 파일↔누락된
+   의존성) 둘 다, 이제 그 위를 감싸는 세로 SplitPane(.vertical-main-split)의
+   grid row 안에 놓인다 — 그래서 자기 자신의 flex-basis/min-height를
+   따로 가질 필요가 없고, 부모 grid cell을 꽉 채우기만 하면 된다
+   (`.fill`의 height:100%가 이 역할을 한다). */

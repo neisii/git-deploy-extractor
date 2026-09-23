@@ -1,0 +1,78 @@
+/* Chip.tsx — 라벨 버튼 + × 버튼 두 개로 나눈 래퍼(REQ-024와 같은 이유로
+   button 중첩 불가). exclude/include/manual 세 변형은 각각 기존
+   status-text--error(#e5675f)/button--primary(#3a6ea5)/status-text--success
+   (#67c090) 색을 재사용한다(새 색을 만들지 않는다, manual-add-popup__chip
+   주석과 같은 원칙). off(비활성)는 취소선 + 흐림으로 "지금 적용 안 됨"을
+   더 뚜렷하게 표시한다. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 2px 4px 2px 8px;
+  font-size: 12px;
+  border: 1px solid var(--ev-c-gray-3);
+  background: transparent;
+  color: var(--ev-c-text-2);
+}
+
+.chip--exclude.chip--on {
+  background: #e5675f;
+  border-color: #e5675f;
+  color: #fff;
+}
+
+.chip--include.chip--on {
+  background: #3a6ea5;
+  border-color: #3a6ea5;
+  color: #fff;
+}
+
+.chip--manual.chip--on {
+  background: #67c090;
+  border-color: #67c090;
+  color: #1a1a1a;
+}
+
+.chip--off {
+  opacity: 0.6;
+}
+
+.chip--off .chip__label {
+  text-decoration: line-through;
+}
+
+.chip__label {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+}
+
+button.chip__label {
+  cursor: pointer;
+}
+
+.chip__badge {
+  font-weight: 600;
+}
+
+.chip__secondary {
+  opacity: 0.8;
+}
+
+.chip__remove {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  opacity: 0.7;
+  padding: 0 0 0 2px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.chip__remove:hover {
+  opacity: 1;
+}

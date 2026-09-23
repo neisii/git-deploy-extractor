@@ -1,0 +1,66 @@
+/* CollapsibleSection.tsx — 헤더 행(제목+접기 버튼)은 본문 박스 밖(위)에
+   둔다(사용자 결정 2026-09-21). 본문은 [hidden]으로만 숨겨 입력 중이던
+   값을 보존한다(unmount 안 함). RT-47 — 세 사용처(조회 조건·커밋·배포
+   대상 파일) 모두 이 컴포넌트 하나를 그대로 쓰므로 헤더 높이·좌측 시작
+   위치·접기 버튼 우측 위치가 자동으로 동일해진다(개별 컴포넌트가 헤더를
+   따로 그리지 않는 한). 바깥 테두리는 두지 않는다 — 본문 안쪽 상자
+   (branch-search-bar/panel, commit-list-panel/panel, file-pane 등)가
+   테두리를 가진다. */
+.collapsible-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* RT-47 — CommitWorkspace/DeployFilesWorkspace(SplitPane grid cell 안)만
+   `fill`(height:100%, fill.css)을 className으로 받는다(CollapsibleSection.tsx의
+   `fill` prop이 `collapsible-section` 대신 `fill` 클래스를 덧붙인다).
+   CommitQueryBar(app-shell의 평범한 flex 자식)는 기본(auto) 높이를
+   유지해야 한다 — 다른 모든 SplitPane 자식(commit-list-panel/
+   deploy-files-panel 등)과 같은 관례. */
+
+.collapsible-section__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+}
+
+.collapsible-section__body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* display:flex는 [hidden]일 때 적용하면 안 된다 — author 규칙(이 클래스)이
+   UA 스타일시트의 [hidden]{display:none}보다 우선순위가 높아(출처가
+   author라 특정도가 같아도 이긴다) 접힌 본문이 계속 보이는 버그가 실제로
+   있었다(Playwright 스크린샷으로 발견). :not([hidden])로 펼친 상태에만
+   적용한다. */
+.collapsible-section__body:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+
+.collapsible-section__title {
+  font-weight: 600;
+}
+
+.collapsible-section__summary {
+  color: var(--ev-c-text-2);
+  font-size: 12px;
+}
+
+.collapsible-section__toggle {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.collapsible-section__toggle:hover {
+  opacity: 1;
+}

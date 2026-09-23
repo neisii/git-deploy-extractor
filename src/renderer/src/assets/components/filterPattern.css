@@ -1,0 +1,82 @@
+/* FilterPatternBar.tsx / FilterPatternsPopup.tsx */
+
+/* RT-46(§3.1·§5.1) — 파일 패턴(제외/포함) 입력 줄. "포함된 파일" 쪽
+   toolbar에만 렌더링된다(IncludedFilesPane.tsx가 조립). */
+.filter-pattern-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.filter-pattern-bar__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-pattern-bar__row input[type='text'] {
+  flex: 1;
+  min-width: 160px;
+}
+
+/* RT-45(M-1) — "화면만" 체크박스(검색 대체 안전장치). */
+.filter-pattern-bar__screen-only {
+  white-space: nowrap;
+}
+
+/* 입력창 바로 아래 겹쳐 뜨는 해석 미리보기 — 레이아웃(아래 목록 높이)에
+   영향을 주지 않도록 입력에 포커스가 있고 값이 있을 때만 보인다. */
+.filter-pattern-bar__overlay {
+  font-size: 12px;
+  color: var(--ev-c-text-2);
+  max-height: 80px;
+  overflow-y: auto;
+}
+
+.filter-pattern-bar__summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.filter-pattern-bar__badge {
+  cursor: help;
+  color: var(--ev-c-text-2);
+  white-space: pre-line;
+}
+
+/* 'patterns' 팝업(FilterPatternsPopup) — 제외/포함 두 구역. */
+.filter-patterns-popup__section-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.filter-patterns-popup__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+/* RT-45(M-1) — Chip 옆에 붙는 "화면만" 토글. 한 쌍으로 줄바꿈되도록
+   inline-flex로 묶는다. */
+.filter-patterns-popup__chip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.filter-patterns-popup__screen-only-toggle {
+  font-size: 11px;
+  padding: 1px 6px;
+  opacity: 0.5;
+}
+
+.filter-patterns-popup__screen-only-toggle--on {
+  opacity: 1;
+  border-color: #67c090;
+  color: #67c090;
+}

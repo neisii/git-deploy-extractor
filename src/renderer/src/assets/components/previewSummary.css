@@ -1,0 +1,13 @@
+/* PreviewSummary.tsx — `.fill`(height:100%, fill.css)을 className으로
+   덧붙여 쓴다(SplitPane이 배정한 높이를 실제로 채운다, RISK_ISSUES.md
+   §7.2). */
+.deployment-preview-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.preview-summary__warning-button {
+  color: #f0c674;
+  border-color: #f0c674;
+}

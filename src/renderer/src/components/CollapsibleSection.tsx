@@ -63,7 +63,7 @@ export function CollapsibleSection({
   }, [collapsed, sectionKey, title, owner])
 
   return (
-    <div className={`collapsible-section${fill ? ' collapsible-section--fill' : ''}`}>
+    <div className={`collapsible-section${fill ? ' fill' : ''}`}>
       <div className="collapsible-section__header">
         <span className="collapsible-section__title">{title}</span>
         {collapsed && summary != null && (

@@ -151,7 +151,7 @@ export function IncludedFilesPane({ onOpenManualAdd }: IncludedFilesPaneProps): 
   const body = isStale ? (
     <PanelState kind="stale" />
   ) : (
-    <div className="file-list__scroll">
+    <div className="file-list__scroll fill-scroll">
       <div className="file-list__header-row">
         <TriStateCheckbox
           checked={false}
@@ -162,7 +162,7 @@ export function IncludedFilesPane({ onOpenManualAdd }: IncludedFilesPaneProps): 
           title="화면에 보이는 변경 파일을 모두 Extract 대상으로 이동"
         />
       </div>
-      <div className="file-list__body">
+      <div className="file-list__body fill-scroll">
         <TreeList
           items={items}
           getPath={(item) => item.localPath}

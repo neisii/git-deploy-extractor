@@ -1,0 +1,204 @@
+/* TreeList.tsx(공용 행) + ExtractTargetsPane.tsx/IncludedFilesPane.tsx가
+   그 위에 그리는 도메인 전용 내용(파일명 상태색·되돌리기 액션 등) +
+   CopyPathButton.tsx. */
+
+/* RT-53(§5.1 RT-53, U-13) — TreeList 공용 행. 폴더·리프 둘 다 같은
+   높이·구분선·들여쓰기(JS에서 paddingLeft로 주입) 규칙을 쓴다. min-width:0
+   이 있어야 안의 flex 자식(이름 span)이 내용(안 잘리는 파일명) 크기로 안
+   버티고 줄어들 수 있다 — 없으면 오른쪽 ×/배지가 컨테이너 밖으로 밀려나
+   보이지 않는 버그가 있었다(Playwright 스크린샷으로 발견, 예전 FileRow의
+   가로 스크롤 방식을 그대로 재사용했다가 생긴 문제 — 이 행들은 오른쪽에
+   항상 보여야 하는 액션이 있어 가로 스크롤 대신 이름을 ellipsis로 자르는
+   쪽을 택했다). */
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--ev-c-gray-3);
+}
+
+.tree-row__toggle {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.8;
+  padding: 0 2px;
+}
+
+.tree-row__toggle:hover {
+  opacity: 1;
+}
+
+.tree-row__name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-row__name--clickable {
+  cursor: pointer;
+}
+
+.tree-row__name--clickable:hover {
+  text-decoration: underline;
+}
+
+.tree-row__count {
+  color: var(--ev-c-text-2);
+}
+
+/* IncludedFilesPane의 체크박스+이름(리프·폴더 공용) — 라벨 자체가 flex
+   컨테이너라 예전 .deploy-files-row__label(display:contents, grid 전용
+   트릭)이 더 이상 필요 없다(TreeList는 grid가 아니라 flex라서). */
+.tree-row__leaf-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  cursor: pointer;
+}
+
+.extract-row__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.extract-row__name .deploy-files-row__local {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.deploy-files-row__local {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  white-space: nowrap;
+}
+
+.deploy-files-row__local--clickable {
+  cursor: pointer;
+}
+
+.deploy-files-row__local--clickable:hover {
+  text-decoration: underline;
+}
+
+/* §7.2 — 우측 "누락된 의존성" 목록에서 인터페이스/구현체 구분 라벨 */
+.deploy-files-row__extra-label {
+  color: var(--ev-c-text-2);
+}
+
+/* RT-45(M-2) — added 파일은 색만으로 구분하지 않고 녹색 + "+" 마커를
+   병행한다(색각 이상·흑백 캡처 대응). Chip.chip--manual.chip--on과 같은
+   녹색(#67c090)을 재사용(새 색을 만들지 않는다). */
+.deploy-files-row__local--added {
+  color: #67c090;
+}
+
+.deploy-files-row__status-marker {
+  font-weight: 600;
+}
+
+/* RT-53(§5.1 RT-53, U-18) — 5개 목록 공용 경로 복사 버튼(CopyPathButton.tsx).
+   상시 노출하지 않고 행 호버·포커스 시에만 보인다 — `display`가 아니라
+   `visibility`를 쓰는 이유는 자리를 미리 확보해 나타날 때 레이아웃이
+   밀리지 않게 하기 위함(§5.1 명세 그대로). 최소 20×20px. */
+.copy-path-button {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--ev-c-text-2);
+  cursor: pointer;
+  visibility: hidden;
+  border-radius: 3px;
+}
+
+.tree-row:hover .copy-path-button,
+.copy-path-button:focus-visible {
+  visibility: visible;
+}
+
+.copy-path-button--error {
+  color: #e5675f;
+  visibility: visible;
+}
+
+/* RT-51/52 — 누락된 의존성 종류 배지(Impl 구현체/I 인터페이스). Extract
+   행에서는 이미 추가된 항목이라 중립 회색, AddFilesPopup에서는 빨간
+   파일명 옆에 같이 쓰인다(배지 자체 색은 둘 다 중립 — 파일명 색으로만
+   "누락됨"을 강조한다, U-20 "색만으로 구분하지 않는다"와도 맞음: 배지
+   텍스트(Impl/I)가 이미 색과 무관한 구분 수단이다). */
+.kind-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ev-c-text-2);
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+/* RT-51 — 활성 파일 패턴에 걸린 Extract 항목(조용한 누락 방지 — 숨기지
+   않고 흐림+취소선으로 "지금은 Export되지 않는다"는 걸 알린다). RT-53에서
+   행 wrapper(.extract-row div)가 없어지면서(TreeList의 범용 .tree-row로
+   교체) 조상 선택자 대신 이름 span에 직접 거는 클래스로 바뀌었다. */
+.deploy-files-row__local--pattern-excluded {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.extract-row__pattern-tag {
+  font-size: 11px;
+  color: var(--ev-c-text-2);
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.extract-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+/* × 되돌리기는 확인창 없이 즉시 실행되는 파괴적(?) 동작이라 붉은색으로
+   구분한다(RT-53 명세가 미리 정한 규칙 — "복사=회색 중립, ×=붉은색"을
+   이번에 ×만 먼저 적용). */
+.extract-row__remove {
+  border: none;
+  background: transparent;
+  color: #e5675f;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.extract-row__remove:hover {
+  opacity: 0.8;
+}
+
+.extract-row__source-badge {
+  font-size: 11px;
+  color: var(--ev-c-text-2);
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+}

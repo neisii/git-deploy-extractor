@@ -1,0 +1,78 @@
+/* SplitPane.tsx — 루트 grid 컨테이너는 `.fill`(height:100%, fill.css)을
+   기본으로 받는다(SplitPane.tsx가 매 인스턴스마다 className에 덧붙임).
+   `.split-pane`이 커버하지 않는 grid-template-columns/rows 값 자체는
+   SplitPane이 비율에 따라 인라인으로 계산해 넣는다 — 여기서는 grid
+   컨테이너로서의 공통 성질만 정의한다. RISK_ISSUES.md §7.4 — 좌우/상하
+   드래그 리사이즈 스플릿의 공용 스타일. MainGrid·DeployFilesPanel 내부
+   분할(가로)과 그 둘을 나누는 상하 분할(세로) 세 곳에서 재사용한다. */
+.split-pane {
+  display: grid;
+  align-items: stretch;
+}
+
+/* 창이 두 최소 크기의 합보다 좁아지면(가로) 또는 짧아지면(세로) 반대편이
+   잘려 보이지 않도록 스크롤이 뜨는 안전망(#22와 같은 안전망을 세로에도
+   동일하게 적용). 두 오버플로 축을 동시에 auto로 주지 않는 이유는
+   DeployFilesPanel §2.6의 실측 이력과 같다 — 필요한 축만 연다. */
+.split-pane--horizontal {
+  overflow-x: auto;
+}
+
+.split-pane--vertical {
+  overflow-y: auto;
+  /* RT-47 — 두 트랙이 접혀 auto 높이만 차지할 때(§5.1 "둘 다 접힘 → 위에
+     붙임") 남는 공간을 아래로 보낸다. 비율/1fr 트랙만 쓰는 다른 상태에는
+     여유 공간이 없어 영향이 없다. */
+  align-content: start;
+}
+
+.split-pane__start,
+.split-pane__end {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 핸들의 실제 그리드 트랙(SplitPane.tsx의 HANDLE_HIT_PX=8px)은 잡기
+   편하도록 넉넉하지만, 눈에 보이는 막대는 이 안에서 2px로 얇게 중앙
+   정렬해 그린다 — 두껍게 보이지 않으면서 클릭 판정 영역은 좁지 않다.
+   가로 SplitPane이 세로 SplitPane 안에 중첩되는 경우(App.tsx —
+   MainGrid가 vertical-main-split 안에 있음)가 있어, 후손 선택자
+   (`.split-pane--vertical .split-pane__handle-bar`)를 쓰면 중첩된
+   가로 인스턴스의 핸들까지 같이 걸려서 나중에 선언된 규칙이 방향과
+   무관하게 이겨버리는 문제가 실제로 있었다 — `>` 자식 결합자로 "가장
+   가까운 SplitPane"만 정확히 스코프해서 고쳤다. */
+.split-pane__handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.split-pane--horizontal > .split-pane__handle {
+  cursor: col-resize;
+}
+
+.split-pane--vertical > .split-pane__handle {
+  cursor: row-resize;
+}
+
+.split-pane__handle-bar {
+  border-radius: 1px;
+  background: var(--ev-c-gray-3);
+}
+
+.split-pane--horizontal > .split-pane__handle > .split-pane__handle-bar {
+  width: 2px;
+  height: 100%;
+}
+
+.split-pane--vertical > .split-pane__handle > .split-pane__handle-bar {
+  width: 100%;
+  height: 2px;
+}
+
+.split-pane__handle:hover .split-pane__handle-bar,
+.split-pane__handle:active .split-pane__handle-bar {
+  background: var(--ev-c-gray-1);
+}

@@ -10,7 +10,7 @@ export function DeployFilesPanel(): React.JSX.Element {
   const { open } = useWorkAreaPopup()
 
   return (
-    <div className="deploy-files-panel">
+    <div className="deploy-files-panel fill">
       <DeployFilesWorkspace onOpenManualAdd={() => open('addFiles')} />
     </div>
   )

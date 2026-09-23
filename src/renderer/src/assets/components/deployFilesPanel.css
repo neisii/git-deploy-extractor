@@ -1,0 +1,7 @@
+/* DeployFilesPanel.tsx / DeployFilesWorkspace.tsx — `.fill`(height:100%)은
+   DeployFilesPanel.tsx가, `.fill-scroll`(flex:1)은 DeployFilesWorkspace.tsx가
+   각각 className으로 덧붙여 쓴다(fill.css). */
+.deploy-files-panel {
+  display: flex;
+  flex-direction: column;
+}

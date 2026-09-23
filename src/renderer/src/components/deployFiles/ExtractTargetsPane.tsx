@@ -121,13 +121,13 @@ export function ExtractTargetsPane(): React.JSX.Element {
   const body = isStale ? (
     <PanelState kind="stale" />
   ) : (
-    <div className="file-list__scroll">
+    <div className="file-list__scroll fill-scroll">
       <div className="file-list__header-row">
         <button type="button" disabled={items.length === 0} onClick={returnAllExtractItems}>
           모두 되돌리기
         </button>
       </div>
-      <div className="file-list__body">
+      <div className="file-list__body fill-scroll">
         <TreeList
           items={items}
           getPath={(item) => item.localPath}

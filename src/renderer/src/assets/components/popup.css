@@ -1,0 +1,52 @@
+/* Popup.tsx / PopupHost.tsx — RT-15 공용 primitive(백드롭 + 박스 + 헤더).
+   AddFilesPopup을 포함해 부모(가장 가까운 position:relative 조상, 지금은
+   .work-area) 중앙에 뜨는 모든 팝업이 공유한다. 배경(backdrop) 클릭
+   또는 팝업 안 클릭 이벤트 버블링 차단(stopPropagation, Popup.tsx가
+   처리)으로 닫기/유지를 구분한다.
+   U2 정정: 예전엔 `max-height: 60vh`(뷰포트 기준)라 세로 SplitPane을
+   최소 높이로 줄이면 팝업이 넘쳐 헤더 `×`가 잘렸다. `.popup-backdrop`의
+   padding을 뺀 content box가 실제 부모 높이이므로, `.popup`의
+   `max-height: 100%`는 그 실제 높이에 맞춰 클램프된다(뷰포트와 무관). */
+.popup-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* RT-54(U-14) — 표준 크기 720×480(폭 min(720px, 94%), 높이
+   min(480px, 부모 높이 − 20px)). 예전 480px 고정폭은 RT-15 때 "전체
+   표준 크기는 RT-54 몫"으로 미뤄뒀던 것 — RT-53의 TreeList(폴더
+   들여쓰기+경로 복사+×/추가 버튼)가 480px에선 비좁아 RT-53과 함께
+   먼저 처리한다. `.popup-backdrop`의 padding(16px×2)까지 감안해 부모
+   높이 여유를 20px로 잡았다. */
+.popup {
+  width: min(720px, 94%);
+  max-width: 100%;
+  height: min(480px, calc(100% - 20px));
+  max-height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--color-background-soft, var(--ev-c-gray-3));
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.popup input {
+  width: 100%;
+}
+
+.popup__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+}

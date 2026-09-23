@@ -1,0 +1,75 @@
+/* CommitListPanel.tsx — `.fill`(height:100%, fill.css)을 className으로
+   덧붙여 쓴다. */
+.commit-list-panel {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.commit-list-panel__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ev-c-gray-3);
+}
+
+/* RISK_ISSUES.md §6.1 케이스 D — "전체 선택" 체크박스와 선택 개수 카운터를
+   한 그룹으로 묶어 header의 space-between 배치가 여전히 좌(그룹)/우
+   (Preview 버튼) 2개 축으로만 갈리게 한다. */
+.commit-list-panel__header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* body가 목록 대신 로딩/빈 목록/에러 안내문(status-text)을 보여줄 때는
+   .commit-list-panel(padding:0)에 눌려 텍스트가 패널 가장자리에 바로
+   붙는다 — List 컴포넌트에는 영향 없이 이 직계 자식에만 여백을 준다. */
+.commit-list-panel__body > .status-text {
+  padding: 8px 10px;
+}
+
+.commit-row {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--ev-c-gray-3);
+}
+
+.commit-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  cursor: pointer;
+}
+
+.commit-row__hash {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--ev-c-text-2);
+  flex: 0 0 auto;
+}
+
+.commit-row__author {
+  color: var(--ev-c-text-2);
+  flex: 0 0 auto;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-row__date {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--ev-c-text-2);
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.commit-row__message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

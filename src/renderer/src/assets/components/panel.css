@@ -1,0 +1,33 @@
+/* Panel.tsx / PanelState.tsx — RT-40 primitives. Panel/PanelHeader/PanelBody:
+   테두리 + 헤더 + 스크롤 본문. 본문(PanelBody)만 `.fill-scroll`
+   (flex:1+min-height:0, fill.css — Panel.tsx가 className으로 항상
+   덧붙인다) + overflow:auto라 넘치는 내용이 있어도 헤더는 고정된 채
+   본문 안에서만 스크롤된다. 기존 `.panel`(shell.css)은 여러 화면이
+   헤더/본문 구분 없이 단일 div로 계속 쓰고 있어 시맨틱을 안 바꾸려고
+   새 클래스(panel-frame)를 쓴다. */
+.panel-frame {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 4px;
+  background: var(--color-background-soft);
+  overflow: hidden;
+}
+
+.panel-frame__header {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ev-c-gray-3);
+}
+
+.panel-frame__body {
+  overflow: auto;
+  padding: 8px 10px;
+}
+
+/* PanelState — 다섯 상태 문구를 patch-state 메시지와 동일하게 회색조
+   status-text로 보여준다(기존 stale/loading 안내 문구와 톤 통일). */
+.panel-state {
+  padding: 8px 0;
+}

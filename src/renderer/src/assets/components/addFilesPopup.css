@@ -1,0 +1,91 @@
+/* AddFilesPopup.tsx */
+.warning-banner {
+  background: #4a3a1a;
+  color: #f0c674;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+/* RT-52 — AddFilesPopup 툴바(검색 입력 + "보이는 항목 모두 추가"). */
+.add-files-popup__toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+.add-files-popup__toolbar input {
+  flex: 1;
+}
+
+/* RT-53(§5.1 RT-53) — 팝업 자체는 720×480(RT-54)로 커졌지만 트리 영역은
+   검색 입력·안내문과 같이 내부 스크롤을 가져야 팝업 높이 안에 들어맞는다.
+   `.fill-scroll`(flex:1+min-height:0, fill.css)을 className으로 덧붙여
+   쓰고, 여기서는 실제 스크롤(overflow)과 최소 높이만 얹는다. */
+.add-files-popup__tree {
+  min-height: 120px;
+  overflow: auto;
+}
+
+/* RT-53(§5.1 RT-53, U-13) — AddFilesPopup 트리 리프(파일명 + 배지 + 추가
+   버튼). `.tree-row`가 이미 flex라 이 span은 남은 공간을 채우며 이름만
+   ellipsis로 줄어든다("추가" 버튼·복사 버튼은 항상 보임). */
+.add-files-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.add-files-row__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* RT-52 — 누락된 의존성 파일명(빨간 글자, status-text--error와 같은
+   색 재사용 — 새 색을 만들지 않는다). */
+.add-files-row--missing .add-files-row__name {
+  color: #e5675f;
+}
+
+/* 강조색 — 목록이 팝업에 가려 안 보일 수 있으므로, "지금까지 뭘
+   추가했는지"를 이 칩 색으로 바로 알아볼 수 있게 exclude-pattern-chip의
+   무채색 톤 대신 확실히 눈에 띄는 강조 스타일을 쓴다. 새 색을 만들지 않고
+   REQ-017 버전 배지의 강조색(--available)을 그대로 재사용한다 — 이 앱에서
+   이미 "주목할 것"의 의미로 쓰이는 색이라 일관성이 맞는다. */
+.manual-add-popup__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.manual-add-popup__chip {
+  border: 1px solid #d4ff00;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #d4ff00;
+  color: #1a1a1a;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* RT-52 — "+ 파일 추가" 버튼의 `누락 N` 배지(REQ-020 50개 초과 경고
+   이월, IncludedFilesPane.tsx의 트리거 버튼에서 씀). 버튼 안에 있어
+   상속되는 기본 색은 중립, 50 초과일 때만 status-text--error와 같은
+   색으로 강조한다. */
+.add-file-button__badge {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ev-c-text-2);
+}
+
+.add-file-button__badge--over {
+  color: #e5675f;
+}

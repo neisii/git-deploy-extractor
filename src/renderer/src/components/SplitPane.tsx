@@ -102,7 +102,7 @@ export function SplitPane({
   return (
     <div
       ref={containerRef}
-      className={`split-pane split-pane--${direction} ${className ?? ''}`}
+      className={`split-pane split-pane--${direction} fill ${className ?? ''}`}
       style={style}
     >
       <div className="split-pane__start">{start}</div>
