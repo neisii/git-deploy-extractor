@@ -37,6 +37,7 @@
   .box { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: #fff; }
   .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .muted { color: var(--sub); }
+  .repo-path { flex: 1; min-width: 80px; font: 12px ui-monospace, Menlo, Consolas, monospace; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .badge { background: #eef1f5; border-radius: 10px; padding: 0 8px; }
   .split { display: grid; gap: 0; }
   .handle { width: 8px; cursor: col-resize; display: flex; justify-content: center; }
@@ -218,6 +219,7 @@
            data-note="저장소 라벨/경로/버전 배지. 자식은 전부 props만 받는 리프.">
         <div class="row">
           <span data-comp="RepoLabel" data-depth="3" data-st="props" data-note="path, remoteName → 표시 문자열"><b>deep-backend</b> <span class="muted">(shallow-backend)</span> / main</span>
+          <span class="repo-path" data-comp="RepoPath" data-depth="3" data-st="props" data-note="저장소 전체 경로(RT-59 결정, 2026-09-23: RepoLabel과 우측 그룹 사이에 그대로 유지 — flex:1로 남은 공간을 채움, 넘치면 ellipsis + title 툴팁). 실제 앱의 .repository-panel__path(결정 이력 #38)와 동일." title="D:\work\shallow-backend">D:\work\shallow-backend</span>
           <span class="row" data-comp="RepoBarRight" data-depth="3" data-st="layout" data-note="Browse... · Reload · 버전 배지를 저장소 바의 오른쪽 끝에 모아 배치(margin-left:auto). 폭이 좁아 줄바꿈되어도 오른쪽 정렬 유지." style="margin-left:auto;flex-wrap:nowrap">
           <span data-comp="RepoPathActions" data-depth="3" data-st="events" data-note="이벤트: browse, reload"><button>Browse...</button> <button id="btnReload" title="저장소를 다시 읽고 선택한 브랜치·모든 조회/필터 조건·선택·분석 결과를 기본값으로 초기화합니다">Reload</button></span>
           <span data-comp="VersionBadge" data-depth="3" data-st="props" data-note="updateBadgeState 파생 결과만 받음" class="badge">v0.6.0</span>

@@ -150,6 +150,20 @@ body,
   padding-right: 60px;
 }
 
+/* RT-59(U-21) — Browse.../Reload/버전 배지를 저장소 바 오른쪽 끝에 한
+   그룹으로 묶는다(margin-left:auto). 폭이 좁아 .repository-panel의
+   flex-wrap이 이 그룹 전체를 다음 줄로 내려도, 그룹 자체의 margin-left:
+   auto가 그 줄 안에서도 오른쪽 정렬을 유지시킨다(M-44 — 저장소 전체
+   경로 텍스트 .repository-panel__path는 이 그룹 밖, 라벨과의 사이에서
+   flex:1로 남은 공간을 채우는 자리 그대로 유지). */
+.repository-panel__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  flex-wrap: nowrap;
+}
+
 .repository-panel__actions {
   display: flex;
   gap: 6px;
