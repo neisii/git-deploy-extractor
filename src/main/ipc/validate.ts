@@ -1,4 +1,5 @@
 import { isAbsolute, join, relative } from 'node:path'
+import type { ExportMode } from '../../shared/types'
 
 // RT-12(R3) — main/ipc/handlers/*.ts(RT-21로 채널 그룹별 분리)로 들어오는
 // IPC 파라미터 중, 검증 없이
@@ -48,5 +49,14 @@ export function assertServerPathsWithinDir(deployDir: string, serverPaths: strin
 export function assertManualFileInHeadTree(localPath: string, headTreeFiles: string[]): void {
   if (!headTreeFiles.includes(localPath)) {
     throw new IpcValidationError(`HEAD 트리에 없는 파일입니다: ${localPath}`)
+  }
+}
+
+// RT-56(U-16) — BuildPackageParams.mode/ValidateExportTargetParams.mode는
+// 렌더러가 보낸 문자열이라, 타입 단언만으로는 실제로 'sub'|'direct'인지
+// 보장되지 않는다(RT-12 IPC 화이트리스트 원칙과 동일).
+export function assertValidExportMode(mode: string): asserts mode is ExportMode {
+  if (mode !== 'sub' && mode !== 'direct') {
+    throw new IpcValidationError(`알 수 없는 Export 방식입니다: ${mode}`)
   }
 }

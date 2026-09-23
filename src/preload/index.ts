@@ -43,6 +43,8 @@ const api = {
   },
   package: {
     browseExportDir: () => invoke(IPC_CHANNELS['package:browseExportDir']),
+    validateExportTarget: (params: IpcChannelMap['package:validateExportTarget']['params'][0]) =>
+      invoke(IPC_CHANNELS['package:validateExportTarget'], params),
     export: (params: IpcChannelMap['package:export']['params'][0]) =>
       invoke(IPC_CHANNELS['package:export'], params)
   },

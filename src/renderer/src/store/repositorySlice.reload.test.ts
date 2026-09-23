@@ -17,6 +17,11 @@ function mockApi(overrides: Partial<Api['git']> = {}): Api {
       getRemoteProjectName: async () => 'my-project',
       listCommits: async () => ({ commits: [], hasMore: false, invalidHashes: [] }),
       ...overrides
+    },
+    // RT-56 — reloadRepository/browseRepository가 마지막에
+    // revalidateExportTarget()을 호출한다(§5.1 RT-56 검증 시점 ②).
+    package: {
+      validateExportTarget: async () => ({ ok: true })
     }
   } as unknown as Api
 }

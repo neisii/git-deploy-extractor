@@ -1,7 +1,12 @@
 import { promises as fs } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { getHeadFileContent } from '../git/showFile'
-import type { BuildPackageParams, BuildPackageResult, DeploySummary } from '../../shared/types'
+import type {
+  BuildPackageParams,
+  BuildPackageResult,
+  DeploySummary,
+  ExportMode
+} from '../../shared/types'
 
 export type { BuildPackageParams, BuildPackageResult, DeploySummary }
 
@@ -34,10 +39,18 @@ function toLfText(lines: string[]): string {
 }
 
 // Export 결과물이 생성될 위치. 사용자가 부모 디렉터리를 지정하지 않으면
-// 저장소 루트가 기본값이다 — 하위 폴더명(git-deploy-extracted)은 항상
-// 고정(결정 이력 #20과 일관성 유지, RISK_ISSUES.md §7.1).
-export function getDeployDir(repoPath: string, exportParentDir?: string): string {
-  return join(exportParentDir ?? repoPath, 'git-deploy-extracted')
+// 저장소 루트가 기본값이다(단위 테스트 편의 — 실제 UI는 REQ-012 정정으로
+// 경로를 명시적으로 고를 때까지 Export를 막는다, §5.1 RT-56). mode가
+// 'sub'면 하위 폴더명(git-deploy-extracted)이 항상 고정(결정 이력 #20과
+// 일관성 유지, RISK_ISSUES.md §7.1)이고, 'direct'면 부모 디렉터리
+// 자체가 최종 산출물 위치다(빈 폴더 전용, a안).
+export function getDeployDir(
+  repoPath: string,
+  exportParentDir: string | undefined,
+  mode: ExportMode
+): string {
+  const parent = exportParentDir ?? repoPath
+  return mode === 'direct' ? parent : join(parent, 'git-deploy-extracted')
 }
 
 // 덮어쓰기 확인 팝업을 띄울지 판단하기 위해 IPC 핸들러가 먼저 호출한다.
@@ -61,7 +74,8 @@ export async function buildPackage(params: BuildPackageParams): Promise<BuildPac
     files,
     deletedServerPaths,
     warnings,
-    exportParentDir
+    exportParentDir,
+    mode
   } = params
 
   // §4.1: 파일을 쓰기 전에 대소문자만 다른 경로 충돌부터 검사한다.
@@ -72,12 +86,20 @@ export async function buildPackage(params: BuildPackageParams): Promise<BuildPac
     throw new Error(`대소문자만 다른 경로 충돌이 발견되어 중단합니다: ${detail}`)
   }
 
-  const deployDir = getDeployDir(repoPath, exportParentDir)
-  // 재실행 시 이전 Export의 잔여 파일이 이번 선택 범위와 섞이지 않도록
-  // 매번 완전히 비우고 새로 만든다. 기존 내용이 있는 경우의 사용자 확인은
-  // IPC 핸들러(package:export)가 buildPackage 호출 전에 이미 처리했다.
-  await fs.rm(deployDir, { recursive: true, force: true })
-  await fs.mkdir(deployDir, { recursive: true })
+  const deployDir = getDeployDir(repoPath, exportParentDir, mode)
+  if (mode === 'sub') {
+    // 재실행 시 이전 Export의 잔여 파일이 이번 선택 범위와 섞이지 않도록
+    // GDE가 소유한 고정 이름 하위 폴더를 매번 완전히 비우고 새로 만든다.
+    // 기존 내용이 있는 경우의 사용자 확인은 IPC 핸들러(package:export)가
+    // buildPackage 호출 전에 이미 처리했다.
+    await fs.rm(deployDir, { recursive: true, force: true })
+    await fs.mkdir(deployDir, { recursive: true })
+  } else {
+    // direct 모드는 사용자가 고른 임의의 폴더에 그대로 쓴다 — 절대
+    // fs.rm(recursive)를 호출하지 않는다(§5.1 RT-56). 비어 있음은 이미
+    // Main이 buildPackage 호출 전에 검증했다(validateExportTarget).
+    await fs.mkdir(deployDir, { recursive: true })
+  }
 
   for (const file of files) {
     const content = await getHeadFileContent(repoPath, branch, file.localPath)

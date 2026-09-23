@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
-import { createFixtureRepo, type Fixture } from './support/fixtureRepo'
+import { createExportDirFixture, createFixtureRepo, type Fixture } from './support/fixtureRepo'
 import { launchApp } from './support/launchApp'
 import type { ElectronApplication, Page } from '@playwright/test'
 
@@ -10,19 +10,29 @@ import type { ElectronApplication, Page } from '@playwright/test'
 // 동작을 고정해 두는 회귀 테스트다.
 
 let fixture: Fixture
+let exportDirFixture: Fixture
 let electronApp: ElectronApplication
 let window: Page
 
 test.beforeEach(async () => {
   fixture = createFixtureRepo()
-  const launched = await launchApp(fixture.dir)
+  // RT-56(REQ-012 정정) — 경로를 명시적으로 고르지 않으면 Export가
+  // 막히므로(저장소 루트 기본값 폐지), 저장소와 겹치지 않는 빈 폴더를
+  // 미리 준비해 GDE_E2E_EXPORT_DIR로 넘긴다.
+  exportDirFixture = createExportDirFixture()
+  const launched = await launchApp(fixture.dir, exportDirFixture.dir)
   electronApp = launched.app
   window = launched.window
 })
 
 test.afterEach(async () => {
+  // 전역(localStorage) Export 경로 상태라 다음 테스트(다른 spec 파일
+  // 포함)로 새어 나가지 않도록 정리한다(included-files-pane.spec.ts의
+  // clearAllPatterns와 같은 이유).
+  await window.evaluate(() => localStorage.removeItem('gde:exportParentDir'))
   await electronApp.close()
   fixture.cleanup()
+  exportDirFixture.cleanup()
 })
 
 test('커밋 선택 → Preview → Export까지 한 번에 끝난다', async () => {
@@ -48,14 +58,20 @@ test('커밋 선택 → Preview → Export까지 한 번에 끝난다', async ()
   await expect(window.locator('.included-row', { hasText: 'FileA.txt' })).toHaveCount(0)
   await expect(window.locator('.extract-row', { hasText: 'FileA.txt' })).toHaveCount(0)
 
+  // RT-56(REQ-012 정정) — 경로를 명시적으로 고르기 전에는 Export가
+  // 막힌다. "변경"으로 exportDirFixture.dir을 고른다(GDE_E2E_EXPORT_DIR
+  // 우회, launchApp.ts 참고) — 다른 spec 파일이 남긴 전역(localStorage)
+  // Export 경로가 있어도 이 클릭이 결정적으로 exportDirFixture.dir로
+  // 덮어쓴다.
+  await window.getByRole('button', { name: '변경' }).click()
   const exportButton = window.getByRole('button', { name: 'Export' })
   await expect(exportButton).toBeEnabled()
   await exportButton.click()
 
   await expect(window.locator('text=Export 완료')).toBeVisible({ timeout: 10_000 })
 
-  // 기본 Export 위치 = 저장소 루트/git-deploy-extracted(getDeployDir).
-  const exportedFile = join(fixture.dir, 'git-deploy-extracted', 'src', 'FileB.txt')
+  // 기본 Export 방식(sub) = <선택 경로>/git-deploy-extracted(getDeployDir).
+  const exportedFile = join(exportDirFixture.dir, 'git-deploy-extracted', 'src', 'FileB.txt')
   expect(existsSync(exportedFile)).toBe(true)
   expect(readFileSync(exportedFile, 'utf-8')).toBe('B v1\n')
 })

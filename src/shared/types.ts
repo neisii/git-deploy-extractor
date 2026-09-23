@@ -94,6 +94,11 @@ export interface ListCommitsResult {
   invalidHashes?: string[]
 }
 
+// RT-56(U-16) — 'sub': <exportParentDir>/git-deploy-extracted 하위에 생성
+// (기존 방식, 기본값). 'direct': exportParentDir에 바로 생성(빈 폴더
+// 전용, a안 — DETAILED_DESIGN.md §5.1 RT-56).
+export type ExportMode = 'sub' | 'direct'
+
 export interface BuildPackageParams {
   repoPath: string
   branch: string
@@ -103,7 +108,24 @@ export interface BuildPackageParams {
   deletedServerPaths: string[]
   warnings: AnalysisWarning[]
   exportParentDir?: string // 사용자가 지정한 부모 디렉터리. 미지정 시 repoPath가 기본값 (RISK_ISSUES.md §7.1)
+  mode: ExportMode
 }
+
+// RT-56 — package:validateExportTarget 요청/응답. classifyExportTarget이
+// 판정한 저장소 겹침(INSIDE_REPO/CONTAINS_REPO)과 direct 모드의 "폴더가
+// 비어 있지 않음"(NOT_EMPTY), 경로 미선택(NO_PATH)을 한 값으로 합친다 —
+// 검사 우선순위(①경로 미선택 ②겹침 ③비어있지 않음)는 호출 순서로 이미
+// 반영돼 있어 호출부가 다시 고를 필요가 없다.
+export interface ValidateExportTargetParams {
+  repoPath: string
+  exportParentDir?: string
+  mode: ExportMode
+}
+
+export type ExportTargetErrorCode = 'NO_PATH' | 'INSIDE_REPO' | 'CONTAINS_REPO' | 'NOT_EMPTY'
+
+export type ExportTargetValidation =
+  { ok: true } | { ok: false; code: ExportTargetErrorCode; message: string }
 
 export interface DeploySummary {
   generatedAt: string

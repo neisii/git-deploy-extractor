@@ -9,10 +9,10 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
 이미 구현 완료 후 v0.6.0으로 릴리스된 상태입니다 — 처음부터 만드는 게 아니라
 기존 앱을 확장하는 작업입니다.
 
-**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 + P4의 RT-40~49·51~55
+**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 + P4의 RT-40~49·51~56
 구현 완료 — 2026-09-22/23).** v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에
-분리해 뒀습니다. **다음 착수 지점은 P4의 RT-56(U-16, `ExportModeSelect` +
-추출 위치 방식/저장소 겹침 검증)입니다.**
+분리해 뒀습니다. **다음 착수 지점은 P4의 RT-57(U-17, Export 산출물을
+`extract-list.txt` 하나로 통합)입니다.**
 RT-43(PopupHost)·RT-44(PreviewSummary/Deleted·경고 팝업)·RT-46
 (FilterPatternBar/패턴 팝업)은 2026-09-22에 한 번에(RT-43 명세가 RT-44/46을
 전제해 AskUserQuestion으로 범위를 확인한 뒤), RT-45(StatusFilter·좌측 검색
@@ -777,9 +777,71 @@ UI 변경 단계라 P0~P3의 "동작 불변" 원칙이 더 이상 적용되지 �
     해제되고 Extract 결과가 사라지는지 확인) 전부 통과. 상세는
     `docs/refactoring/REFACTORING_TASKS.md` §5.1 RT-55 항목, M-22·M-24(§7)
     참고.
-    **다음 착수 지점은 RT-56**(U-16, `ExportModeSelect` — 추출 위치 방식
-    `sub`/`direct` + 저장소와 겹치는 위치 금지 검증, `classifyExportTarget`
-    순수 함수부터).
+  - **RT-56(U-16, `ExportModeSelect` + 추출 위치 방식/저장소 겹침 검증)을
+    구현(2026-09-23)** — 착수 전 §7 M-25(`direct` 빈 폴더 전용 a안)·
+    M-27(모드 영속)·M-33(저장소 경로 검증 범위)이 RT-55의 M-22/M-24와
+    달리 스펙 본문·표 둘 다에 이미 "결정 대기" 표시 없이 권장값까지
+    확정돼 있어(이 RT만의 특징) AskUserQuestion 없이 그대로 구현했다.
+    **겹침 판정**: `classifyExportTarget(repoPath, deployDir)`(순수 함수,
+    `src/main/package/classifyExportTarget.ts`)가 `path.relative`만으로
+    INSIDE_REPO(F가 R과 같거나 하위)/CONTAINS_REPO(R이 F의 하위 — `sub`의
+    `fs.rm(recursive)`가 저장소를 지울 수 있는 경우)/OK를 판정하고,
+    `startsWith` 접두사 비교를 쓰지 않아 `<저장소>-old` 같은 형제를
+    오판하지 않는다. `validateExportTarget()`(`src/main/package/
+    validateExportTarget.ts`)이 `fs.realpath`(경로가 없으면 존재하는
+    가장 가까운 상위까지만 resolve)로 심볼릭 링크·`.`/`..`·끝 구분자를
+    해소하고, `process.platform` 기준으로 Windows/macOS는 소문자로 접고
+    Linux는 그대로 두는 대소문자 정책을 적용한 뒤 이 함수를 부른다.
+    우선순위는 ①경로 미선택(NO_PATH, IPC 왕복 없이 즉시 판정) ②겹침
+    ③(`direct`만) 폴더가 비어 있지 않음(NOT_EMPTY, a안).
+    **IPC**: `package:validateExportTarget` 신설 — 경로 선택 직후·저장소
+    변경(Browse)/Reload 직후·모드 변경 시 렌더러가 호출한다.
+    `package:export`도 실행 직전 같은 함수로 재검증해 실패하면
+    `IpcValidationError`로 거부한다(렌더러 상태를 신뢰하지 않는 이
+    저장소의 기존 원칙 그대로). `assertValidExportMode`(`validate.ts`,
+    RT-12)로 `mode` 문자열이 `'sub'`/`'direct'`인지 화이트리스트 확인.
+    **`getDeployDir`**이 3번째 인자로 `mode`를 받도록 바뀌었다(신규 필수
+    필드 `BuildPackageParams.mode`) — `'direct'`면 `exportParentDir` 그대로
+    최종 산출물 위치, `'sub'`면 기존과 동일하게 `<parent>/
+    git-deploy-extracted`. `buildPackage()`는 `mode==='sub'`일 때만
+    `fs.rm(recursive)` 후 재생성하고, `'direct'`는 **절대 `fs.rm`을
+    호출하지 않는다**(비어 있음은 이미 Main이 보장) — `fs.mkdir
+    (recursive)`만 호출. `package:export` 핸들러의 "이미 내용이 있으면
+    덮어쓰기 확인창"은 `sub`일 때만 실행(`direct`는 애초에 빈 폴더만
+    허용되므로 불필요).
+    **렌더러**: `exportSlice.ts`에 `exportMode`(localStorage
+    `gde:exportMode`, 기본 `sub`, `exportParentDir`과 같은 전역 저장
+    패턴)·`exportTargetValidation`·`setExportMode`·`revalidateExportTarget`
+    (오래된 응답이 최신 상태를 덮어쓰지 않도록 기존 `requestGuard.ts`
+    재사용) 추가. `repositorySlice.ts`의 `browseRepository`/
+    `reloadRepository` 끝에서 `revalidateExportTarget()`을 호출해 검증
+    시점 ②(저장소 변경/Reload 직후)를 만족시킨다. `FooterActionBar.tsx`
+    (ExportBar)에 신규 `ExportModeSelect.tsx`를 `Export` 버튼 왼쪽에
+    배치하고, 상태 메시지 우선순위(경로 검증 실패 > RT-17 분석 중 >
+    `isStale`)를 반영했다. **REQ-012 정정**: 경로 미선택 시 저장소
+    루트로 대체하던 기존 기본값을 완전히 폐지 — 이제 "추출할 폴더를
+    선택하세요"가 뜨고 Export가 막힌다.
+    **검증**: `npm test`(220개, 신규 26개 — `classifyExportTarget.test.ts`
+    7개·`validateExportTarget.test.ts`(임시 폴더 통합 테스트, 동일/끝
+    구분자/`.`·`..`/심볼릭 링크/깊은 하위 폴더 전부 INSIDE_REPO, F가
+    저장소를 포함하면 CONTAINS_REPO, 형제·접두사만 같은 형제 통과,
+    `direct`의 빈 폴더/비어 있지 않음/아직 없는 경로, `sub`는 비어
+    있어도 NOT_EMPTY를 반환하지 않음, `normalizeForCasePolicy`는
+    `process.platform`을 강제로 바꿔가며 세 플랫폼 모두 결정적으로
+    확인)·`buildPackage.test.ts`에 `direct` 모드 케이스(무관한 기존
+    파일이 `fs.rm` 없이 보존됨) 추가)·`typecheck`·`lint`·`build`·
+    `test:e2e`(24개) 전부 통과. **e2e**: `package:browseExportDir`도
+    `repository:browse`(`GDE_E2E_REPO_PATH`)와 같은 이유로
+    `GDE_E2E_EXPORT_DIR` 우회를 추가했다(REQ-012 정정으로 Playwright도
+    경로를 반드시 "골라야" 하므로) — `launchApp.ts`(`exportDir` 2번째
+    인자)·`fixtureRepo.ts`(`createExportDirFixture`). 저장소 루트 기본값에
+    의존하던 `preview-export.spec.ts`·`export-feedback.spec.ts`를 "변경"
+    클릭 + 별도 빈 폴더로 교체(기존처럼 저장소 루트에 Export하면 이제
+    `INSIDE_REPO`로 막힌다). 상세는 `docs/refactoring/REFACTORING_TASKS.md`
+    §5.1 RT-56 항목, M-25·M-27·M-33(§7) 참고.
+    **다음 착수 지점은 RT-57**(U-17, Export 산출물을 `extract-list.txt`
+    하나로 통합 — `deploy-summary.json`·`deploy-files.txt`·
+    `delete-list.txt` 삭제, `treeText`/`buildExtractListText` 순수 함수부터).
 
 먼저 이 순서로 읽어주세요 (짐작하지 말고 실제로 읽어야 합니다):
 

@@ -39,6 +39,9 @@ export interface Api {
   }
   package: {
     browseExportDir: () => Promise<Result<'package:browseExportDir'>>
+    validateExportTarget: (
+      ...args: Params<'package:validateExportTarget'>
+    ) => Promise<Result<'package:validateExportTarget'>>
     export: (...args: Params<'package:export'>) => Promise<Result<'package:export'>>
   }
   update: {

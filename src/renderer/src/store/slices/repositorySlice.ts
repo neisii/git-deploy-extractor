@@ -62,6 +62,9 @@ export const createRepositorySlice: StateCreator<AppState, [], [], RepositorySli
     // §6.1 케이스 A: 다른 저장소로 전환하면 이전 저장소의 커밋 hash로 git
     // 명령을 시도하게 되므로 선택을 지운다(keepSelection 기본값 false).
     await get().loadCommitsFirstPage()
+    // RT-56(U-16) — Export 경로는 전역 저장이라 새 저장소와 겹칠 수
+    // 있다(§5.1 RT-56 검증 시점 ②). 저장소가 바뀔 때마다 다시 검사.
+    await get().revalidateExportTarget()
   },
 
   reloadRepository: async () => {
@@ -95,6 +98,10 @@ export const createRepositorySlice: StateCreator<AppState, [], [], RepositorySli
     get().resetAnalysis()
     set({ branches, selectedBranch, remoteProjectName })
     await get().loadCommitsFirstPage(false)
+    // RT-56(U-16) — Reload도 "저장소 변경"과 같은 이유로 재검증한다
+    // (§5.1 RT-56 검증 시점 ②). Export 경로 자체는 M-22가 "유지"로
+    // 확정했으므로 이 호출이 손대는 건 검증 결과뿐이다.
+    await get().revalidateExportTarget()
   },
 
   setBranch: async (branch) => {

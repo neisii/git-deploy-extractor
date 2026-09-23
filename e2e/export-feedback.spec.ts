@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { createFixtureRepo, type Fixture } from './support/fixtureRepo'
+import { createExportDirFixture, createFixtureRepo, type Fixture } from './support/fixtureRepo'
 import { launchApp } from './support/launchApp'
 import type { ElectronApplication, Page } from '@playwright/test'
 
@@ -7,12 +7,17 @@ import type { ElectronApplication, Page } from '@playwright/test'
 // 파일 행의 키보드 토글(체크박스).
 
 let fixture: Fixture
+let exportDirFixture: Fixture
 let electronApp: ElectronApplication
 let window: Page
 
 test.beforeEach(async () => {
   fixture = createFixtureRepo()
-  const launched = await launchApp(fixture.dir)
+  // RT-56(REQ-012 정정) — 경로를 명시적으로 고르지 않으면 Export가
+  // 막히므로(저장소 루트 기본값 폐지), 저장소와 겹치지 않는 빈 폴더를
+  // 미리 준비해 GDE_E2E_EXPORT_DIR로 넘긴다.
+  exportDirFixture = createExportDirFixture()
+  const launched = await launchApp(fixture.dir, exportDirFixture.dir)
   electronApp = launched.app
   window = launched.window
 
@@ -25,11 +30,20 @@ test.beforeEach(async () => {
   await window.getByRole('button', { name: 'Preview' }).click()
   // RT-51(M-14) — Preview 직후 기본값은 전체 Extract로 이동.
   await expect(window.locator('.extract-row', { hasText: 'FileB.txt' })).toBeVisible()
+  // RT-56 — Export 대상 목록 테스트만 있는 세 번째 케이스는 이 클릭이
+  // 없어도 상관없지만, 공유 beforeEach라 항상 골라 둔다(GDE_E2E_EXPORT_DIR
+  // 우회, launchApp.ts 참고).
+  await window.getByRole('button', { name: '변경' }).click()
 })
 
 test.afterEach(async () => {
+  // 전역(localStorage) Export 경로 상태라 다음 테스트(다른 spec 파일
+  // 포함)로 새어 나가지 않도록 정리한다(included-files-pane.spec.ts의
+  // clearAllPatterns와 같은 이유).
+  await window.evaluate(() => localStorage.removeItem('gde:exportParentDir'))
   await electronApp.close()
   fixture.cleanup()
+  exportDirFixture.cleanup()
 })
 
 test('Export 완료 메시지를 클릭하면 복사 성공 피드백이 보인다(U7)', async () => {

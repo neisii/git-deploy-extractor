@@ -46,3 +46,14 @@ export function createFixtureRepo(): Fixture {
     cleanup: () => rmSync(dir, { recursive: true, force: true })
   }
 }
+
+// RT-56(U-16) — REQ-012 정정으로 Export 경로를 명시적으로 골라야 하므로
+// (저장소 루트 기본값 폐지), 저장소와 겹치지 않는 빈 폴더를 e2e에서
+// GDE_E2E_EXPORT_DIR로 미리 준비해 둔다(launchApp.ts 참고).
+export function createExportDirFixture(): Fixture {
+  const dir = mkdtempSync(join(tmpdir(), 'gde-e2e-export-'))
+  return {
+    dir,
+    cleanup: () => rmSync(dir, { recursive: true, force: true })
+  }
+}

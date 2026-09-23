@@ -70,7 +70,8 @@ describe('buildPackage', () => {
       ],
       files: plan.files,
       deletedServerPaths: plan.deletedServerPaths,
-      warnings: plan.warnings
+      warnings: plan.warnings,
+      mode: 'sub'
     })
 
     // 원본 git 저장소 파일과 git-deploy-extracted/ 산출물이 바이트 단위로
@@ -136,7 +137,8 @@ describe('buildPackage', () => {
       selectedCommits: [],
       files: plan.files,
       deletedServerPaths: plan.deletedServerPaths,
-      warnings: plan.warnings
+      warnings: plan.warnings,
+      mode: 'sub'
     })
 
     const staleJavaFile = join(
@@ -176,7 +178,8 @@ describe('buildPackage', () => {
         selectedCommits: [],
         files: plan.files,
         deletedServerPaths: plan.deletedServerPaths,
-        warnings: plan.warnings
+        warnings: plan.warnings,
+        mode: 'sub'
       })
     ).rejects.toThrow(/대소문자만 다른 경로 충돌/)
 
@@ -231,7 +234,8 @@ describe('buildPackage — 전체 파이프라인(Repository -> Commit 선택 ->
         selectedCommits: commits,
         files: plan.files,
         deletedServerPaths: plan.deletedServerPaths,
-        warnings: plan.warnings
+        warnings: plan.warnings,
+        mode: 'sub'
       })
 
       expect(
@@ -239,6 +243,51 @@ describe('buildPackage — 전체 파이프라인(Repository -> Commit 선택 ->
       ).toBe(true)
     } finally {
       rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('buildPackage — mode: direct (RT-56 §5.1)', () => {
+  it('부모 디렉터리에 바로 쓰고 fs.rm을 호출하지 않아 무관한 기존 파일이 보존된다', async () => {
+    const repoDir = initRepo('gde-package-direct-repo-')
+    try {
+      writeFixtureFile(repoDir, 'src/App.txt', 'content')
+      const hash = commitAll(repoDir, 'add App.txt')
+      const plan = await computeDeployPlan(repoDir, 'main', [hash], {
+        profileName: 'default',
+        version: '1.0',
+        overrides: []
+      })
+
+      const targetDir = mkdtempSync(join(tmpdir(), 'gde-package-direct-target-'))
+      try {
+        // direct 모드는 validateExportTarget이 "비어 있음"을 이미 보장한
+        // 뒤에만 실제로 호출되지만, buildPackage 자체도 fs.rm을 절대 쓰지
+        // 않는다는 계약을 지키는지 이중으로 확인한다(§5.1 RT-56) — 기존
+        // 파일이 있어도 그대로 남아있어야 한다.
+        writeFixtureFile(targetDir, 'unrelated.txt', 'keep me')
+
+        const result = await buildPackage({
+          repoPath: repoDir,
+          branch: 'main',
+          mappingProfileName: 'default',
+          selectedCommits: [],
+          files: plan.files,
+          deletedServerPaths: plan.deletedServerPaths,
+          warnings: plan.warnings,
+          exportParentDir: targetDir,
+          mode: 'direct'
+        })
+
+        expect(result.deployDir).toBe(targetDir)
+        expect(existsSync(join(targetDir, 'src/App.txt'))).toBe(true)
+        expect(existsSync(join(targetDir, 'unrelated.txt'))).toBe(true)
+        expect(existsSync(join(targetDir, 'git-deploy-extracted'))).toBe(false)
+      } finally {
+        rmSync(targetDir, { recursive: true, force: true })
+      }
+    } finally {
+      cleanupRepo(repoDir)
     }
   })
 })

@@ -13,12 +13,14 @@ import type {
   DependencyAnalysisRequest,
   DependencyAnalysisResult,
   DeployPlan,
+  ExportTargetValidation,
   ListCommitsParams,
   ListCommitsResult,
   ManualFileEntry,
   PreviewRequest,
   RepositoryValidation,
-  ResolveManualFileRequest
+  ResolveManualFileRequest,
+  ValidateExportTargetParams
 } from './types'
 
 export interface IpcChannelMap {
@@ -40,6 +42,10 @@ export interface IpcChannelMap {
     result: ManualFileEntry
   }
   'package:browseExportDir': { params: []; result: string | null }
+  'package:validateExportTarget': {
+    params: [params: ValidateExportTargetParams]
+    result: ExportTargetValidation
+  }
   'package:export': { params: [params: BuildPackageParams]; result: BuildPackageResult | null }
   'update:check': { params: []; result: CheckUpdateResult }
   'update:confirmAndOpen': { params: []; result: boolean }
@@ -63,6 +69,7 @@ export const IPC_CHANNELS: { [K in IpcChannel]: K } = {
   'analysis:dependencies': 'analysis:dependencies',
   'analysis:resolveManualFile': 'analysis:resolveManualFile',
   'package:browseExportDir': 'package:browseExportDir',
+  'package:validateExportTarget': 'package:validateExportTarget',
   'package:export': 'package:export',
   'update:check': 'update:check',
   'update:confirmAndOpen': 'update:confirmAndOpen'
