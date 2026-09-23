@@ -22,6 +22,12 @@ interface SplitPaneProps {
   end: ReactNode
   direction?: 'horizontal' | 'vertical'
   className?: string
+  // RT-47 — WorkArea가 CommitWorkspace/DeployFilesWorkspace의 접힘 상태를
+  // 반영하는 데만 쓴다(다른 두 SplitPane 사용처는 넘기지 않아 기존 동작
+  // 그대로). 어느 한쪽이라도 true면 핸들은 비활성(높이/폭 0), 접힌 쪽
+  // 트랙은 auto(헤더 높이만), 펼쳐진 쪽은 1fr(남은 공간 전부).
+  startCollapsed?: boolean
+  endCollapsed?: boolean
 }
 
 // 핸들의 실제 드래그 가능 영역(그리드 트랙 크기)은 잡기 편하도록 넓게
@@ -37,7 +43,9 @@ export function SplitPane({
   start,
   end,
   direction = 'horizontal',
-  className
+  className,
+  startCollapsed = false,
+  endCollapsed = false
 }: SplitPaneProps): React.JSX.Element {
   const [ratio, setRatio] = useState(() => loadSplitRatio(storageKey, defaultRatio))
   const containerRef = useRef<HTMLDivElement>(null)
@@ -79,7 +87,14 @@ export function SplitPane({
     [minStartPx, minEndPx, storageKey, ratio, isHorizontal]
   )
 
-  const tracks = `minmax(${minStartPx}px, ${ratio * 100}%) ${HANDLE_HIT_PX}px minmax(${minEndPx}px, 1fr)`
+  // RT-47 — 접힌 쪽은 헤더 높이만(auto), 펼쳐진 쪽은 남은 공간 전부(1fr).
+  // 둘 다 접히면 두 헤더가 위에 붙고(auto auto) 나머지는 빈 공간으로
+  // 남는다(§5.1 "둘 다 접힘 → 위에 붙임" — .split-pane--vertical의
+  // align-content: start가 그 빈 공간을 아래로 밀어낸다).
+  const eitherCollapsed = startCollapsed || endCollapsed
+  const tracks = eitherCollapsed
+    ? `${startCollapsed ? 'auto' : '1fr'} 0px ${endCollapsed ? 'auto' : '1fr'}`
+    : `minmax(${minStartPx}px, ${ratio * 100}%) ${HANDLE_HIT_PX}px minmax(${minEndPx}px, 1fr)`
   const style: CSSProperties = isHorizontal
     ? { gridTemplateColumns: tracks }
     : { gridTemplateRows: tracks }
@@ -93,7 +108,7 @@ export function SplitPane({
       <div className="split-pane__start">{start}</div>
       <div
         className="split-pane__handle"
-        onMouseDown={handleMouseDown}
+        onMouseDown={eitherCollapsed ? undefined : handleMouseDown}
         title={isHorizontal ? '드래그해서 좌우 비율 조절' : '드래그해서 상하 비율 조절'}
       >
         <div className="split-pane__handle-bar" />

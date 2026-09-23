@@ -80,15 +80,21 @@ export const createRepositorySlice: StateCreator<AppState, [], [], RepositorySli
       api.git.listBranches(repository.path),
       api.git.getRemoteProjectName(repository.path)
     ])
-    const currentBranch = get().selectedBranch
-    const selectedBranch =
-      currentBranch && branches.includes(currentBranch)
-        ? currentBranch
-        : pickDefaultBranch(branches)
+    // RT-55(U-15) — Reload는 "같은 저장소를 다시 읽는 것"이 아니라 전체
+    // 초기화다(REQ-015 정정). 예전엔 Branch가 여전히 존재하면 그대로
+    // 유지·선택도 유지(loadCommitsFirstPage(true))했지만, 이제 Reload는
+    // 조회 조건·선택·분석 결과를 전부 기본값으로 되돌리고 재조회한다 —
+    // 유지하는 건 파일 패턴 이력·Export 경로/방식·접힘 상태·분할 비율·
+    // 트리 펼침뿐이다(M-22, 각자 다른 slice/컴포넌트 로컬 상태라 여기서
+    // 건드릴 필요가 없다). 열려 있는 팝업을 닫는 것도 별도 처리가
+    // 필요없다 — WorkArea가 이미 repository.status==='validating' 전환을
+    // 감지해 닫는다(RT-43). 확인 대화상자는 두지 않는다(M-24).
+    const selectedBranch = pickDefaultBranch(branches)
+    get().resetQuery()
+    get().clearSelection()
+    get().resetAnalysis()
     set({ branches, selectedBranch, remoteProjectName })
-    // A/B 어느 쪽에도 해당하지 않는다 — 같은 저장소를 다시 읽는 것뿐이라
-    // (Branch가 그대로 존재하면 그대로 유지) 선택을 지울 이유가 없다.
-    await get().loadCommitsFirstPage(true)
+    await get().loadCommitsFirstPage(false)
   },
 
   setBranch: async (branch) => {

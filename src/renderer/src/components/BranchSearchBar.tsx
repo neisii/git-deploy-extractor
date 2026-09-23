@@ -1,17 +1,34 @@
+import { useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useAppStore } from '../store/appStore'
 import type { CommitSearchMode } from '../../../shared/types'
 import { useDebouncedAction } from '../lib/useDebouncedAction'
-import { MaxCountField } from './MaxCountField'
+import { parseKeywordText } from '../services/commitQueryParams'
+import { CollapsibleSection } from './CollapsibleSection'
+import { SplitPane } from './SplitPane'
+import { SearchConditionGroup } from './SearchConditionGroup'
+import { QueryFilterGroup } from './QueryFilterGroup'
 
 const SEARCH_DEBOUNCE_MS = 300
+
+// RT-49(§5.1 RT-49) — 메시지/파일명 + 포함 키워드(", "로 연결) + 제외
+// 개수를 하나의 요약 조각으로 합친다(RT-48 명세 예시: `메시지 "guarantee,
+// payment" · 제외 1`). 둘 다 없으면 모드 라벨만(기존 searchTerm 없을 때
+// searchModeLabel만 보이던 동작과 동일).
+function buildKeywordSummary(mode: CommitSearchMode, keywordText: string): string {
+  const label = mode === 'filename' ? '파일명' : '메시지'
+  const { include, exclude } = parseKeywordText(keywordText)
+  const parts = [include.length > 0 ? `${label} "${include.join(', ')}"` : label]
+  if (exclude.length > 0) parts.push(`제외 ${exclude.length}`)
+  return parts.join(' · ')
+}
 
 export function BranchSearchBar(): React.JSX.Element {
   const branches = useAppStore((s) => s.branches)
   const selectedBranch = useAppStore((s) => s.selectedBranch)
   const setBranch = useAppStore((s) => s.setBranch)
-  const searchTerm = useAppStore((s) => s.searchTerm)
-  const setSearchTerm = useAppStore((s) => s.setSearchTerm)
+  const keywordText = useAppStore((s) => s.keywordText)
+  const setKeywordText = useAppStore((s) => s.setKeywordText)
   const searchMode = useAppStore((s) => s.searchMode)
   const setSearchMode = useAppStore((s) => s.setSearchMode)
   const triggerSearch = useAppStore((s) => s.triggerSearch)
@@ -28,11 +45,16 @@ export function BranchSearchBar(): React.JSX.Element {
   const setHashFilterText = useAppStore((s) => s.setHashFilterText)
   const invalidHashFilter = useAppStore((s) => s.invalidHashFilter)
 
+  // RT-47(§5.1 RT-47) — CommitQueryBar(이 컴포넌트)의 접힘은 "자기 로컬
+  // 상태"다(WorkArea가 아니라 여기서 소유). 미영속(M-7) — 새로고침하면
+  // 항상 펼침.
+  const [collapsed, setCollapsed] = useState(false)
+
   // RT-32(S3) — 예전엔 스토어 안 모듈 전역 타이머 하나를 이 네 필드가
   // 공유했다(한 필드를 편집하면 다른 필드의 대기 중이던 디바운스까지
   // 우연히 취소됨). 이제 각 필드가 useDebouncedAction 인스턴스를 하나씩
   // 따로 가져 독립적으로 디바운스한다.
-  const debouncedSearchTerm = useDebouncedAction(triggerSearch, SEARCH_DEBOUNCE_MS)
+  const debouncedKeyword = useDebouncedAction(triggerSearch, SEARCH_DEBOUNCE_MS)
   const debouncedAuthorFilter = useDebouncedAction(triggerSearch, SEARCH_DEBOUNCE_MS)
   const debouncedHashFilter = useDebouncedAction(triggerSearch, SEARCH_DEBOUNCE_MS)
   const debouncedDateRange = useDebouncedAction(triggerSearch, SEARCH_DEBOUNCE_MS)
@@ -42,7 +64,7 @@ export function BranchSearchBar(): React.JSX.Element {
   // 타이머 하나를 clearTimeout하던 것과 같은 효과를 네 인스턴스에
   // 나눠서 낸다.
   function cancelPendingSearches(): void {
-    debouncedSearchTerm.cancel()
+    debouncedKeyword.cancel()
     debouncedAuthorFilter.cancel()
     debouncedHashFilter.cancel()
     debouncedDateRange.cancel()
@@ -63,150 +85,84 @@ export function BranchSearchBar(): React.JSX.Element {
     }
   }
 
+  // RT-47(§5.1 RT-47), RT-48(U-8) — 접힌 요약: "<브랜치> · <메시지|파일명>
+  // ["<포함 키워드>"] [· 제외 N] · <시작>~<종료> · Merge 제외|포함
+  // [· 작성자 필터] [· 해시 필터]".
+  const summaryParts = [
+    selectedBranch ?? '—',
+    buildKeywordSummary(searchMode, keywordText),
+    `${startDate}~${endDate}`,
+    excludeMerges ? 'Merge 제외' : 'Merge 포함',
+    authorFilter.trim() ? '작성자 필터' : null,
+    hashFilterText.trim() ? '해시 필터' : null
+  ].filter((part): part is string => part != null)
+
   return (
-    <section className="panel branch-search-bar">
-      <div className="branch-search-bar__row">
-        <label>
-          Branch :
-          <select
-            value={selectedBranch ?? ''}
-            onChange={(e) => void setBranch(e.target.value)}
-            disabled={branches.length === 0}
-          >
-            {branches.length === 0 && <option value="">—</option>}
-            {branches.map((branch) => (
-              <option key={branch} value={branch}>
-                {branch}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <span className="branch-search-bar__search-mode">
-          검색 대상 :
-          <label>
-            <input
-              type="radio"
-              name="searchMode"
-              checked={searchMode === 'message'}
-              onChange={() => {
-                cancelPendingSearches()
-                void setSearchMode('message' satisfies CommitSearchMode)
-              }}
-            />
-            메시지
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="searchMode"
-              checked={searchMode === 'filename'}
-              onChange={() => {
-                cancelPendingSearches()
-                void setSearchMode('filename' satisfies CommitSearchMode)
-              }}
-            />
-            파일명
-          </label>
-        </span>
-
-        <label>
-          Search :
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value)
-              debouncedSearchTerm.run()
-            }}
-          />
-        </label>
-        <button onClick={handleImmediateSearch}>Search</button>
-      </div>
-
-      <div className="branch-search-bar__row">
-        <label>
-          조회 기간 :
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => {
-              setDateRange(e.target.value, endDate)
+    <CollapsibleSection
+      sectionKey="commitQuery"
+      owner="local"
+      title="조회 조건"
+      collapsed={collapsed}
+      onToggle={() => setCollapsed((v) => !v)}
+      summary={summaryParts.join(' · ')}
+    >
+      <SplitPane
+        className="commit-query-bar__groups"
+        storageKey="gde:splitRatio:queryGroups"
+        defaultRatio={0.5}
+        minStartPx={320}
+        minEndPx={330}
+        start={
+          <SearchConditionGroup
+            branches={branches}
+            selectedBranch={selectedBranch}
+            onBranchChange={(branch) => void setBranch(branch)}
+            onImmediateSearch={handleImmediateSearch}
+            startDate={startDate}
+            endDate={endDate}
+            onDateRangeChange={(nextStart, nextEnd) => {
+              setDateRange(nextStart, nextEnd)
               debouncedDateRange.run()
             }}
-          />
-          <span> ~ </span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => {
-              setDateRange(startDate, e.target.value)
-              debouncedDateRange.run()
-            }}
-          />
-        </label>
-
-        <label>
-          최대
-          <MaxCountField
-            value={maxCount}
-            onCommit={(v) => {
+            maxCount={maxCount}
+            onMaxCountCommit={(v) => {
               cancelPendingSearches()
               void setMaxCount(v)
             }}
-          />
-          개
-        </label>
-
-        <label>
-          <input
-            type="checkbox"
-            checked={excludeMerges}
-            onChange={(e) => {
+            excludeMerges={excludeMerges}
+            onExcludeMergesChange={(v) => {
               cancelPendingSearches()
-              void setExcludeMerges(e.target.checked)
+              void setExcludeMerges(v)
             }}
           />
-          Merge 커밋 제외
-        </label>
-      </div>
-
-      <div className="branch-search-bar__row branch-search-bar__row--split">
-        <label className="branch-search-bar__multiline-field">
-          작성자 :
-          <textarea
-            rows={2}
-            placeholder="쉼표/공백/줄바꿈 구분, 여러 명이면 하나라도 일치 시 포함"
-            title="Ctrl/Cmd+Enter로 즉시 조회"
-            value={authorFilter}
-            onChange={(e) => {
-              setAuthorFilter(e.target.value)
+        }
+        end={
+          <QueryFilterGroup
+            keywordText={keywordText}
+            onKeywordChange={(text) => {
+              setKeywordText(text)
+              debouncedKeyword.run()
+            }}
+            searchMode={searchMode}
+            onSearchModeChange={(mode) => {
+              cancelPendingSearches()
+              void setSearchMode(mode)
+            }}
+            authorFilter={authorFilter}
+            onAuthorChange={(text) => {
+              setAuthorFilter(text)
               debouncedAuthorFilter.run()
             }}
-            onKeyDown={handleImmediateSearchShortcut}
-          />
-        </label>
-
-        <label className="branch-search-bar__multiline-field">
-          해시 필터 :
-          <textarea
-            rows={2}
-            placeholder="쉼표/공백/줄바꿈 구분, 입력 시 다른 조건 무시"
-            title="Ctrl/Cmd+Enter로 즉시 조회"
-            value={hashFilterText}
-            onChange={(e) => {
-              setHashFilterText(e.target.value)
+            hashFilterText={hashFilterText}
+            onHashChange={(text) => {
+              setHashFilterText(text)
               debouncedHashFilter.run()
             }}
-            onKeyDown={handleImmediateSearchShortcut}
+            invalidHashFilter={invalidHashFilter}
+            onImmediateSearchShortcut={handleImmediateSearchShortcut}
           />
-          {invalidHashFilter.length > 0 && (
-            <span className="status-text status-text--error" title={invalidHashFilter.join(', ')}>
-              올바른 해시 형식이 아니라 무시됨: {invalidHashFilter.join(', ')}
-            </span>
-          )}
-        </label>
-      </div>
-    </section>
+        }
+      />
+    </CollapsibleSection>
   )
 }

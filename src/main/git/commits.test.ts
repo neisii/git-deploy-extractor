@@ -70,7 +70,7 @@ describe('listCommits — 기본 기간/검색/페이지네이션', () => {
       maxCount: 100,
       skip: 0,
       pageSize: 100,
-      searchTerm: 'NEEDLE'
+      includeKeywords: ['NEEDLE']
     })
     expect(result.commits).toHaveLength(2)
     expect(result.commits.every((c) => c.message.includes('needle'))).toBe(true)
@@ -176,6 +176,175 @@ describe('listCommits — 해시 필터 옵션 주입 방지', () => {
     })
     expect(result.commits.map((c) => c.hash)).toEqual([head])
     expect(result.invalidHashes).toEqual(['--not-a-hash'])
+  })
+})
+
+// RT-48(U-8, M-4) — 키워드(포함/제외) 필터. `-P`(PCRE) + `\Q…\E`로
+// `--grep`의 기존 BRE 결함(`[skip ci]`가 문자 클래스로 오인되던 것)을
+// 해소하고, 리터럴 취급·대소문자 무시·OR/AND 결합을 실제 git으로 검증한다.
+describe('listCommits — 키워드(포함/제외), 메시지 모드', () => {
+  let dir: string
+  const hashes: Record<string, string> = {}
+
+  beforeAll(() => {
+    dir = initRepo('gde-keyword-')
+    hashes.skipCi = commitAt(dir, new Date('2026-01-01T00:00:00Z'), '[skip ci] release notes')
+    hashes.normal = commitAt(dir, new Date('2026-01-02T00:00:00Z'), 'normal commit c i s k p')
+    hashes.fixBug = commitAt(dir, new Date('2026-01-03T00:00:00Z'), 'fix: payment bug')
+    hashes.wipFix = commitAt(dir, new Date('2026-01-04T00:00:00Z'), 'WIP fix: guarantee flow')
+    hashes.dotLiteral = commitAt(dir, new Date('2026-01-05T00:00:00Z'), 'a.b handler added')
+  })
+
+  afterAll(() => cleanupRepo(dir))
+
+  async function search(includeKeywords?: string[], excludeKeywords?: string[]): Promise<string[]> {
+    const result = await listCommits({
+      repoPath: dir,
+      branch: 'main',
+      startDate: '2020-01-01',
+      endDate: '2030-01-01',
+      maxCount: 100,
+      skip: 0,
+      pageSize: 100,
+      includeKeywords,
+      excludeKeywords
+    })
+    return result.commits.map((c) => c.hash)
+  }
+
+  it('`[skip ci]`는 대괄호를 문자 클래스로 오인하지 않고 그 문구가 있는 커밋만 찾는다(BRE 결함 해소)', async () => {
+    const found = await search(['[skip ci]'])
+    expect(found).toEqual([hashes.skipCi])
+  })
+
+  it('대소문자 무시', async () => {
+    const found = await search(['WIP'])
+    expect(found).toEqual([hashes.wipFix])
+    const found2 = await search(['wip'])
+    expect(found2).toEqual([hashes.wipFix])
+  })
+
+  it('`.`과 `*`는 정규식/글롭이 아니라 글자 그대로(`a.b`가 다른 문구에 일치하지 않음)', async () => {
+    const found = await search(['a.b'])
+    expect(found).toEqual([hashes.dotLiteral])
+    expect(await search(['axb'])).toEqual([])
+  })
+
+  it('포함 키워드 여러 개는 OR', async () => {
+    const found = await search(['payment', 'guarantee'])
+    expect(new Set(found)).toEqual(new Set([hashes.fixBug, hashes.wipFix]))
+  })
+
+  it('제외 키워드만 입력하면 그 조건에 해당하는 커밋만 빠진다', async () => {
+    const found = await search(undefined, ['fix'])
+    expect(found).not.toContain(hashes.fixBug)
+    expect(found).not.toContain(hashes.wipFix)
+    expect(found).toContain(hashes.skipCi)
+    expect(found).toContain(hashes.normal)
+  })
+
+  it('포함+제외는 AND(포함되지만 제외에도 걸리면 빠짐)', async () => {
+    const found = await search(['fix'], ['wip'])
+    expect(found).toEqual([hashes.fixBug])
+  })
+})
+
+// RT-48(M-4) — 제외 키워드가 있으면 클라이언트에서 걸러낸다(위 commits.ts
+// 주석 참고). git의 --skip/-n을 그대로 쓰지 않고 [skip, skip+limit)을
+// 직접 슬라이스하므로, 여러 페이지를 이어 불러와도 중복·누락이 없어야
+// 한다 — 재설계 전 naive 구현(git --skip=걸러진 개수)이 실제로 중복을
+// 냈던 버그의 회귀 방지 테스트.
+describe('listCommits — 제외 키워드 페이지네이션(중복/누락 방지)', () => {
+  let dir: string
+  const surviving: string[] = []
+
+  beforeAll(() => {
+    dir = initRepo('gde-keyword-exclude-pagination-')
+    // 0,3,6,9...는 제외 키워드('drop')가 있어 걸러진다 — 매 3개 중 1개.
+    for (let i = 0; i < 12; i++) {
+      const message = i % 3 === 0 ? `drop commit ${i}` : `keep commit ${i}`
+      const hash = commitAt(dir, new Date(Date.UTC(2026, 0, 1 + i)), message)
+      if (i % 3 !== 0) surviving.push(hash)
+    }
+  })
+
+  afterAll(() => cleanupRepo(dir))
+
+  it('pageSize보다 작은 페이지를 이어 불러와도 중복·누락 없이 전부 모인다', async () => {
+    const pageSize = 3
+    const maxCount = 100
+    let skip = 0
+    let hasMore = true
+    const collected: string[] = []
+    let iterations = 0
+    while (hasMore) {
+      const result = await listCommits({
+        repoPath: dir,
+        branch: 'main',
+        startDate: '2020-01-01',
+        endDate: '2030-01-01',
+        maxCount,
+        skip,
+        pageSize,
+        excludeKeywords: ['drop']
+      })
+      collected.push(...result.commits.map((c) => c.hash))
+      skip += result.commits.length
+      hasMore = result.hasMore
+      iterations += 1
+      expect(iterations).toBeLessThanOrEqual(20) // 무한 루프 방지
+      if (result.commits.length === 0 && hasMore) break // 안전장치
+    }
+    // 최신순(date desc)이므로 surviving도 같은 순서로 뒤집어 비교한다.
+    expect(collected).toEqual([...surviving].reverse())
+    expect(new Set(collected).size).toBe(surviving.length)
+  })
+})
+
+describe('listCommits — 키워드(포함), 파일명 모드', () => {
+  let dir: string
+
+  beforeAll(() => {
+    dir = initRepo('gde-keyword-filename-')
+    writeFixtureFile(dir, 'src/PaymentService.java', 'x')
+    writeFixtureFile(dir, 'src/GuaranteeService.java', 'x')
+    writeFixtureFile(dir, 'README.md', 'x')
+    commitAll(dir, 'init')
+  })
+
+  afterAll(() => cleanupRepo(dir))
+
+  it('포함 키워드 여러 개는 OR로 파일명 부분 일치', async () => {
+    const result = await listCommits({
+      repoPath: dir,
+      branch: 'main',
+      startDate: '2020-01-01',
+      endDate: '2030-01-01',
+      maxCount: 100,
+      skip: 0,
+      pageSize: 100,
+      searchMode: 'filename',
+      includeKeywords: ['payment', 'guarantee']
+    })
+    expect(result.commits).toHaveLength(1)
+  })
+
+  it('파일명 모드에서는 제외 키워드를 무시한다', async () => {
+    // README.md만 있는 커밋이 없어 결과가 0건이 되면(제외가 적용됐다면)
+    // "무시"를 증명할 수 없으니, 포함 없이 제외만 준 경우 필터 자체가
+    // 걸리지 않아 전체(1개 커밋)가 그대로 나오는지로 확인한다.
+    const result = await listCommits({
+      repoPath: dir,
+      branch: 'main',
+      startDate: '2020-01-01',
+      endDate: '2030-01-01',
+      maxCount: 100,
+      skip: 0,
+      pageSize: 100,
+      searchMode: 'filename',
+      excludeKeywords: ['payment']
+    })
+    expect(result.commits).toHaveLength(1)
   })
 })
 

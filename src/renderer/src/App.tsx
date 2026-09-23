@@ -25,28 +25,20 @@ function App(): React.JSX.Element {
     <div className="app-shell">
       <RepositoryPanel />
       <BranchSearchBar />
-      <WorkArea>
-        <SplitPane
-          className="vertical-main-split"
-          direction="vertical"
-          storageKey="gde:splitRatio:commitsVsFiles"
-          defaultRatio={0.5}
-          minStartPx={140}
-          minEndPx={140}
-          start={
-            <SplitPane
-              className="main-grid"
-              storageKey="gde:splitRatio:mainGrid"
-              defaultRatio={0.8}
-              minStartPx={320}
-              minEndPx={180}
-              start={<CommitListPanel />}
-              end={<PreviewSummary />}
-            />
-          }
-          end={<DeployFilesPanel />}
-        />
-      </WorkArea>
+      <WorkArea
+        commitWorkspace={
+          <SplitPane
+            className="main-grid"
+            storageKey="gde:splitRatio:mainGrid"
+            defaultRatio={0.8}
+            minStartPx={320}
+            minEndPx={180}
+            start={<CommitListPanel />}
+            end={<PreviewSummary />}
+          />
+        }
+        deployFilesWorkspace={<DeployFilesPanel />}
+      />
       <FooterActionBar />
       <Credit />
     </div>

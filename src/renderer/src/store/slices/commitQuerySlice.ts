@@ -22,9 +22,13 @@ export interface CommitQuerySlice {
   startDate: string
   endDate: string
   maxCount: number
-  searchTerm: string
+  // RT-48(U-8) — 예전 searchTerm(단일행) 대체. 원본 텍스트(줄바꿈 구분,
+  // `-` 접두는 제외) — 파싱은 조회 시점에 services/commitQueryParams.ts의
+  // parseKeywordText가 한다(쉼표는 구분자가 아니라는 점이 작성자/해시와
+  // 다르다).
+  keywordText: string
   searchMode: CommitSearchMode // RISK_ISSUES.md §7.3 — 메시지/파일명 토글, 기본 'message'
-  authorFilter: string // REQ-022 — 원본 텍스트(줄바꿈/쉼표 구분, 2026-09-14부터 여러 작성자 지원). searchTerm과 독립적으로 AND 결합
+  authorFilter: string // REQ-022 — 원본 텍스트(줄바꿈/쉼표 구분, 2026-09-14부터 여러 작성자 지원). keywordText와 독립적으로 AND 결합
   excludeMerges: boolean // REQ-022 — Merge 커밋 제외, 기본 true(제외) — 2026-09-14 사용자 요청으로 기본값 변경
   hashFilterText: string // REQ-023 — 원본 텍스트(줄바꿈/쉼표 구분). 값이 있으면 다른 모든 조회 조건을 무시
   // RT-10(M-5) — hashFilterText 중 16진수 형식이 아니라서 git에 넘기지
@@ -32,7 +36,7 @@ export interface CommitQuerySlice {
   // 보관). 조회할 때마다 새로 채워진다.
   invalidHashFilter: string[]
 
-  setSearchTerm: (term: string) => void
+  setKeywordText: (text: string) => void
   setSearchMode: (mode: CommitSearchMode) => Promise<void>
   setAuthorFilter: (author: string) => void
   setExcludeMerges: (excludeMerges: boolean) => Promise<void>
@@ -40,6 +44,11 @@ export interface CommitQuerySlice {
   triggerSearch: () => Promise<void>
   setDateRange: (startDate: string, endDate: string) => void
   setMaxCount: (maxCount: number) => Promise<void>
+  // RT-55(U-15) — Reload 전용. 조회 조건을 전부 기본값으로 되돌린다(기간은
+  // "지금" 기준으로 다시 계산 — 모듈 최상단의 defaultRange는 앱 시작
+  // 시점에 한 번만 계산돼 있어 재사용할 수 없다). 조회 자체는 호출자
+  // (reloadRepository)가 뒤이어 loadCommitsFirstPage를 불러 트리거한다.
+  resetQuery: () => void
 }
 
 export const createCommitQuerySlice: StateCreator<AppState, [], [], CommitQuerySlice> = (
@@ -49,7 +58,7 @@ export const createCommitQuerySlice: StateCreator<AppState, [], [], CommitQueryS
   startDate: defaultRange.startDate,
   endDate: defaultRange.endDate,
   maxCount: 100,
-  searchTerm: '',
+  keywordText: '',
   searchMode: 'message',
   authorFilter: '',
   excludeMerges: true,
@@ -61,7 +70,7 @@ export const createCommitQuerySlice: StateCreator<AppState, [], [], CommitQueryS
   // 부른다) — "검색 조건을 바꿔가며 여러 번 찾아 누적 체크"하는
   // 워크플로우가 이 기능의 핵심 목적이다. 조회 자체는 컴포넌트가
   // (디바운스 또는 즉시) triggerSearch를 호출해서 일으킨다.
-  setSearchTerm: (term) => set({ searchTerm: term }),
+  setKeywordText: (text) => set({ keywordText: text }),
 
   setSearchMode: async (mode) => {
     set({ searchMode: mode })
@@ -94,5 +103,20 @@ export const createCommitQuerySlice: StateCreator<AppState, [], [], CommitQueryS
   setMaxCount: async (maxCount) => {
     set({ maxCount })
     await get().loadCommitsFirstPage(true)
+  },
+
+  resetQuery: () => {
+    const range = getDefaultDateRange()
+    set({
+      startDate: range.startDate,
+      endDate: range.endDate,
+      maxCount: 100,
+      keywordText: '',
+      searchMode: 'message',
+      authorFilter: '',
+      excludeMerges: true,
+      hashFilterText: '',
+      invalidHashFilter: []
+    })
   }
 })

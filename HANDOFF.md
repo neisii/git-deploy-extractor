@@ -9,18 +9,52 @@ Git Deploy Extractor에 새 기능을 추가합니다. 이 저장소(neisii/git-
 이미 구현 완료 후 v0.6.0으로 릴리스된 상태입니다 — 처음부터 만드는 게 아니라
 기존 앱을 확장하는 작업입니다.
 
-**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 + P4의 RT-40~46 구현
-완료 — 2026-09-22).** v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에
-분리해 뒀습니다. **다음 착수 지점은 P4의 RT-47(U-6, `CollapsibleSection`
-적용 3곳·`section:hide/show` 이벤트·`WorkArea` grid 행 재분배)입니다.
+**⚠ 리팩토링이 진행 중입니다(2026-09-21 계획 수립, P0~P3 + P4의 RT-40~49·51~55
+구현 완료 — 2026-09-22/23).** v0.6.0 대비 변경이 커서 계획·명세를 `docs/refactoring/`에
+분리해 뒀습니다. **다음 착수 지점은 P4의 RT-56(U-16, `ExportModeSelect` +
+추출 위치 방식/저장소 겹침 검증)입니다.**
 RT-43(PopupHost)·RT-44(PreviewSummary/Deleted·경고 팝업)·RT-46
 (FilterPatternBar/패턴 팝업)은 2026-09-22에 한 번에(RT-43 명세가 RT-44/46을
 전제해 AskUserQuestion으로 범위를 확인한 뒤), RT-45(StatusFilter·좌측 검색
-삭제·added 녹색·`+ 파일 추가` 제목 줄 우측)는 그 직후 같은 날 구현
-완료됐습니다 — §5 RT-43/44/45/46 각 항목의 구현 요약 참고. 착수 전에 §5.1의
-RT-47 명세가 아직 없는 다른 RT(번호가 더 큰 것 포함)를 전제하고 있는지부터
-확인하세요 — RT-41/42/43에서 실제로 이런 순서 문제가 있었습니다. P4는 실제
-UI 변경 단계라 P0~P3의 "동작 불변" 원칙이 더 이상 적용되지 않습니다** — §3 확정 UI
+삭제·added 녹색·`+ 파일 추가` 제목 줄 우측)는 그 직후 같은 날, RT-47
+(`CollapsibleSection` 3곳·`section:hide/show`·`WorkArea` grid 재분배)은
+2026-09-23에 구현 완료됐습니다. RT-48(U-8, 키워드 검색 통합)·RT-49(U-9·U-10,
+CommitQueryBar 레이아웃)도 2026-09-23에 함께 구현 완료됐습니다 — 착수 전
+§5.1 RT-48이 RT-49의 산출물(필터 그룹의 "키워드" 필드)을 전제하는 순서
+충돌을 먼저 확인(RT-41/42/43/47과 같은 유형), AskUserQuestion으로 "RT-48을
+앞당겨 함께 진행"을 확인받아 한 세션에서 처리했습니다. 이 과정에서 M-4의
+원래 가정(`-P` PCRE 패턴 하나에 `\Q…\E`로 포함·제외를 전부 결합)이 실제
+git(2.53)에서는 깨진다는 것을 재현으로 발견해(negative lookahead가
+들어간 `-P --grep` 패턴은 실제로 불일치하는 커밋도 포함시키는 git 자체
+버그) 포함/제외를 서로 다른 메커니즘(포함은 `-F`+반복 `--grep`, 제외는
+클라이언트 필터+페이지네이션 재설계)으로 재설계했습니다 — §5 RT-48
+항목의 "M-4 재검증" 문단 참고, 이 리팩토링에서 §0.1(재현 검증 원칙)이
+실제로 원래 계획 문서의 가정을 뒤집은 사례입니다. **RT-51(U-11, Extract
+대상 목록 상태 모델)·RT-52(U-12·U-19·U-20, `AddFilesPopup`)도 2026-09-23에
+함께 구현 완료됐습니다** — RT-51이 요구하는 "누락된 의존성 복귀 위치 =
+AddFilesPopup의 HEAD 트리"·"SplitPane 2분할"이 그때까지 존재하던
+`MissingDependenciesPane`과 충돌하는 걸(RT-47이 이미 한 번 겪고 RT-51 선도를
+보류했던 것과 동일 유형) 확인해 AskUserQuestion → "RT-51+RT-52를 평탄한
+목록으로 함께"(RT-44의 "평탄한 목록 우선 구현 → RT-53이 교체" 패턴 재사용)
+확정 후 처리했습니다 — §5 RT-51 항목 참고. **RT-53(U-13, `TreeList`
+primitive)·RT-54(U-14, `Popup` 720×480)도 2026-09-23에 함께 구현
+완료됐습니다** — 착수 전 AddFilesPopup의 HEAD 트리가 기존 480px 고정폭
+팝업엔 비좁다는 걸 확인해 AskUserQuestion → "RT-54를 먼저(또는 함께)
+처리"를 확인받고, RT-51이 평탄한 목록으로 임시 구현해 둔 6개 목록(왼쪽
+포함된 파일·Extract 대상·AddFilesPopup 탐색/결과·삭제됨/경고 팝업)을
+전부 진짜 트리로 교체했습니다 — §5 RT-53 항목 참고. **RT-55(U-15, Reload
+전체 초기화)도 2026-09-23에 구현 완료됐습니다** — 착수 전 §7 M-22(유지
+범위)·M-24(확인 대화상자 여부)가 둘 다 "결정 대기"라 AskUserQuestion으로
+확인(M-22는 스펙 본문의 가정 그대로 확정, M-24는 원래 권장이던 "있음"을
+뒤집어 "없음"으로 — 코드베이스에 confirm 패턴이 아예 없어 새로 설계하는
+비용 대비 Reload는 버튼을 직접 눌러야만 일어나는 명시적 동작이라 불필요로
+판단) 후 처리했습니다 — §5 RT-55 항목 참고. **P4부터는 이 순서 문제가
+반복적으로 나타나므로(RT-41/42/43/47/48/51/53), 새 RT를 시작하기 전에 그
+§5.1 명세가 아직 존재하지 않는 다른 RT를 전제하고 있는지 확인하는 걸 매번
+빠뜨리지 마세요** — 지금까지는 전부 AskUserQuestion으로 사용자에게 먼저
+확인받고 진행했습니다. §5 RT-43/44/45/46/47/48/49/51/52/53/54/55
+각 항목의 구현 요약 참고. P4는 실제
+UI 변경 단계라 P0~P3의 "동작 불변" 원칙이 더 이상 적용되지 않습니다 — §3 확정 UI
 변경(U-1~U-22)·목업(`component-playground.html`)·§5.1 각 RT 상세 명세를 따르고,
 관련 §7 미결 사항(M-x)이 미확정이면 구현 전에 먼저 확인하세요. 이번 작업이
 새 기능이 아니라 이 리팩토링의
@@ -501,9 +535,251 @@ UI 변경 단계라 P0~P3의 "동작 불변" 원칙이 더 이상 적용되지 �
     추가하는 e2e 테스트는 시작·종료 시 항상 정리(`clearAllPatterns`
     같은 헬퍼)하는 게 이 저장소의 필수 관례임을 기록해 둔다. 검증:
     `npm test`(140개)·`typecheck`·`lint`·`build`·`test:e2e`(15개,
-    신규 `e2e/included-files-pane.spec.ts` 4건) 전부 통과. **다음 착수
-    지점은 RT-47**(U-6, `CollapsibleSection` 적용 3곳·`section:hide/show`
-    이벤트·`WorkArea` grid 행 재분배)입니다.
+    신규 `e2e/included-files-pane.spec.ts` 4건) 전부 통과.
+  - **RT-47(같은 날, 2026-09-22)**: 착수 전 §7 M-7(접힘 영속 여부·팝업
+    처리)·M-8(접힌 Preview 버튼·경고 개수 노출)·M-13(트랙 최소 높이)이
+    "결정 대기"로 남아 있어 AskUserQuestion으로 확정(M-7: 미영속+접을
+    때 팝업 닫기, M-8: 접힌 헤더에 Preview 유지·경고는 요약에, M-13:
+    목업 값 90px/120px 채택). 진행 중 §5.1 명세 원문의 배포 영역 접힌
+    요약 문구("Extract N개 · 미선택 변경 파일 M개")가 아직 없는
+    RT-51(Extract 상태 모델)을 전제하는 걸 또 발견(RT-41/42와 같은
+    유형) — RT-51을 이 김에 앞당기는 방안도 검토했으나, RT-51 단독
+    적용은 "미선택|Extract 2분할" 명세와 RT-52 전까지 존치하기로 한
+    `MissingDependenciesPane`이 자리를 잃는 새 충돌을 낳아 보류,
+    지금 모델 기준 문구("포함된 파일 N개(패턴 제외 K) · 누락된 의존성
+    M개")로 임시 작성했다. `CollapsibleSection`에 `sectionKey`/`owner`/
+    `headerActions`/`fill` prop 추가, `SplitPane`에 `startCollapsed`/
+    `endCollapsed`(접힌 쪽 auto·펼친 쪽 1fr·핸들 0px, 둘 다 접히면
+    `align-content:start`로 위에 붙음) 추가. `WorkArea`가 `children`
+    대신 `commitWorkspace`/`deployFilesWorkspace` 두 슬롯을 받아 세로
+    SplitPane과 커밋/배포 두 `CollapsibleSection`을 직접 조립(상태는
+    WorkArea 소유, §5.1). `BranchSearchBar`는 자기 로컬 collapsed state로
+    감쌌다(owner: `'local'`). **Playwright 스크린샷으로 실제 화면을
+    확인하다가 자동 테스트(vitest/typecheck/lint/build/기존 e2e)로는
+    전혀 안 잡히는 CSS 버그 두 개를 발견·수정**: ①
+    `.collapsible-section{height:100%}`를 세 사용처 모두에 무조건
+    걸었더니 app-shell의 평범한 flex 자식인 CommitQueryBar 인스턴스가
+    그 퍼센트를 100vh로 해석해 레이아웃이 깨짐(체크박스 클릭이
+    `.app-shell`에 가로채임) — `fill` prop(모디파이어 클래스)으로
+    WorkArea 소유 두 섹션에만 걸도록 분리. ② `.collapsible-section__body
+    {display:flex}`를 무조건 걸었더니 author 규칙이 UA 스타일시트의
+    `[hidden]{display:none}`보다 우선해(특정도가 같아도 author가 이김)
+    접힌 섹션의 본문이 계속 보이는 버그 — `:not([hidden])`로 펼친
+    상태에만 걸어 해결. 검증: `npm test`(140개)·`typecheck`·`lint`·
+    `build`·`test:e2e`(15개, 기존 스펙 그대로 — 새 e2e는 추가하지
+    않았다, `useMemo`/DOM 기반이라 RT-01/34 방침대로 vitest 대상이
+    아니라서 임시 Playwright 스크린샷 6장으로 육안 확인만 하고 삭제).
+    상세는 `docs/refactoring/REFACTORING_TASKS.md` §5.1 RT-47 항목.
+  - **RT-48(U-8, 키워드 통합)·RT-49(U-9·U-10, CommitQueryBar 레이아웃)를
+    함께 구현(2026-09-23)** — 착수 전 §5.1 RT-48이 RT-49의 산출물(필터
+    그룹 "키워드" 필드)을 전제하는 순서 충돌을 발견(RT-41/42/43/47과
+    같은 유형), AskUserQuestion → "RT-48을 앞당겨 함께 진행" 확인 후
+    한 세션에서 처리했다. **M-4를 실제 git(2.53)으로 재검증하다가
+    원래 가정이 깨지는 걸 발견했다**: `-P`(PCRE) 자체는 지원되지만,
+    그 패턴에 negative lookahead(제외 조건)를 넣으면 실제로는
+    불일치하는 커밋도 git이 결과에 포함시키는 버그를 재현했다
+    (`\A(?!fix)`처럼 최소화한 패턴으로도 재현 — 같은 저장소에서
+    `--invert-grep`은 정상 동작하지만 포함 조건과 AND로 결합할 방법이
+    없다). 그래서 **포함은 `-F`(고정 문자열)+반복 `--grep`(OR,
+    `authors`와 동일 관례 — `[skip ci]`가 BRE 문자 클래스로 오인되던
+    기존 결함도 함께 해소), 제외는 클라이언트(Node.js) 필터**로
+    최종 구현했다. 제외를 클라이언트로 옮기면서 페이지네이션도 다시
+    설계해야 했다 — git의 `--skip`을 그대로 쓰면 클라이언트 필터로
+    걸러진 "이후" 개수가 실제 git 쪽 skip과 어긋나 이미 보여준
+    커밋이 다음 페이지에 재등장하는 버그를 재현했고, `maxCount`
+    전체를 한 번에 가져와 걸러낸 뒤 `[skip, skip+limit)`을 직접
+    슬라이스하는 방식으로 막았다(회귀 테스트로 증명). `CommitQueryBar`는
+    `SplitPane`(가로, 최소 폭 320/330px)으로 검색 조건 그룹·필터
+    그룹(`QueryFilterGroup`, 키워드·작성자·해시 세 텍스트 영역)으로
+    나눴고, 입력 시작 시 필드 아래 겹쳐 뜨는 힌트 툴팁(`FieldHint.tsx`)은
+    가로 SplitPane의 `overflow-x:auto`가 CSS 스펙상 `overflow-y`도
+    `auto`로 강제 승격시켜 `position:absolute`로는 잘리는 걸 확인해
+    `position:fixed` + `getBoundingClientRect()`로 우회했다. 기본 창
+    폭도 900→1100px로 키웠다(M-13 잔여분). 상세는
+    `docs/refactoring/REFACTORING_TASKS.md` §5.1 RT-48·RT-49 항목,
+    M-4·M-42·M-13(§7) 참고.
+  - **RT-51(U-11, Extract 대상 목록)·RT-52(U-12·U-19·U-20, `AddFilesPopup`)를
+    함께 구현(2026-09-23)** — 착수 전 §5.1 RT-51이 요구하는 "누락된 의존성
+    복귀 위치 = AddFilesPopup의 HEAD 트리"·"SplitPane 2분할 그대로"가 그때
+    까지 별도 존재하던 `MissingDependenciesPane`과 충돌하는 순서 문제를
+    발견(RT-47이 이미 겪고 RT-51 선도를 보류했던 것과 동일 유형),
+    AskUserQuestion → "RT-51+RT-52를 평탄한 목록으로 함께"(RT-44가
+    Deleted/경고 팝업에 쓴 "평탄한 목록 우선 구현 → RT-53이 TreeList로
+    교체" 패턴 재사용) 확정 후 한 세션에서 처리했다.
+    **상태 모델**: `DeployFileEntry`에 `source: 'changed'|'dependency'|'manual'`
+    (+`dependency`에만 `kind`) 추가. `included`는 명세대로 "소속 목록"
+    의미로 재정의됐지만 필드 이름·타입은 안 바꿨다 — RT-33이 미리 설계해
+    둔 `exportPlan.buildExportFiles`("included=true 중 패턴 미매치만
+    Export")가 "Extract 목록 − 활성 패턴 해당 항목"과 정확히 같은 판정이라
+    그 함수는 실제로 한 글자도 안 바꿨다. `source==='changed'`만
+    `included:false`로 배열에 남고(왼쪽 "포함된 파일" 목록), dependency/
+    manual은 항상 `included:true`이며 "되돌리기"는 배열에서 완전히
+    제거하는 것으로 표현한다. 왼쪽 목록은 `source==='changed' && !included`
+    로 필터링하도록만 바꿨더니 체크박스·전체선택 로직은 그대로 재사용한
+    채(코드 변경 없이) "체크=Extract로 이동"이 자연히 단방향으로
+    동작하게 됐다(화면에 늘 `!included`만 보이므로). "선택 N개"(REQ-020)는
+    이제 "이미 Extract로 이동한 변경 파일 개수"(필터와 무관한 절대값,
+    원래 원칙 그대로).
+    **오른쪽 `ExtractTargetsPane.tsx`(신규, `MissingDependenciesPane.tsx`
+    대체)**: `useExtractTargetsView.ts` 신규 — `included===true` 전부
+    (출처 무관)를 모아 활성(비 screenOnly) 패턴 매치 여부를 같이 계산.
+    `ExtractRow.tsx`/`ExtractList.tsx` 신규 — 체크박스 대신 `×` 버튼
+    (출처별 복귀 위치가 다름), 종류 배지(Impl/I, 의존성 출처만·중립
+    회색), 출처 배지(변경/수동 — 의존성은 표시 안 함, 사용자 결정),
+    패턴 제외 시 흐림+취소선+"패턴 제외" 태그(숨기지 않음). "모두
+    되돌리기" 버튼. 경로 복사 버튼(RT-53)은 범위 밖.
+    **`AddFilesPopup.tsx`(신규, `ManualAddPopup.tsx` 대체, 팝업 키도
+    `'manual'`→`'addFiles'`로 개명, M-18)**: 검색어가 없으면 발견성
+    보존을 위해 누락된 의존성만 보여주고(HEAD 트리 전체를 평탄하게 다
+    나열하면 수천~수만 개라 못 씀 — RT-53이 트리로 바뀌면 전체 탐색
+    가능), 검색어가 있으면 매칭되는 HEAD 트리 후보 전체를 보여주며 그중
+    누락된 의존성은 계속 붉은 글자(`status-text--error`와 같은 색
+    재사용)+배지로 구분한다 — `lib/addFilesCandidates.ts` 신규(순수
+    함수, vitest 6케이스). 검색은 `lib/matchesFileName.ts`(`*` 와일드카드
+    포함) 재사용. "보이는 항목 모두 추가 (N)"은 누락된 의존성만 add-only로
+    추가. `+ 파일 추가` 버튼에 `누락 N` 배지(50 초과 시 붉은색, REQ-020
+    이월) — 팝업이 닫혀 있어도 `IncludedFilesPane`이 항상 계산해 보여준다.
+    **실측 CSS 버그**: `ExtractRow`가 처음엔 `FileRow`의
+    `width:max-content`(긴 경로를 가로 스크롤로 다 보여주는 방식)를 그대로
+    재사용했는데, Extract 행 오른쪽의 ×·배지가 화면 밖으로 밀려나 안
+    보이는 걸 Playwright 요소 스크린샷으로 발견 — `width:100%` + 파일명
+    `text-overflow:ellipsis`(전체 경로는 title 툴팁)로 바꿔 해결했다.
+    **e2e 대량 수정**: 예전엔 Preview 직후 변경 파일이 왼쪽 "포함된
+    파일"에 체크된 채로 나타난다고 가정한 테스트가 5개 스펙에 걸쳐
+    있었는데(RT-51 기본값 "전체 Extract 이동"으로는 그 가정이 전부
+    깨짐), `preview-export`·`export-feedback`·`work-area-popups`·
+    `included-files-pane`·`popup-behavior` 전부 Extract 모델 기준으로
+    다시 썼다(예: U8 키보드 토글 테스트는 ×로 왼쪽에 되돌린 뒤 그
+    체크박스를 Space로 토글하는 흐름으로 재구성). `manual-add.spec.ts`→
+    `add-files-popup.spec.ts`로 개명하며 발견성 시나리오 1건을 추가했다.
+    검증: `npm test`(169개, 신규 `addFilesCandidates.test.ts` 6개 +
+    `deployFilesSlice.extract.test.ts` 8개)·`typecheck`·`lint`·`build`·
+    `test:e2e`(20개) 전부 통과. Playwright 임시 스크린샷(Spring Boot
+    모양 fixture로 실제 누락된 의존성 2건 재현 — 인터페이스 1·구현체 1)
+    으로 빨간 글자·배지·Extract 행·모두 되돌리기까지 육안 확인 후 삭제.
+    상세는 `docs/refactoring/REFACTORING_TASKS.md` §5.1 RT-51·RT-52 항목,
+    M-14·M-18(§7) 참고.
+  - **RT-53(U-13, `TreeList` primitive)·RT-54(U-14, `Popup` 720×480)를
+    함께 구현(2026-09-23)** — 착수 전 AddFilesPopup의 HEAD 트리(들여쓰기+
+    파일명+종류 배지+경로 복사+추가 버튼)가 기존 480px 고정폭 `Popup`엔
+    비좁다는 걸 확인, RT-15가 "전체 표준 크기(720×480)는 RT-54 몫"이라고
+    이미 미뤄둔 걸 발견해 AskUserQuestion으로 "RT-54를 먼저(또는 함께)
+    처리"를 확인받아 함께 진행했다. 착수 전 M-20도 확정(AskUserQuestion,
+    2026-09-23): 펼침 상태는 로컬에만(저장 안 함, 새로고침하면 항상 기본
+    전부 펼침) · **300개 초과 기본 접힘은 채택하지 않음**(가상 스크롤이
+    이미 렌더링 비용을 해결해 성능상 이유가 없고 "한눈에 구조 파악"
+    이점도 이 앱의 목록 크기에선 크지 않다는 게 실제 이유 — 사용자가
+    "화면에 안 보이면 스크롤하면 되는데 왜 굳이 접어야 하냐"고 근거를
+    요구해 재검토한 뒤 원래 권장안을 뒤집은 항목) · 폴더 체크박스에
+    **indeterminate 추가**(일부만 Extract로 이동된 폴더 표시,
+    `TriStateCheckbox` 재사용).
+    **순수 함수**(`lib/tree.ts` 신규): `buildTree(items, getPath)`·
+    `compressChains(node, compactFromDepth)`·`flatten(root, isOpen)` —
+    `component-playground.html`의 `buildTree`/`treeHtml` 알고리즘을 그대로
+    이식. vitest 12케이스(단일 파일·중첩·같은 이름 다른 폴더·한글 경로·
+    체인 병합·병합 중간에 파일 있으면 끊김·`compactFromDepth` 미만 병합
+    안 함·폴더 우선 정렬·같은 레벨 이름순·접힌 폴더 flatten 제외·펼침
+    상태별·depth 반영).
+    **`useTreeExpansion(defaultOpen)`**(`lib/useTreeExpansion.ts` 신규) —
+    펼침 상태는 이 훅을 호출한 컴포넌트 로컬에만 있다(M-20). 목록마다(그리고
+    AddFilesPopup의 탐색/결과 트리처럼 한 컴포넌트 안에서도) 이 훅을 별도로
+    호출해 서로 독립된 펼침 상태를 갖는다.
+    **`TreeList.tsx`**(신규) — `renderLeaf`/`renderFolder` 슬롯,
+    `expansion` prop(호출부 소유), `compactFromDepth`(기본 1, AddFilesPopup
+    탐색 트리만 3). 경로 복사 버튼(U-18, `CopyPathButton.tsx` 신규 +
+    `lib/toRepoRelativePath.ts` 신규, `useCopyToClipboard` 재사용)은
+    `copyable` prop(기본 true)으로 TreeList가 자동으로 붙이거나, Extract처럼
+    `×`와의 16px 간격·순서 규칙이 있는 곳은 꺼서(`copyable={false}`)
+    `renderLeaf`/`renderFolder` 안에서 직접 배치한다. `rowClassName` prop
+    (선택)은 스타일 목적이 아니라 e2e가 "동시에 떠 있는 여러 TreeList 중
+    어느 것"을 구체적으로 짚을 수 있게 하는 훅이다 — `IncludedFilesPane`은
+    `included-row`, `ExtractTargetsPane`은 `extract-row`(기존 이름 유지로
+    하위 e2e 호환).
+    **6개 트리 인스턴스**(§5.1 "5곳"이지만 AddFilesPopup의 탐색/결과가
+    펼침 상태 분리된 별도 인스턴스라 실질 6개): `IncludedFilesPane`(왼쪽,
+    폴더 체크박스로 하위 변경 파일 이동, indeterminate는 "이 폴더 아래
+    원래 변경 파일 개수가 화면에 보이는 fileCount보다 많은지"로 판정) ·
+    `ExtractTargetsPane`(오른쪽, 폴더 `×`=신규 `returnFolderFromExtract`
+    액션) · `AddFilesPopup` 탐색 트리(`compactFromDepth:3`, 기본 펼침 =
+    1단계 ∪ 누락된 의존성 조상 폴더) · 같은 팝업 결과 트리(검색어 있을 때,
+    `compactFromDepth:1`, 전부 펼침) · `DeletedFilesPopup`·`WarningsPopup`
+    (읽기 전용, `renderFolder` 기본값 그대로).
+    **AddFilesPopup 재구성**: `lib/addFilesCandidates.ts`를 RT-52의
+    "빈 검색어=누락된 의존성만" 2분기에서 `buildBrowseCandidates`(HEAD
+    트리 전체)·`buildSearchCandidates`(매칭 50개 상한 + truncated 플래그)·
+    `missingDependencyAncestorPaths`(누락된 의존성 경로의 모든 조상 폴더
+    집합 — compact 병합 후 폴더 노드의 `path`가 항상 이 조상 경로 중
+    하나와 같다는 걸 이용해, TreeList 내부 트리 구조를 몰라도 기본 펼침
+    규칙을 맞출 수 있다) 셋으로 재구성. 이제 진짜 HEAD 트리 탐색이 된다.
+    **폴더 인덱터미네이트 계산**: `useIncludedFilesView`가 `changedFiles`
+    (패턴·이동 여부 무관, source==='changed' 전체)를 추가로 반환하도록
+    확장 — `IncludedFilesPane`의 `renderFolder`가
+    `changedFiles.filter(prefix 매치).length > info.fileCount`로 "이 폴더
+    중 일부가 이미 Extract로 이동했거나 패턴에 걸려 안 보인다"를 판정한다.
+    **실측 CSS 버그**: `ExtractRow`(RT-51)의 `width:max-content` 가로
+    스크롤 방식을 그대로 재사용했다가 Playwright 요소 스크린샷으로
+    ×/배지가 화면 밖으로 밀려나 안 보이는 걸 재발견 — `TreeList`의 모든
+    행에 `width:100%` + 이름 `text-overflow:ellipsis`로 통일했다(전체
+    경로는 행 `title` 툴팁). `FileList.tsx`/`FileRow.tsx`/
+    `lib/useMeasuredColumnWidth.ts`(가로 스크롤 실측 방식 전체)는 더 이상
+    쓰이지 않아 삭제.
+    **`.popup` 크기(RT-54)**: `width: 480px` 고정 → `width: min(720px, 94%)`,
+    `height: min(480px, calc(100% - 20px))`로 변경. `Popup.tsx` 로직은
+    무변경(크기는 전적으로 CSS가 결정) — `AddFilesPopup`·
+    `FilterPatternsPopup`·`DeletedFilesPopup`·`WarningsPopup` 전부 이
+    표준 크기로 자동 통일됐다.
+    검증: `npm test`(190개, 신규 `tree.test.ts` 12개+
+    `toRepoRelativePath.test.ts` 4개+`addFilesCandidates.test.ts` 재작성
+    10개)·`typecheck`·`lint`·`build`·`test:e2e`(23개 — 기존 스펙들이
+    "리프는 전체 경로를 표시"하던 가정이 "파일명만 표시"로 바뀌어
+    `hasText` 로케이터를 전부 갱신, 신규 `tree-list.spec.ts` 3건) 전부
+    통과. Playwright 임시 스크린샷(Spring Boot 모양 fixture)으로 720px
+    폭 팝업·탐색 트리(1~2단계 병합 안 함+누락된 의존성 조상 자동 펼침)·
+    결과 트리(전 구간 병합)·Extract 트리 폴더 압축까지 육안 확인 후 삭제.
+    상세는 `docs/refactoring/REFACTORING_TASKS.md` §5.1 RT-53·RT-54 항목,
+    M-20(§7) 참고.
+  - **RT-55(U-15, Reload 전체 초기화)를 구현(2026-09-23)** — 착수 전 §7
+    M-22(유지 범위)·M-24(확인 대화상자 여부)가 둘 다 "결정 대기"라
+    AskUserQuestion으로 확인했다. M-22는 스펙 본문에 이미 "가정"으로 적힌
+    목록(파일 패턴 이력·Export 경로/방식·접힘 상태·분할 비율·트리 펼침
+    유지)을 그대로 확정. M-24는 원래 권장이던 "있음"을 뒤집어 **"없음"**
+    으로 확정했다 — 이유는 현재 코드베이스에 `confirm` 대화상자 패턴이
+    전혀 없어(`grep`으로 확인) 새로 설계해야 하는데, 그 비용 대비 Reload는
+    버튼을 직접 눌러야만 발생하는 명시적 동작이라 확인창 없이 바로
+    초기화하는 쪽이 낫다고 판단했기 때문이다.
+    **새 reset 액션 3개**: `commitQuerySlice.resetQuery()`(조회 조건 전부
+    기본값 — 기간은 `getDefaultDateRange()`를 **그 시점에 다시 호출**해
+    "오늘" 기준으로 재계산, 모듈 최상단의 `defaultRange`는 앱 시작 시점에
+    한 번만 계산돼 재사용할 수 없다는 점이 함정이었다) · `commitsSlice.
+    clearSelection()`(`selectedHashes` 비움) · `analysisSlice.
+    resetAnalysis()`(요약·변경 파일·Extract·삭제·경고·누락된 의존성·수동
+    추가 전부 폐기 — `deployFiles`/`manuallyAddedPaths`/`headTreeFiles`는
+    원래 `deployFilesSlice` 소유지만, `runPreview`의 "선택 없음" 분기·
+    `commitsSlice`의 기존 인라인 초기화도 이미 슬라이스 경계를 넘어 같은
+    필드를 직접 `set()`해 온 이 저장소의 기존 패턴을 그대로 따랐다).
+    **`reloadRepository` 수정**: 검증 성공 후 `selectedBranch`를 (기존
+    "현재 Branch가 여전히 존재하면 유지"에서) **항상 `pickDefaultBranch
+    (branches)`**로 바꿨다 — Reload가 이제 부분 재조회가 아니라 전체
+    초기화이므로. 위 세 reset을 호출한 뒤 `loadCommitsFirstPage(true)` →
+    **`loadCommitsFirstPage(false)`**로 바꿔 선택을 더 이상 유지하지
+    않는다(스펙이 지시한 "`keepSelection` 파라미터 경로 정리"). **열려
+    있는 팝업을 닫는 로직은 새로 만들 필요가 없었다** — `WorkArea.tsx`가
+    이미 `repository.status==='validating'` 전환을 감지해 팝업을 닫고
+    있었고(RT-43), `reloadRepository`가 검증을 시작하는 시점에 제일 먼저
+    이 상태가 되기 때문이다. 검증 실패 경로는 그대로 조기 `return`이라
+    reset 호출부에 아예 도달하지 않는다 — "검증 실패 시 초기화하지 않고
+    오류만 표시"가 코드 구조상 자연히 성립한다.
+    **검증**: `npm test`(194개, 신규 `repositorySlice.reload.test.ts` 4개 —
+    초기화 필드 전부·기간 재계산·M-22 유지 필드(`exportParentDir`) 불변·
+    검증 실패 시 무변화)·`typecheck`·`lint`·`build`·`test:e2e`(24개, 신규
+    `reload-reset.spec.ts` 1개 — 키워드로 목록을 거른 뒤 커밋 선택→Preview
+    →Reload하면 키워드가 풀려 전체 커밋이 다시 보이고 체크박스가 전부
+    해제되고 Extract 결과가 사라지는지 확인) 전부 통과. 상세는
+    `docs/refactoring/REFACTORING_TASKS.md` §5.1 RT-55 항목, M-22·M-24(§7)
+    참고.
+    **다음 착수 지점은 RT-56**(U-16, `ExportModeSelect` — 추출 위치 방식
+    `sub`/`direct` + 저장소와 겹치는 위치 금지 검증, `classifyExportTarget`
+    순수 함수부터).
 
 먼저 이 순서로 읽어주세요 (짐작하지 말고 실제로 읽어야 합니다):
 

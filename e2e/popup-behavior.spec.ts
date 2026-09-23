@@ -4,7 +4,7 @@ import { launchApp } from './support/launchApp'
 import type { ElectronApplication, Page } from '@playwright/test'
 
 // RT-15(U5) — 공용 Popup 컴포넌트의 Esc 닫기 + 포커스 복귀. 실제 팝업
-// (ManualAddPopup)을 통해 검증한다.
+// (AddFilesPopup)을 통해 검증한다.
 
 let fixture: Fixture
 let electronApp: ElectronApplication
@@ -30,7 +30,8 @@ test('Esc로 팝업이 닫히고, 닫히면 트리거 버튼으로 포커스가 
     .locator('input[type="checkbox"]')
     .check()
   await window.getByRole('button', { name: 'Preview' }).click()
-  await expect(window.locator('.deploy-files-row', { hasText: 'src/FileB.txt' })).toBeVisible()
+  // RT-51(M-14) — Preview 직후 기본값은 전체 Extract로 이동.
+  await expect(window.locator('.extract-row', { hasText: 'FileB.txt' })).toBeVisible()
 
   const trigger = window.getByRole('button', { name: '+ 파일 추가' })
   await trigger.click()

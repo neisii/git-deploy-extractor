@@ -38,6 +38,11 @@ export interface CommitsSlice {
   loadNextPage: () => Promise<void>
   toggleCommit: (hash: string) => void
   toggleAllCommits: () => void
+  // RT-55(U-15) — Reload 전용. loadCommitsFirstPage(keepSelection=false)도
+  // 결과적으로 selectedHashes를 비우지만, Reload는 "재조회가 끝나기 전에
+  // 이미 선택이 비었다"를 명확히 하기 위해 이 함수로 먼저 비운다(재조회가
+  // 느리거나 실패해도 선택은 지워져 있어야 한다).
+  clearSelection: () => void
 }
 
 export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = (set, get) => ({
@@ -59,7 +64,7 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
       startDate,
       endDate,
       maxCount,
-      searchTerm,
+      keywordText,
       searchMode,
       authorFilter,
       excludeMerges,
@@ -99,7 +104,7 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
             startDate,
             endDate,
             maxCount,
-            searchTerm,
+            keywordText,
             searchMode,
             authorFilter,
             excludeMerges,
@@ -134,7 +139,7 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
       startDate,
       endDate,
       maxCount,
-      searchTerm,
+      keywordText,
       searchMode,
       authorFilter,
       excludeMerges,
@@ -161,7 +166,7 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
             startDate,
             endDate,
             maxCount,
-            searchTerm,
+            keywordText,
             searchMode,
             authorFilter,
             excludeMerges,
@@ -260,5 +265,7 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
         ...emptyManualAddState
       })
     }
-  }
+  },
+
+  clearSelection: () => set({ selectedHashes: new Set() })
 })

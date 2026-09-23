@@ -11,7 +11,7 @@ export function DeployFilesPanel(): React.JSX.Element {
 
   return (
     <div className="deploy-files-panel">
-      <DeployFilesWorkspace onOpenManualAdd={() => open('manual')} />
+      <DeployFilesWorkspace onOpenManualAdd={() => open('addFiles')} />
     </div>
   )
 }

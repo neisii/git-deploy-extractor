@@ -8,9 +8,11 @@ export interface FilePaneCountTitleProps {
   overCountThreshold?: number
 }
 
-// RT-42 — DeployFilesPanel.tsx의 buildCountTitle 지역 함수를 IncludedFilesPane·
-// MissingDependenciesPane 둘 다 쓸 수 있게 컴포넌트로 뺐다(제목 문구는
-// REQ-020 — 선택/전체/필터 전 전체 세 숫자). 동작은 그대로다.
+// RT-42 — DeployFilesPanel.tsx의 buildCountTitle 지역 함수를 컴포넌트로
+// 뺐다(제목 문구는 REQ-020 — 선택/전체/필터 전 전체 세 숫자). RT-51 —
+// ExtractTargetsPane은 문구 형태가 달라(N개·패턴 제외 K개, 두 숫자) 이
+// 컴포넌트를 쓰지 않고 자체 제목을 그린다 — 지금은 IncludedFilesPane만
+// 쓴다.
 export function FilePaneCountTitle({
   label,
   selectedCount,

@@ -1,16 +1,30 @@
 import type { StateCreator } from 'zustand'
-import type { DeployFileStatus } from '../../../../shared/types'
+import type { DeployFileStatus, JavaDependencyKind } from '../../../../shared/types'
 import { loadFilePatterns, saveFilePatterns } from '../../lib/filePatterns'
 import { parsePatternList } from '../../lib/filePattern'
 import type { FilePattern } from '../../lib/filePattern'
 import { api } from '../../api'
 import type { AppState } from '../appStore'
 
+// RT-51(§3.2·§5.1 RT-51) — Extract 대상 목록 모델의 출처. `included`은
+// 이제 "소속 목록"(true=Extract 대상, false=미선택 변경 파일) 의미로
+// 재정의됐다 — 필드 이름은 바꾸지 않았다(exportPlan.buildExportFiles의
+// 기존 계약 "included=true가 Export 대상"이 그대로 성립하므로, RT-33이
+// 미리 설계해둔 대로 판정 로직을 건드릴 필요가 없었다). `source==='changed'`
+// 만 `included:false`(미선택 변경 파일)로 존재할 수 있다 — dependency/
+// manual은 추가되는 순간 항상 included:true이고, "되돌리기"는 배열에서
+// 완전히 제거하는 것으로 표현한다(원래 목록이 없거나(수동) HEAD 트리로
+// 돌아가야 하므로(의존성), included:false로 남겨두면 안 된다).
+export type DeployFileSource = 'changed' | 'dependency' | 'manual'
+
 export interface DeployFileEntry {
   localPath: string
   serverPath: string
   status: DeployFileStatus
   included: boolean
+  source: DeployFileSource
+  // source === 'dependency'일 때만 채워진다(Extract 행의 Impl/I 배지용).
+  kind?: JavaDependencyKind
 }
 
 // REQ-021/DR-019 — deployFiles가 통째로 교체/초기화되는 지점(새 Preview
@@ -61,10 +75,26 @@ export interface DeployFilesSlice {
   removeFilePattern: (pattern: string, mode: FilePattern['mode']) => void
   addManualFile: (localPath: string) => Promise<void>
   removeManualFile: (localPath: string) => void
+  // 왼쪽 "포함된 파일"(미선택 변경 파일) 체크박스 — 체크하면 Extract로
+  // 이동한다(included:false→true). source==='changed'인 항목에만 의미가
+  // 있다(왼쪽 목록엔 그것만 나타나므로).
   toggleDeployFileIncluded: (localPath: string) => void
   toggleAllDeployFiles: (visibleLocalPaths: string[]) => void
-  toggleDependencyIncluded: (localPath: string) => void
-  toggleAllMissingDependencies: (visibleLocalPaths: string[]) => void
+  // RT-51 — AddFilesPopup의 "추가" 버튼(누락된 의존성 한 개). missingDependencies
+  // 에서 후보를 찾아 source:'dependency'로 deployFiles에 추가한다.
+  addDependencyToExtract: (localPath: string) => void
+  // RT-51/52 — "보이는 항목 모두 추가"(누락된 의존성 한정, add-only).
+  addAllVisibleDependencies: (visibleLocalPaths: string[]) => void
+  // RT-51 — Extract 행의 × 버튼(출처에 따라 분기: 변경→미선택으로 복귀,
+  // 의존성→제거(HEAD 트리로 복귀), 수동→철회).
+  removeFromExtract: (localPath: string) => void
+  // RT-51 — Extract 목록 헤더 "모두 되돌리기".
+  returnAllExtractItems: () => void
+  // RT-53(§5.1 RT-53) — Extract 트리의 폴더 × — folderPath 아래 전체를
+  // 출처별로 되돌린다(removeFromExtract를 경로마다 반복 적용한 것과
+  // 동일 — component-playground.html의 data-fret 핸들러와 같은 방식,
+  // `folderPath + '/'`로 시작하는 항목만 대상).
+  returnFolderFromExtract: (folderPath: string) => void
 }
 
 export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesSlice> = (
@@ -135,10 +165,10 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
     })
   },
 
-  // REQ-021/DR-019: 팝업에서 자동완성 후보를 선택했을 때. Server Path는
-  // §7.2 의존성 후보와 동일하게 Main에서 Mapping Rule로 계산한다(Renderer는
-  // MappingProfile 전체를 갖고 있지 않다). 이미 deployFiles에 있으면(다른
-  // 경로로 이미 들어와 있거나 중복 클릭) 아무 것도 하지 않는다.
+  // REQ-021/DR-019: 팝업(AddFilesPopup)에서 후보를 선택했을 때. Server
+  // Path는 §7.2 의존성 후보와 동일하게 Main에서 Mapping Rule로 계산한다
+  // (Renderer는 MappingProfile 전체를 갖고 있지 않다). 이미 deployFiles에
+  // 있으면(다른 경로로 이미 들어와 있거나 중복 클릭) 아무 것도 하지 않는다.
   addManualFile: async (localPath) => {
     const { repository, selectedBranch, selectedProfile, deployFiles } = get()
     if (!repository.path || !selectedBranch) return
@@ -155,7 +185,7 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
       // IPC 왕복 중 이미 추가됐을 수 있다(연속 클릭) — 다시 한번 확인.
       if (state.deployFiles.some((f) => f.localPath === localPath)) return {}
       return {
-        deployFiles: [...state.deployFiles, { ...entry, included: true }],
+        deployFiles: [...state.deployFiles, { ...entry, included: true, source: 'manual' }],
         manuallyAddedPaths: [...state.manuallyAddedPaths, localPath]
       }
     })
@@ -163,7 +193,9 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
 
   // 팝업 칩의 × — 제외 패턴 칩과 달리 토글이 아니라 철회다(이력성 데이터가
   // 아니라 그 자리에서 추가/철회하는 1회성 액션 — RISK_ISSUES.md 결정
-  // 이력 #48).
+  // 이력 #48). RT-51 — Extract 행의 ×(source==='manual')도 이 액션을
+  // 그대로 재사용한다(원래 목록이 없어 "철회"뿐이므로 removeFromExtract가
+  // 위임한다).
   removeManualFile: (localPath) => {
     set((state) => ({
       deployFiles: state.deployFiles.filter((f) => f.localPath !== localPath),
@@ -171,6 +203,9 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
     }))
   },
 
+  // 왼쪽 "포함된 파일" 체크박스 — included를 뒤집는다. 왼쪽 목록엔
+  // source==='changed' && !included인 행만 나타나므로 실질적으로는 항상
+  // false→true(Extract로 이동)로만 호출된다.
   toggleDeployFileIncluded: (localPath) => {
     set((state) => ({
       deployFiles: state.deployFiles.map((f) =>
@@ -182,8 +217,11 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
   // 정정(RISK_ISSUES.md 결정 이력 #33): 필터 로직을 여기서 다시 계산하지
   // 않고, 화면에 실제로 표시 중인 목록(RT-45 이후: 파일 패턴만 반영됨,
   // 상태 Filter·검색은 삭제됨)의 경로를 그대로 파라미터로 받는다(단일
-  // 진실 공급원). 받은 목록이 전부 included면 전체 해제, 그 외(일부만/
-  // 전혀 없음)면 전체 선택.
+  // 진실 공급원). RT-51 — 왼쪽 목록은 이제 항상 !included만 보여주므로
+  // "전부 included"인 경우가 나타나지 않아, 이 액션은 사실상 "화면에
+  // 보이는 변경 파일을 전부 Extract로 이동"(단방향)으로 동작한다(§5.1
+  // RT-51 명세와 일치) — 로직 자체는 그대로 두되(재사용 가능한 일반
+  // 토글이라 굳이 단순화하지 않음) 실질 동작만 바뀐다.
   toggleAllDeployFiles: (visibleLocalPaths) => {
     set((state) => {
       const visibleSet = new Set(visibleLocalPaths)
@@ -198,17 +236,11 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
     })
   },
 
-  // 우측 "누락된 의존성" 개별 체크박스 — 이미 좌측(deployFiles)에 들어가
-  // 있으면 빼고(다시 "누락됨"으로 보이게), 없으면 추가한다. missingDependencies
-  // 자체는 건드리지 않는다 — 우측에 실제로 표시되는 목록은 컴포넌트가
-  // "missingDependencies 중 deployFiles에 아직 없는 것"으로 파생 계산한다
-  // (전체 선택 indeterminate 판정과 같은 이유로 상태 중복 저장을 피함).
-  toggleDependencyIncluded: (localPath) => {
+  // RT-51 — AddFilesPopup의 "추가"(누락된 의존성 한 개). 이미 deployFiles에
+  // 있으면(연속 클릭 등) 아무 것도 하지 않는다.
+  addDependencyToExtract: (localPath) => {
     set((state) => {
-      const alreadyIncluded = state.deployFiles.some((f) => f.localPath === localPath)
-      if (alreadyIncluded) {
-        return { deployFiles: state.deployFiles.filter((f) => f.localPath !== localPath) }
-      }
+      if (state.deployFiles.some((f) => f.localPath === localPath)) return {}
       const candidate = state.missingDependencies.find((d) => d.localPath === localPath)
       if (!candidate) return {}
       return {
@@ -218,29 +250,25 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
             localPath: candidate.localPath,
             serverPath: candidate.serverPath,
             status: candidate.status,
-            included: true
+            included: true,
+            source: 'dependency',
+            kind: candidate.kind
           }
         ]
       }
     })
   },
 
-  // "전체 추가"(add-only) 버튼을 "전체 선택"(양방향 토글) 체크박스로
-  // 교체 — 좌측 toggleAllDeployFiles()와 같은 패턴. 받은 경로 중 화면에
-  // 실제로 보이는 missingDependencies가 전부 이미 추가돼 있으면 전체
-  // 제거, 그 외(일부만/전혀 없음)면 아직 없는 것만 전체 추가한다.
-  toggleAllMissingDependencies: (visibleLocalPaths) => {
+  // RT-51/52 — "보이는 항목 모두 추가"(누락된 의존성 한정, add-only —
+  // 이미 추가된 건 건드리지 않는다. 받은 경로는 팝업이 현재 화면에 보여준
+  // 누락된 의존성 경로만 넘긴다).
+  addAllVisibleDependencies: (visibleLocalPaths) => {
     set((state) => {
       const visibleSet = new Set(visibleLocalPaths)
       const existing = new Set(state.deployFiles.map((f) => f.localPath))
-      const visibleMissing = state.missingDependencies.filter((d) => visibleSet.has(d.localPath))
-      const allChecked =
-        visibleMissing.length > 0 && visibleMissing.every((d) => existing.has(d.localPath))
-
-      if (allChecked) {
-        return { deployFiles: state.deployFiles.filter((f) => !visibleSet.has(f.localPath)) }
-      }
-      const toAdd = visibleMissing.filter((d) => !existing.has(d.localPath))
+      const toAdd = state.missingDependencies.filter(
+        (d) => visibleSet.has(d.localPath) && !existing.has(d.localPath)
+      )
       if (toAdd.length === 0) return {}
       return {
         deployFiles: [
@@ -249,10 +277,72 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
             localPath: d.localPath,
             serverPath: d.serverPath,
             status: d.status,
-            included: true
+            included: true,
+            source: 'dependency' as const,
+            kind: d.kind
           }))
         ]
       }
     })
+  },
+
+  // RT-51 — Extract 행의 × 하나. 출처별로 되돌아갈 곳이 다르다: 변경 파일은
+  // included:false(왼쪽 목록으로 복귀), 의존성은 배열에서 제거(AddFilesPopup
+  // HEAD 트리에 다시 붉은색으로 나타남), 수동은 제거+이력에서도 제거(철회,
+  // removeManualFile과 동일).
+  removeFromExtract: (localPath) => {
+    const entry = get().deployFiles.find((f) => f.localPath === localPath)
+    if (!entry) return
+    if (entry.source === 'changed') {
+      set((state) => ({
+        deployFiles: state.deployFiles.map((f) =>
+          f.localPath === localPath ? { ...f, included: false } : f
+        )
+      }))
+      return
+    }
+    if (entry.source === 'manual') {
+      get().removeManualFile(localPath)
+      return
+    }
+    // source === 'dependency'
+    set((state) => ({
+      deployFiles: state.deployFiles.filter((f) => f.localPath !== localPath)
+    }))
+  },
+
+  // RT-51 — Extract 목록 헤더 "모두 되돌리기". 변경 파일은 전부
+  // included:false, 의존성·수동은 전부 제거(수동은 이력도 함께 비움).
+  returnAllExtractItems: () => {
+    set((state) => ({
+      deployFiles: state.deployFiles
+        .filter((f) => f.source !== 'dependency' && f.source !== 'manual')
+        .map((f) => (f.included ? { ...f, included: false } : f)),
+      manuallyAddedPaths: []
+    }))
+  },
+
+  // RT-53 — 위 returnAllExtractItems와 같은 로직을 prefix로 좁혔을
+  // 뿐이다(전체 대신 `folderPath/`로 시작하는 것만). 의존성/수동은
+  // 제거, 변경은 included:false.
+  returnFolderFromExtract: (folderPath) => {
+    const prefix = `${folderPath}/`
+    set((state) => ({
+      deployFiles: state.deployFiles
+        .filter(
+          (f) =>
+            !(
+              f.included &&
+              (f.source === 'dependency' || f.source === 'manual') &&
+              f.localPath.startsWith(prefix)
+            )
+        )
+        .map((f) =>
+          f.included && f.source === 'changed' && f.localPath.startsWith(prefix)
+            ? { ...f, included: false }
+            : f
+        ),
+      manuallyAddedPaths: state.manuallyAddedPaths.filter((p) => !p.startsWith(prefix))
+    }))
   }
 })

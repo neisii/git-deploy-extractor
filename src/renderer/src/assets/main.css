@@ -45,60 +45,103 @@ body,
   gap: 12px;
 }
 
-/* REQUIREDMENT.md §8 와이어프레임처럼 항상 2줄로 고정한다 — Branch/Search는
-   위 줄, 조회 기간/최대 개수는 아래 줄. 이전엔 한 줄짜리 flex-wrap이라
-   창이 넓으면 네 그룹이 전부 한 줄에 붙어버렸다(의도한 2줄 배치가 창
-   폭에 따라 우연히만 재현됨) — 항상 2줄로 나오도록 바깥은 세로로
-   쌓고, 각 줄 내부에서만 flex-wrap을 적용한다. */
-.branch-search-bar {
+/* RT-49(§5.1 RT-49) — 조회 조건 본문을 검색 조건 그룹(왼쪽)·필터 그룹
+   (오른쪽) 둘로 나누는 SplitPane 래퍼. 본문 컨테이너 자체는 테두리를
+   갖지 않는다(각 그룹이 자기 테두리 상자, 아래 .search-condition-group/
+   .query-filter-group가 .panel). BranchSearchBar는 fill 없는
+   CollapsibleSection이라(app-shell의 평범한 flex 자식, 자기 콘텐츠
+   높이만큼만 차지) `.split-pane`의 기본 height:100%를 그대로 두면 조상
+   높이가 부정확(auto)한 채로 퍼센트가 걸려 크기가 뒤틀린다(RT-47이
+   .collapsible-section에서 겪은 것과 같은 유형) — auto로 되돌린다.
+   overflow-x:auto(M-42(b) 가로 스크롤)는 .split-pane--horizontal 공용
+   규칙을 그대로 물려받는다. */
+.commit-query-bar__groups {
+  height: auto;
+}
+
+.search-condition-group,
+.query-filter-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.branch-search-bar__row {
+.search-condition-group__row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
 }
 
-/* RISK_ISSUES.md §7.3 — "검색 대상 : (●메시지 ○파일명)" 라디오 토글을
-   한 그룹으로 묶어 보여준다. */
-.branch-search-bar__search-mode {
+/* RT-49 — 키워드(1.5) · 작성자(1) · 해시(1), 최소 폭 100px. 좁아지면
+   flex-wrap으로 아래로 줄바꿈된다(검색 조건 그룹과 같은 감각). */
+.query-filter-group__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.query-filter-group__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 110px;
+  min-width: 100px;
+}
+
+/* flex-basis 합(140+110+110=360px)이 기본 50:50 분할 폭(1100px 창 기준
+   필터 그룹 약 530px, 안쪽 여백·간격 제외 약 490px)에 여유 있게 들어가야
+   실제로 줄바꿈 없이 한 줄에 나란히 보인다 — 처음엔 200/160/160(합
+   520px)로 뒀다가 Playwright 스크린샷으로 확인해보니 기본 폭에서도
+   이미 줄바꿈되는 걸 발견해 줄였다(브라우저의 줄바꿈 판정은 flex-shrink
+   적용 전 flex-basis 합으로 이뤄져, min-width만으로는 못 막는다). */
+.query-filter-group__field--keyword {
+  flex: 1.5 1 140px;
+}
+
+.query-filter-group__field-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ev-c-text-2);
 }
 
-/* REQ-023(해시 필터)에서 처음 도입, 2026-09-14부터 REQ-022 작성자
-   필터도 재사용 — textarea는 다른 필드보다 키가 커서 row의
-   align-items:center를 그대로 쓰면 라벨 텍스트가 세로 중앙에 어중간하게
-   걸린다. 이 라벨만 위쪽 정렬로 바꾸고, textarea 폭을 넉넉히 잡아 여러
-   줄 붙여넣기 편하게 한다. */
-.branch-search-bar__multiline-field {
+.query-filter-group__mode-radios {
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  flex: 1 1 100%;
+  align-items: center;
+  gap: 8px;
 }
 
-.branch-search-bar__multiline-field textarea {
+/* RT-49 — "정확히 2줄이 한 번에 보이는 높이"(rows=2, 그룹이 커져도
+   늘어나지 않음), 3줄부터는 영역 안에서 스크롤한다(resize 없음 — 예전
+   작성자/해시 필드는 resize:vertical로 높이를 늘릴 수 있었지만, 이제
+   "정확히 2줄" 고정이 명세라 늘리면 그 규칙이 깨진다). */
+.query-filter-group__field textarea {
   flex: 1;
-  min-width: 240px;
+  min-width: 0;
   font-family: inherit;
-  resize: vertical;
+  resize: none;
+  overflow-y: auto;
 }
 
-/* 2026-09-14 — 작성자/해시 필터를 한 행에 나란히 배치, DeployFilesPanel의
-   좌(포함된 파일)/우(누락된 의존성) 50:50 분할과 같은 감각으로 "반반"
-   보이게 한다. flex-basis(320px)를 기준으로 grow/shrink하므로 창이
-   넓으면 자연히 절반씩 채우고, 640px보다 좁아지면(각 320px 미만) 자동으로
-   아래로 줄바꿈되어 세로로 쌓인다 — 별도 미디어 쿼리 없이 `flex-wrap`만으로
-   해결(DeployFilesPanel의 드래그 리사이즈 SplitPane과 달리, 두 필드는
-   항상 동일 비율이면 충분해 더 단순한 이 방식을 택했다). */
-.branch-search-bar__row--split .branch-search-bar__multiline-field {
-  flex: 1 1 320px;
+/* RT-49(§5.1) — 입력을 시작하면 필드 바로 아래에 겹쳐 뜨는 힌트 툴팁
+   (FieldHint.tsx가 position:fixed로 좌표를 계산해 넣는다). popup-backdrop
+   (z-index:30)보다 아래, 일반 콘텐츠보다는 위. */
+.field-hint {
+  position: fixed;
+  z-index: 20;
+  margin-top: 2px;
+  padding: 6px 8px;
+  max-width: 320px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-text);
+  background: var(--color-background-soft, var(--ev-c-gray-3));
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 /* 우측 하단 고정 이미지(.credit-link, 50px)와 겹치지 않도록 그만큼
@@ -277,6 +320,10 @@ body,
 
 .split-pane--vertical {
   overflow-y: auto;
+  /* RT-47 — 두 트랙이 접혀 auto 높이만 차지할 때(§5.1 "둘 다 접힘 → 위에
+     붙임") 남는 공간을 아래로 보낸다. 비율/1fr 트랙만 쓰는 다른 상태에는
+     여유 공간이 없어 영향이 없다. */
+  align-content: start;
 }
 
 .split-pane__start,
@@ -608,9 +655,16 @@ body,
   background: rgba(0, 0, 0, 0.35);
 }
 
+/* RT-54(U-14) — 표준 크기 720×480(폭 min(720px, 94%), 높이
+   min(480px, 부모 높이 − 20px)). 예전 480px 고정폭은 RT-15 때 "전체
+   표준 크기는 RT-54 몫"으로 미뤄뒀던 것 — RT-53의 TreeList(폴더
+   들여쓰기+경로 복사+×/추가 버튼)가 480px에선 비좁아 RT-53과 함께
+   먼저 처리한다. `.popup-backdrop`의 padding(16px×2)까지 감안해 부모
+   높이 여유를 20px로 잡았다. */
 .popup {
-  width: 480px;
+  width: min(720px, 94%);
   max-width: 100%;
+  height: min(480px, calc(100% - 20px));
   max-height: 100%;
   overflow-y: auto;
   display: flex;
@@ -632,29 +686,6 @@ body,
   justify-content: space-between;
   align-items: center;
   font-weight: 600;
-}
-
-.manual-add-popup__results {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.manual-add-popup__results li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.manual-add-popup__result-path {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
 }
 
 .manual-add-popup__chips {
@@ -697,59 +728,21 @@ body,
   min-height: 0;
 }
 
-/* 실제 폭은 (최소 폭, 내용 폭) 중 큰 값으로 정해져서 아무리 좁아도
-   텍스트가 잘리거나 옆 칸을 침범하지 않고, 넘치는 만큼은
-   .file-list__scroll의 가로 스크롤로 해결된다. 내용 폭
-   (--local-col-natural)은 CSS의 max-content가 아니라 JS(useMeasuredColumnWidth)
-   가 실측해서 주입한 값이다 — 헤더와 각 행이 서로 별도의 grid
-   컨테이너라 max-content를 쓰면 행마다 독립적으로 계산되어 헤더/목록
-   폭이 어긋나는 문제가 있었다. RT-41 — 컬럼 리사이즈 삭제로
-   --local-col-min 변수는 없어지고 최소 폭 100px을 직접 고정했다
-   (사용자 결정 2026-09-21: 컬럼이 하나뿐이고 헤더 텍스트도 없어져
-   수동으로 넓힐 이유가 없어짐). */
-.deploy-files-grid-row {
-  display: grid;
-  grid-template-columns: 24px minmax(100px, var(--local-col-natural, 100px));
-  align-items: center;
-  gap: 8px;
-  padding: 0 4px;
-  width: max-content;
-}
-
-/* 컬럼 실측 폭 계산용 프로브 — 화면에 그려지지 않고 레이아웃에도 관여하지 않는다 */
-.deploy-files-measure-probe {
-  position: absolute;
-  left: -9999px;
-  top: -9999px;
-  visibility: hidden;
-  height: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
 /* RT-41 — "전체 선택" TriStateCheckbox만 남은 헤더 행(예전 이름
    .deploy-files-panel__columns). 리사이즈 핸들·"Local Path" 헤더 글자는
-   삭제됐다(컬럼이 하나뿐이고 행에 파일명만 보여 의미가 없어짐). */
+   삭제됐다(컬럼이 하나뿐이고 행에 파일명만 보여 의미가 없어짐). RT-53
+   부터는 ExtractTargetsPane의 "모두 되돌리기" 버튼도 이 클래스를
+   재사용한다(같은 sticky·배경·구분선 규칙이면 충분해 별도 클래스를
+   만들지 않았다). */
 .file-list__header-row {
   position: sticky;
   top: 0;
   z-index: 1;
+  display: flex;
   flex: 0 0 auto;
   background: var(--color-background-soft);
   padding-bottom: 4px;
   border-bottom: 1px solid var(--ev-c-gray-3);
-}
-
-.deploy-files-row {
-  border-bottom: 1px solid var(--ev-c-gray-3);
-}
-
-/* RT-16(U8) — checkbox+파일명을 감싸는 <label>이 자기 박스를 만들지
-   않게 해서, .deploy-files-grid-row의 2열 grid(체크박스|경로)에 그
-   자식들(checkbox, span)이 직접 배치되도록 유지한다. */
-.deploy-files-row__label {
-  display: contents;
 }
 
 .deploy-files-row__local {
@@ -789,24 +782,30 @@ body,
   margin-bottom: 8px;
 }
 
-/* RT-44(U-1·U-2) — PreviewSummary의 Deleted/⚠ HEAD에 없음 버튼이 여는
-   팝업(DeletedFilesPopup/WarningsPopup) 본문. 평탄한 목록으로 우선
-   구현했다(RT-53의 TreeList가 만들어지면 교체 예정). */
-.popup-plain-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 320px;
-  overflow-y: auto;
+/* RT-53(§5.1 RT-53, U-18) — 5개 목록 공용 경로 복사 버튼(CopyPathButton.tsx).
+   상시 노출하지 않고 행 호버·포커스 시에만 보인다 — `display`가 아니라
+   `visibility`를 쓰는 이유는 자리를 미리 확보해 나타날 때 레이아웃이
+   밀리지 않게 하기 위함(§5.1 명세 그대로). 최소 20×20px. */
+.copy-path-button {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--ev-c-text-2);
+  cursor: pointer;
+  visibility: hidden;
+  border-radius: 3px;
 }
 
-.popup-plain-list li {
-  padding: 2px 0;
-  font-size: 12px;
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.tree-row:hover .copy-path-button,
+.copy-path-button:focus-visible {
+  visibility: visible;
+}
+
+.copy-path-button--error {
+  color: #e5675f;
+  visibility: visible;
 }
 
 .preview-summary__warning-button {
@@ -978,11 +977,47 @@ button.chip__label {
 
 /* CollapsibleSection — 헤더 행(제목+접기 버튼)은 본문 박스 밖(위)에 둔다
    (사용자 결정 2026-09-21). 본문은 [hidden]으로만 숨겨 입력 중이던 값을
-   보존한다(unmount 안 함). */
+   보존한다(unmount 안 함). RT-47 — 세 사용처(조회 조건·커밋·배포 대상
+   파일) 모두 이 컴포넌트 하나를 그대로 쓰므로 헤더 높이·좌측 시작
+   위치·접기 버튼 우측 위치가 자동으로 동일해진다(개별 컴포넌트가 헤더를
+   따로 그리지 않는 한). 바깥 테두리는 두지 않는다 — 본문 안쪽 상자
+   (branch-search-bar/panel, commit-list-panel/panel, file-pane 등)가
+   테두리를 가진다. */
+.collapsible-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* RT-47 — CommitWorkspace/DeployFilesWorkspace(SplitPane grid cell 안)만
+   height:100%를 받는다. CommitQueryBar(app-shell의 평범한 flex 자식)는
+   기본(auto) 높이를 유지해야 한다 — 다른 모든 SplitPane 자식(commit-list-
+   panel/deploy-files-panel 등)과 같은 관례. */
+.collapsible-section--fill {
+  height: 100%;
+}
+
 .collapsible-section__header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 4px 2px;
+}
+
+.collapsible-section__body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* display:flex는 [hidden]일 때 적용하면 안 된다 — author 규칙(이 클래스)이
+   UA 스타일시트의 [hidden]{display:none}보다 우선순위가 높아(출처가
+   author라 특정도가 같아도 이긴다) 접힌 본문이 계속 보이는 버그가 실제로
+   있었다(Playwright 스크린샷으로 발견). :not([hidden])로 펼친 상태에만
+   적용한다. */
+.collapsible-section__body:not([hidden]) {
+  display: flex;
+  flex-direction: column;
 }
 
 .collapsible-section__title {
@@ -1006,4 +1041,210 @@ button.chip__label {
 
 .collapsible-section__toggle:hover {
   opacity: 1;
+}
+
+/* RT-53(§5.1 RT-53, U-13) — TreeList 공용 행. 폴더·리프 둘 다 같은
+   높이·구분선·들여쓰기(JS에서 paddingLeft로 주입) 규칙을 쓴다. min-width:0
+   이 있어야 안의 flex 자식(이름 span)이 내용(안 잘리는 파일명) 크기로 안
+   버티고 줄어들 수 있다 — 없으면 오른쪽 ×/배지가 컨테이너 밖으로 밀려나
+   보이지 않는 버그가 있었다(Playwright 스크린샷으로 발견, 예전 FileRow의
+   가로 스크롤 방식을 그대로 재사용했다가 생긴 문제 — 이 행들은 오른쪽에
+   항상 보여야 하는 액션이 있어 가로 스크롤 대신 이름을 ellipsis로 자르는
+   쪽을 택했다). */
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--ev-c-gray-3);
+}
+
+.tree-row__toggle {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.8;
+  padding: 0 2px;
+}
+
+.tree-row__toggle:hover {
+  opacity: 1;
+}
+
+.tree-row__name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-row__name--clickable {
+  cursor: pointer;
+}
+
+.tree-row__name--clickable:hover {
+  text-decoration: underline;
+}
+
+.tree-row__count {
+  color: var(--ev-c-text-2);
+}
+
+/* IncludedFilesPane의 체크박스+이름(리프·폴더 공용) — 라벨 자체가 flex
+   컨테이너라 예전 .deploy-files-row__label(display:contents, grid 전용
+   트릭)이 더 이상 필요 없다(TreeList는 grid가 아니라 flex라서). */
+.tree-row__leaf-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  cursor: pointer;
+}
+
+.extract-row__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.extract-row__name .deploy-files-row__local {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* RT-51 — 활성 파일 패턴에 걸린 Extract 항목(조용한 누락 방지 — 숨기지
+   않고 흐림+취소선으로 "지금은 Export되지 않는다"는 걸 알린다). RT-53에서
+   행 wrapper(.extract-row div)가 없어지면서(TreeList의 범용 .tree-row로
+   교체) 조상 선택자 대신 이름 span에 직접 거는 클래스로 바뀌었다. */
+.deploy-files-row__local--pattern-excluded {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.extract-row__pattern-tag {
+  font-size: 11px;
+  color: var(--ev-c-text-2);
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.extract-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+/* × 되돌리기는 확인창 없이 즉시 실행되는 파괴적(?) 동작이라 붉은색으로
+   구분한다(RT-53 명세가 미리 정한 규칙 — "복사=회색 중립, ×=붉은색"을
+   이번에 ×만 먼저 적용). */
+.extract-row__remove {
+  border: none;
+  background: transparent;
+  color: #e5675f;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.extract-row__remove:hover {
+  opacity: 0.8;
+}
+
+.extract-row__source-badge {
+  font-size: 11px;
+  color: var(--ev-c-text-2);
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+/* RT-51/52 — 누락된 의존성 종류 배지(Impl 구현체/I 인터페이스). Extract
+   행에서는 이미 추가된 항목이라 중립 회색, AddFilesPopup에서는 빨간
+   파일명 옆에 같이 쓰인다(배지 자체 색은 둘 다 중립 — 파일명 색으로만
+   "누락됨"을 강조한다, U-20 "색만으로 구분하지 않는다"와도 맞음: 배지
+   텍스트(Impl/I)가 이미 색과 무관한 구분 수단이다). */
+.kind-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ev-c-text-2);
+  border: 1px solid var(--ev-c-gray-3);
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+/* RT-52 — AddFilesPopup 툴바(검색 입력 + "보이는 항목 모두 추가"). */
+.add-files-popup__toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+.add-files-popup__toolbar input {
+  flex: 1;
+}
+
+/* RT-53(§5.1 RT-53) — AddFilesPopup 트리 리프(파일명 + 배지 + 추가
+   버튼). .tree-row가 이미 flex라 이 span은 남은 공간을 채우며 이름만
+   ellipsis로 줄어든다("추가" 버튼·복사 버튼은 항상 보임). */
+.add-files-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.add-files-row__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* RT-52 — 누락된 의존성 파일명(빨간 글자, status-text--error와 같은
+   색 재사용 — 새 색을 만들지 않는다). */
+.add-files-row--missing .add-files-row__name {
+  color: #e5675f;
+}
+
+/* RT-53 — 팝업 자체는 720×480(RT-54)로 커졌지만 트리 영역은 검색
+   입력·안내문과 같이 내부 스크롤을 가져야 팝업 높이 안에 들어맞는다. */
+.add-files-popup__tree {
+  flex: 1;
+  min-height: 120px;
+  overflow: auto;
+}
+
+/* RT-52 — "+ 파일 추가" 버튼의 `누락 N` 배지(REQ-020 50개 초과 경고
+   이월). 버튼 안에 있어 상속되는 기본 색은 중립, 50 초과일 때만
+   status-text--error와 같은 색으로 강조한다. */
+.add-file-button__badge {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ev-c-text-2);
+}
+
+.add-file-button__badge--over {
+  color: #e5675f;
 }

@@ -106,15 +106,20 @@ export interface AnalysisSlice {
   dependencyReason: string | null
   missingDependencies: DependencyCandidate[]
   dependencyParseWarnings: AnalysisWarning[]
-  dependencySearchTerm: string // §7.2 point 8 — 우측 "누락된 의존성" 파일명 검색(부분 일치)
 
   profiles: string[]
   selectedProfile: string
 
   initProfiles: () => Promise<void>
-  setDependencySearchTerm: (term: string) => void
   setProfile: (profileName: string) => void
   runPreview: () => Promise<void>
+  // RT-55(U-15) — Reload 전용. Preview/의존성 분석 결과를 전부 폐기한다
+  // (요약·변경 파일·Extract·삭제·경고·누락된 의존성·수동 추가). deployFiles/
+  // manuallyAddedPaths/headTreeFiles는 deployFilesSlice 소유지만, 이 함수는
+  // runPreview()의 "선택 없음" 분기·commitsSlice의 기존 인라인 초기화와
+  // 같은 이유로(§7.2 최초 설계 주석 참고) 여기서 함께 초기화한다 — 셋 다
+  // "선택/조회가 바뀌면 옛 분석 결과가 남으면 안 된다"는 같은 불변식이다.
+  resetAnalysis: () => void
 }
 
 export const createAnalysisSlice: StateCreator<AppState, [], [], AnalysisSlice> = (set, get) => ({
@@ -126,7 +131,6 @@ export const createAnalysisSlice: StateCreator<AppState, [], [], AnalysisSlice> 
   warnings: [],
 
   ...emptyDependencyState,
-  dependencySearchTerm: '',
 
   profiles: [],
   selectedProfile: 'default',
@@ -140,8 +144,6 @@ export const createAnalysisSlice: StateCreator<AppState, [], [], AnalysisSlice> 
         : (profiles[0] ?? 'default')
     }))
   },
-
-  setDependencySearchTerm: (term) => set({ dependencySearchTerm: term }),
 
   setProfile: (profileName) => {
     // RT-17(R4·R5) — toggleCommit과 동일한 이유(선택 구성 요소가
@@ -215,7 +217,10 @@ export const createAnalysisSlice: StateCreator<AppState, [], [], AnalysisSlice> 
       set({
         analyzing: false,
         summary: plan.summary,
-        deployFiles: plan.files.map((f) => ({ ...f, included: true })),
+        // RT-51(M-14) — Preview 직후 기본값은 "전체 Extract로 이동"(기존
+        // 동작 유지). source:'changed'만 이후 included:false(미선택 변경
+        // 파일로 복귀)가 될 수 있다.
+        deployFiles: plan.files.map((f) => ({ ...f, included: true, source: 'changed' as const })),
         deleteList: plan.deletedServerPaths.map((path) => ({ path })),
         warnings: plan.warnings,
         analyzedSelection: requestSelection,
@@ -268,5 +273,19 @@ export const createAnalysisSlice: StateCreator<AppState, [], [], AnalysisSlice> 
         analysisError: error instanceof Error ? error.message : String(error)
       })
     }
+  },
+
+  resetAnalysis: () => {
+    set({
+      analyzing: false,
+      analysisError: null,
+      analyzedSelection: null,
+      summary: null,
+      deployFiles: [],
+      deleteList: [],
+      warnings: [],
+      ...emptyDependencyState,
+      ...emptyManualAddState
+    })
   }
 })

@@ -66,10 +66,16 @@ export interface ListCommitsParams {
   maxCount: number
   skip: number
   pageSize: number
-  searchTerm?: string
   searchMode?: CommitSearchMode // 기본 'message'
+  // RT-48(U-8) — 키워드 필드(줄바꿈 구분, `-` 접두는 제외)를 파싱한 결과.
+  // message 모드: 둘 다 하나의 `-P`(PCRE) `--grep` 패턴으로 결합
+  // (포함 OR · 제외 OR · 둘 다 있으면 AND, `main/git/keywordGrep.ts`
+  // 참고). filename 모드: includeKeywords만 파일명 부분 일치 OR로 쓰고
+  // excludeKeywords는 무시한다(§5.1 RT-48).
+  includeKeywords?: string[]
+  excludeKeywords?: string[]
   // REQ-022 — 작성자명 부분 일치(대소문자 무관). 여러 개면 OR(하나라도
-  // 일치하면 포함) — searchTerm/searchMode와는 독립적으로 AND 결합된다.
+  // 일치하면 포함) — includeKeywords/excludeKeywords와는 독립적으로 AND 결합된다.
   // 2026-09-14부터 REQ-023 해시 필터와 동일하게 여러 줄 입력을 지원한다.
   authors?: string[]
   // REQ-022 — Merge 커밋 제외 (git --no-merges와 동일). 기본 false(포함).

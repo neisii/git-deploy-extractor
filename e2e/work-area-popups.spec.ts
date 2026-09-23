@@ -44,7 +44,10 @@ test('PreviewSummary의 Deleted 버튼으로 삭제 목록 팝업을 열고 닫�
 
   const popup = window.locator('.popup')
   await expect(popup).toBeVisible()
-  await expect(popup.locator('.popup-plain-list li', { hasText: 'FileA.txt' })).toBeVisible()
+  // RT-53 — 평탄한 목록(popup-plain-list)이 TreeList로 바뀌었다. 이
+  // fixture는 파일 하나가 저장소 루트에 바로 있어 폴더 없이 리프 행
+  // 하나만 뜬다.
+  await expect(popup.locator('.tree-row--file', { hasText: 'FileA.txt' })).toBeVisible()
 
   await popup.locator('.popup__header button').click()
   await expect(popup).toHaveCount(0)
@@ -65,7 +68,7 @@ test('HEAD에 없는 커밋만 선택하면 경고 버튼이 나타나고 팝업
   await warnButton.click()
 
   const popup = window.locator('.popup')
-  await expect(popup.locator('.popup-plain-list li', { hasText: 'FileA.txt' })).toBeVisible()
+  await expect(popup.locator('.tree-row--file', { hasText: 'FileA.txt' })).toBeVisible()
 
   await window.keyboard.press('Escape')
   await expect(popup).toHaveCount(0)
@@ -86,7 +89,7 @@ test('Reload를 누르면 열려 있던 팝업이 닫힌다', async () => {
   await expect(window.locator('.popup')).toHaveCount(0)
 })
 
-test('파일 패턴을 추가하면 매치되는 파일이 숨겨지고, 패턴 팝업에서 토글·삭제할 수 있다', async () => {
+test('파일 패턴을 추가하면 Extract 행이 흐려지고, 패턴 팝업에서 토글·삭제할 수 있다', async () => {
   await window.getByRole('button', { name: 'Browse...' }).click()
   await expect(window.locator('.commit-row', { hasText: 'add FileB' })).toBeVisible()
 
@@ -95,13 +98,23 @@ test('파일 패턴을 추가하면 매치되는 파일이 숨겨지고, 패턴 
     .locator('input[type="checkbox"]')
     .check()
   await window.getByRole('button', { name: 'Preview' }).click()
-  await expect(window.locator('.deploy-files-row', { hasText: 'src/FileB.txt' })).toBeVisible()
+  // RT-51(M-14) — Preview 직후 기본값은 전체 Extract로 이동.
+  const extractRow = window.locator('.extract-row', { hasText: 'FileB.txt' })
+  await expect(extractRow).toBeVisible()
 
   await window.locator('.filter-pattern-bar input[type="text"]').fill('FileB.txt')
   await window.locator('.filter-pattern-bar').getByRole('button', { name: '+추가' }).click()
 
-  await expect(window.locator('.deploy-files-row', { hasText: 'src/FileB.txt' })).toHaveCount(0)
-  await expect(window.locator('.filter-pattern-bar__summary')).toContainText('1개 숨김')
+  // RT-51(§5.1) — Extract 목록은 패턴에 걸려도 숨기지 않고 흐림+취소선+
+  // "패턴 제외" 태그로 표시한다(조용한 누락 방지) — 행 자체는 그대로
+  // 보이고, 제목에도 반영된다(FilterPatternBar의 "N개 숨김"은 왼쪽
+  // "포함된 파일" 목록 전용이라 여기서는 0으로 남는다 — FileB가 원래
+  // 그 목록에 없었으므로).
+  await expect(extractRow).toBeVisible()
+  await expect(extractRow.locator('.extract-row__pattern-tag')).toHaveText('패턴 제외')
+  await expect(window.locator('.file-pane__title-text', { hasText: 'Extract 대상' })).toContainText(
+    '패턴 제외 1개'
+  )
 
   await window.locator('.filter-pattern-bar').getByRole('button', { name: '보기' }).click()
   const popup = window.locator('.popup')
@@ -109,9 +122,9 @@ test('파일 패턴을 추가하면 매치되는 파일이 숨겨지고, 패턴 
   const chip = popup.locator('.chip', { hasText: 'FileB.txt' })
   await expect(chip).toBeVisible()
 
-  // 라벨 클릭 = 활성 토글 → 꺼지면 숨김이 풀린다.
+  // 라벨 클릭 = 활성 토글 → 꺼지면 패턴 제외 표시가 풀린다.
   await chip.locator('.chip__label').click()
-  await expect(window.locator('.deploy-files-row', { hasText: 'src/FileB.txt' })).toBeVisible()
+  await expect(extractRow.locator('.extract-row__pattern-tag')).toHaveCount(0)
 
   // × = 삭제(확인창 없음, REQ-024) → 등록이 0개가 되어 팝업이 자동으로 닫힌다.
   await chip.locator('.chip__remove').click()

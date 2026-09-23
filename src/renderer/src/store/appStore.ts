@@ -55,4 +55,4 @@ export const useAppStore = create<AppState>()((...a) => ({
 export { parseMultiValueFilter } from '../services/commitQueryParams'
 export { selectionMatches, selectIsAnalysisStale } from './slices/analysisSlice'
 export type { AnalyzedSelection, SelectionSnapshot, DeleteEntry } from './slices/analysisSlice'
-export type { DeployFileEntry } from './slices/deployFilesSlice'
+export type { DeployFileEntry, DeployFileSource } from './slices/deployFilesSlice'

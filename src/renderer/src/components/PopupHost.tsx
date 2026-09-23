@@ -1,5 +1,5 @@
 import { useWorkAreaPopup } from '../lib/workAreaPopupContext'
-import { ManualAddPopup } from './deployFiles/ManualAddPopup'
+import { AddFilesPopup } from './deployFiles/AddFilesPopup'
 import { FilterPatternsPopup } from './deployFiles/FilterPatternsPopup'
 import { DeletedFilesPopup } from './deployFiles/DeletedFilesPopup'
 import { WarningsPopup } from './deployFiles/WarningsPopup'
@@ -14,8 +14,8 @@ export function PopupHost(): React.JSX.Element | null {
   const { openPopup, close } = useWorkAreaPopup()
 
   switch (openPopup) {
-    case 'manual':
-      return <ManualAddPopup onClose={close} />
+    case 'addFiles':
+      return <AddFilesPopup onClose={close} />
     case 'patterns':
       return <FilterPatternsPopup onClose={close} />
     case 'deleted':

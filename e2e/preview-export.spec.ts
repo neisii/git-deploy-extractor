@@ -40,10 +40,13 @@ test('커밋 선택 → Preview → Export까지 한 번에 끝난다', async ()
 
   await window.getByRole('button', { name: 'Preview' }).click()
 
-  const includedRow = window.locator('.deploy-files-row', { hasText: 'src/FileB.txt' })
-  await expect(includedRow).toBeVisible()
-  // FileA는 이번 선택의 변경 파일이 아니므로 좌측 "포함된 파일"에 없어야 한다.
-  await expect(window.locator('.deploy-files-row', { hasText: 'src/FileA.txt' })).toHaveCount(0)
+  // RT-51(M-14) — Preview 직후 기본값은 전체 Extract로 이동이라 FileB는
+  // 오른쪽 Extract 대상 목록에 바로 나타난다.
+  const extractRow = window.locator('.extract-row', { hasText: 'FileB.txt' })
+  await expect(extractRow).toBeVisible()
+  // FileA는 이번 선택의 변경 파일이 아니므로 어느 목록에도 없어야 한다.
+  await expect(window.locator('.included-row', { hasText: 'FileA.txt' })).toHaveCount(0)
+  await expect(window.locator('.extract-row', { hasText: 'FileA.txt' })).toHaveCount(0)
 
   const exportButton = window.getByRole('button', { name: 'Export' })
   await expect(exportButton).toBeEnabled()

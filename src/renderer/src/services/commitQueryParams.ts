@@ -17,6 +17,31 @@ export function parseMultiValueFilter(text: string): string[] {
     .filter((token) => token.length > 0)
 }
 
+// RT-48(U-8) — 키워드 필드(줄바꿈 구분, `-` 접두는 제외) 파싱. 쉼표는
+// 구분자가 아니다(작성자/해시와 다름 — parseMultiValueFilter 재사용 불가).
+// 각 줄 앞뒤 공백 제거, 빈 줄 무시, `-`만 있는 줄도 무시.
+export interface ParsedKeywords {
+  include: string[]
+  exclude: string[]
+}
+
+export function parseKeywordText(text: string): ParsedKeywords {
+  const include: string[] = []
+  const exclude: string[] = []
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim()
+    if (line.length === 0) continue
+    if (line.startsWith('-')) {
+      const rest = line.slice(1).trim()
+      if (rest.length === 0) continue
+      exclude.push(rest)
+    } else {
+      include.push(line)
+    }
+  }
+  return { include, exclude }
+}
+
 // commitQuerySlice가 들고 있는 조회 조건 중 listCommits 파라미터 조립에
 // 필요한 것만 뽑은 최소 형태 — commitsSlice가 그대로 AppState를 넘길 수
 // 있다(TS structural typing, RT-01의 SelectionSnapshot과 같은 패턴).
@@ -24,7 +49,7 @@ export interface CommitQueryFilters {
   startDate: string
   endDate: string
   maxCount: number
-  searchTerm: string
+  keywordText: string
   searchMode: CommitSearchMode
   authorFilter: string
   excludeMerges: boolean
@@ -40,6 +65,7 @@ export function buildListCommitsParams(
 ): ListCommitsParams {
   const hashFilter = parseMultiValueFilter(filters.hashFilterText)
   const authors = parseMultiValueFilter(filters.authorFilter)
+  const { include, exclude } = parseKeywordText(filters.keywordText)
   return {
     repoPath,
     branch,
@@ -48,8 +74,9 @@ export function buildListCommitsParams(
     maxCount: filters.maxCount,
     skip,
     pageSize,
-    searchTerm: filters.searchTerm || undefined,
     searchMode: filters.searchMode,
+    includeKeywords: include.length > 0 ? include : undefined,
+    excludeKeywords: exclude.length > 0 ? exclude : undefined,
     authors: authors.length > 0 ? authors : undefined,
     excludeMerges: filters.excludeMerges,
     hashFilter: hashFilter.length > 0 ? hashFilter : undefined

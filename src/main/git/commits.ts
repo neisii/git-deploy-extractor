@@ -27,6 +27,12 @@ function matchesFileName(path: string, term: string): boolean {
   return fileName.toLowerCase().includes(term.toLowerCase())
 }
 
+// RT-48(U-8) — 대소문자 무관 부분 일치, 글자 그대로(정규식 아님).
+function messageContainsAny(message: string, keywords: string[]): boolean {
+  const lower = message.toLowerCase()
+  return keywords.some((k) => lower.includes(k.toLowerCase()))
+}
+
 // RT-10(R1/M-5) — 해시 필터는 git이 인정하는 축약 해시를 포함한 16진수
 // 문자열만 허용한다(git 최소 축약 길이 4자 ~ SHA-1 40자, 여유를 둬
 // SHA-256 저장소의 64자까지 받는다). 이 형식을 벗어나는 입력(예:
@@ -126,7 +132,8 @@ export async function listCommits(params: ListCommitsParams): Promise<ListCommit
     maxCount,
     skip,
     pageSize,
-    searchTerm,
+    includeKeywords,
+    excludeKeywords,
     authors,
     excludeMerges,
     hashFilter
@@ -172,22 +179,64 @@ export async function listCommits(params: ListCommitsParams): Promise<ListCommit
     args.push('--no-merges')
   }
 
+  const include = includeKeywords ?? []
+  const exclude = excludeKeywords ?? []
+
   let pathspecArgs: string[] = []
-  if (searchTerm && searchMode === 'filename') {
-    // 2단계 구현(RISK_ISSUES.md §7.3): ① HEAD 트리 전체 파일 목록 조회
-    // ② 파일명이 매치하는 경로만 pathspec으로 좁혀 git log에 전달.
-    const allPaths = await listTrackedFiles(repoPath, branch)
-    const matched = allPaths.filter((path) => matchesFileName(path, searchTerm))
-    // `git log ... --`처럼 `--` 뒤에 경로를 하나도 안 주면 "필터 없음"으로
-    // 해석되어 오히려 전체 커밋을 돌려준다(재현 테스트로 확인,
-    // DETAILED_DESIGN.md §0.1) — 매치가 0건이면 git을 호출하지 않고
-    // 바로 빈 결과를 반환해 이 함정을 피한다.
-    if (matched.length === 0) {
-      return { commits: [], hasMore: false }
+  if (searchMode === 'filename') {
+    // RT-48 — 파일명 모드는 제외(`-`) 줄을 무시하고(§5.1), 포함 키워드가
+    // 하나도 없으면 파일명 필터 자체를 걸지 않는다.
+    if (include.length > 0) {
+      // 2단계 구현(RISK_ISSUES.md §7.3): ① HEAD 트리 전체 파일 목록 조회
+      // ② 파일명이 매치하는 경로만 pathspec으로 좁혀 git log에 전달.
+      const allPaths = await listTrackedFiles(repoPath, branch)
+      const matched = allPaths.filter((path) => include.some((k) => matchesFileName(path, k)))
+      // `git log ... --`처럼 `--` 뒤에 경로를 하나도 안 주면 "필터 없음"으로
+      // 해석되어 오히려 전체 커밋을 돌려준다(재현 테스트로 확인,
+      // DETAILED_DESIGN.md §0.1) — 매치가 0건이면 git을 호출하지 않고
+      // 바로 빈 결과를 반환해 이 함정을 피한다.
+      if (matched.length === 0) {
+        return { commits: [], hasMore: false }
+      }
+      pathspecArgs = ['--', ...matched]
     }
-    pathspecArgs = ['--', ...matched]
-  } else if (searchTerm) {
-    args.push(`--grep=${searchTerm}`, '-i')
+  } else if (include.length > 0) {
+    // RT-48(M-4) — `-F`(고정 문자열) + `--grep`을 여러 번(git이 기본
+    // OR로 묶음, authors와 동일한 관례) 넘긴다. 애초에 정규식으로 해석하지
+    // 않으므로 기존 `--grep=<검색어>`(BRE)의 `[skip ci]`가 문자 클래스로
+    // 오인되던 결함(재현 확인, DETAILED_DESIGN.md §0.1)도 함께 해소한다.
+    args.push('-F', '-i')
+    for (const k of include) args.push(`--grep=${k}`)
+  }
+
+  if (searchMode !== 'filename' && exclude.length > 0) {
+    // RT-48(M-4) — 원래 가정("-P PCRE + `\Q…\E`로 포함·제외를 패턴 하나에
+    // 결합")은 실제 git(2.53)으로 재현한 결과 무효였다: `-P --grep`에
+    // negative lookahead가 들어가면(예 `\A(?!fix)`) 그 커밋이 실제로는
+    // 일치하지 않는데도 결과에 포함되는 버그를 재현했다(같은 저장소에서
+    // `--invert-grep`은 정상 동작하지만, "포함 조건과 동시에 AND로 결합"할
+    // 방법이 없다 — 전체 --grep 결과를 통째로 뒤집을 뿐이라서). 그래서
+    // 제외 키워드가 하나라도 있으면 이 경로 전체를 클라이언트 필터로
+    // 전환한다. git의 --skip/-n을 그대로 쓰면 클라이언트 필터로 걸러진
+    // "이후" 개수를 다음 페이지의 --skip으로 넘기게 돼(실제로 git 쪽에서
+    // 몇 개를 이미 건너뛰었는지와 어긋남) 이미 보여준 커밋이 다음
+    // 페이지에 중복 재등장하는 버그가 생긴다(재현 확인) — 그래서 이
+    // 검색의 전체 상한인 maxCount만큼을 한 번에 가져와 걸러낸 뒤,
+    // [skip, skip+limit) 구간을 여기서 직접 슬라이스한다(git 쪽
+    // --skip/-n은 쓰지 않는다). maxCount가 이미 이 조회 전체의 상한이라
+    // (사용자가 조정하는 "최대 개수" 필드) 한 번에 가져와도 비용이 늘지
+    // 않는다 — 예전에도 여러 페이지로 나눠서든 결국 maxCount까지 훑었다.
+    args.push('--skip=0', '-n', String(maxCount))
+    const result = await runGit(repoPath, args)
+    if (result.exitCode !== 0) {
+      throw new Error(`Commit 목록 조회 실패: ${result.stderr.trim()}`)
+    }
+    const all = parseCommitRecords(result.stdout).filter(
+      (c) => !messageContainsAny(c.message, exclude)
+    )
+    const commits = all.slice(skip, skip + limit)
+    const hasMore = skip + commits.length < all.length
+    return { commits, hasMore }
   }
 
   args.push(`--skip=${skip}`, '-n', String(limit), ...pathspecArgs)

@@ -23,7 +23,8 @@ test.beforeEach(async () => {
     .locator('input[type="checkbox"]')
     .check()
   await window.getByRole('button', { name: 'Preview' }).click()
-  await expect(window.locator('.deploy-files-row', { hasText: 'src/FileB.txt' })).toBeVisible()
+  // RT-51(M-14) — Preview 직후 기본값은 전체 Extract로 이동.
+  await expect(window.locator('.extract-row', { hasText: 'FileB.txt' })).toBeVisible()
 })
 
 test.afterEach(async () => {
@@ -57,11 +58,24 @@ test('Export 완료 후 커밋 선택을 바꾸면 완료 메시지가 사라진
 })
 
 test('파일 행 체크박스는 키보드(Space)로도 토글된다(U8)', async () => {
-  const row = window.locator('.deploy-files-row', { hasText: 'src/FileB.txt' })
+  // RT-51 — Extract 목록은 체크박스가 아니라 × 버튼(순수 <button>이라
+  // 이미 네이티브로 키보드 접근 가능)이다. U8이 원래 검증하려던 "라벨
+  // 텍스트를 감싼 체크박스가 키보드로도 토글되는지"는 이제 왼쪽 "포함된
+  // 파일" 목록에서만 재현 가능하므로, 먼저 ×로 FileB를 왼쪽으로 되돌린
+  // 뒤 그 체크박스를 Space로 토글한다.
+  await window
+    .locator('.extract-row', { hasText: 'FileB.txt' })
+    .locator('.extract-row__remove')
+    .click()
+
+  const row = window.locator('.included-row', { hasText: 'FileB.txt' })
   const checkbox = row.locator('input[type="checkbox"]')
-  await expect(checkbox).toBeChecked()
+  await expect(checkbox).not.toBeChecked()
 
   await checkbox.focus()
   await window.keyboard.press('Space')
-  await expect(checkbox).not.toBeChecked()
+
+  // 체크하면 Extract로 이동해 왼쪽 목록에서는 사라진다(§3.2 모델).
+  await expect(window.locator('.included-row', { hasText: 'FileB.txt' })).toHaveCount(0)
+  await expect(window.locator('.extract-row', { hasText: 'FileB.txt' })).toBeVisible()
 })

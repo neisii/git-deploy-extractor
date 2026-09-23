@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { List } from 'react-window'
 import type { RowComponentProps } from 'react-window'
 import type { CommitEntry } from '../../../shared/types'
@@ -47,6 +48,15 @@ export function CommitListPanel(): React.JSX.Element {
   const allChecked = commits.length > 0 && commits.every((c) => selectedHashes.has(c.hash))
   const someChecked = commits.some((c) => selectedHashes.has(c.hash))
   const indeterminate = someChecked && !allChecked
+
+  // RT-48(U-8) 수용 기준 — REQ-015로 선택은 검색 조건과 무관하게
+  // 유지되므로, 키워드/작성자/해시 등을 바꿔 다시 찾으면 선택된 커밋
+  // 일부가 지금 로드된 목록엔 없을 수 있다(git 쪽 필터가 걸러낸 개수는
+  // 알 수 없으므로 "숨김 M개"까지는 표시하지 않는다, §5.1). 아직 스크롤로
+  // 안 불러온 다음 페이지에 있을 뿐인 선택도 여기선 "안 보임"으로 잡힌다
+  // — 로드된 commits 기준의 근사치다.
+  const loadedHashes = useMemo(() => new Set(commits.map((c) => c.hash)), [commits])
+  const hiddenSelectedCount = Array.from(selectedHashes).filter((h) => !loadedHashes.has(h)).length
 
   // RISK_ISSUES.md §6.1 케이스 D — 헤더(전체 선택 체크박스 + 선택 개수
   // 카운터)는 목록이 비어있거나(검색 결과 0건) 로딩/에러 상태여도 항상
@@ -100,6 +110,7 @@ export function CommitListPanel(): React.JSX.Element {
               전체 선택 여부와 무관하게 항상 실제 총 개수를 보여준다. */}
           <span className="status-text commit-list-panel__selected-count">
             {selectedHashes.size}개 선택됨
+            {hiddenSelectedCount > 0 && ` (선택 중 ${hiddenSelectedCount}개는 화면에 안 보임)`}
           </span>
         </div>
         <button

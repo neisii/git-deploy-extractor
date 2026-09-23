@@ -5,7 +5,10 @@ import { createContext, useContext } from 'react'
 // 종류와 무관하게 동시에 하나(단일 값으로 구조적 보장). 컨텍스트로 내려
 // 트리거 컴포넌트가 prop 없이도(가장 가까운 조상까지 이벤트를 직접
 // 올리는 대신) "이벤트를 WorkArea로 올려 보낸다".
-export type OpenPopup = 'manual' | 'patterns' | 'deleted' | 'warnings' | null
+// RT-51(M-18) — 'manual' → 'addFiles'로 개명(내부 키만, 화면 문구는
+// 이미 "파일 추가"였다 — 컴포넌트 이름을 ManualAddPopup → AddFilesPopup
+// 으로 바꾸면서 키도 맞췄다).
+export type OpenPopup = 'addFiles' | 'patterns' | 'deleted' | 'warnings' | null
 
 export interface WorkAreaPopupApi {
   openPopup: OpenPopup
