@@ -839,9 +839,41 @@ UI 변경 단계라 P0~P3의 "동작 불변" 원칙이 더 이상 적용되지 �
     클릭 + 별도 빈 폴더로 교체(기존처럼 저장소 루트에 Export하면 이제
     `INSIDE_REPO`로 막힌다). 상세는 `docs/refactoring/REFACTORING_TASKS.md`
     §5.1 RT-56 항목, M-25·M-27·M-33(§7) 참고.
-    **다음 착수 지점은 RT-57**(U-17, Export 산출물을 `extract-list.txt`
-    하나로 통합 — `deploy-summary.json`·`deploy-files.txt`·
-    `delete-list.txt` 삭제, `treeText`/`buildExtractListText` 순수 함수부터).
+  - **RT-57(U-17, Export 산출물을 `extract-list.txt` 하나로 통합)을
+    구현(2026-09-23)** — 착수 전 §7 M-30(트리 체인 병합·서버 경로 기준)·
+    M-31(인코딩 BOM 여부)·M-32(머리말 커밋 목록 형식)가 명세 원문에 직접
+    "결정 대기"로 표시돼 있어 AskUserQuestion으로 확정(M-30: 화면
+    TreeList와 동일하게 체인 병합 + 서버 경로만, M-31: BOM 없는 UTF-8,
+    M-32: 가정대로 — 해시7자리+날짜+작성자+제목, 10줄 상한+"… 외 K개").
+    `src/main/package/extractListText.ts`(신규) — `treeText(paths)`·
+    `buildExtractListText({ branch, generatedAt, commits, files, deleted })`
+    순수 함수, `docs/refactoring/component-playground.html`의
+    `buildTree`/`treeText` 프로토타입을 그대로 이식(폴더 먼저·이름순·
+    `├──`/`└──`/`│   ` 커넥터·단일 자식 폴더 체인 병합). `buildPackage.ts`가
+    `deploy-files.txt`·`delete-list.txt`·`deploy-summary.json` 3종 대신
+    `extract-list.txt` 하나만 씀. **`shared/types.ts` 정리**:
+    `DeploySummary` 타입 삭제, `BuildPackageParams`에서 `mappingProfileName`·
+    `warnings`(요약 전용으로만 쓰이던 필드, M-29 "매핑 프로필·경고는 머리말에
+    안 남김"과 일치) 제거, `BuildPackageResult`는 `{ deployDir }`만 남김 —
+    `exportSlice.ts`의 `runExport` 호출부도 맞춰 정리(`selectedProfile`/
+    `warnings` destructure 제거). `verify-phase3.ts`는 P0에서 이미 삭제된
+    파일이라 갱신 대상이 없었다(확인만 하고 스킵). README.md(3·8번 항목의
+    `delete-list.txt`/`deploy-files.txt` 언급)·ARCHITECTURE.md(§4.4 Package
+    Builder 단계 설명, 파이프라인 다이어그램)를 `extract-list.txt` 기준으로
+    갱신. REQUIREDMENT.md/UI_UX_SPEC.md/DETAILED_DESIGN.md/PRD.md는 RT-60
+    문서 정식 병합 때 함께 처리하는 게 이 계획의 순서라 이번엔 손대지
+    않았다(§6 문서 동기화 표 참고). 검증: `npm test`(238개, 신규
+    `extractListText.test.ts` 20개 — 빈 목록·루트 파일·체인 병합·체인
+    중간에 파일 있으면 끊김·정렬(폴더 먼저)·한글 경로·머리말 형식(시각
+    주입 결정적 테스트)·커밋 행 형식/정렬·10줄 경계(0·1·10·11·25개)·
+    배포/삭제 개수 제목 일치)·`typecheck`·`lint`·`build`·`test:e2e`
+    (24개, 기존 스펙 전부 그대로 통과 — extract-list.txt 내용을 직접
+    검증하는 e2e는 없었고 이번에도 추가하지 않음, vitest로 충분히
+    커버됨) 전부 통과.
+    **다음 착수 지점은 RT-59**(U-21, `RepositoryBar`의 `Browse...`·
+    `Reload`·버전 배지를 저장소 바 오른쪽 끝으로 모으는 배치 변경 —
+    §5.1 RT-59 명세 참고, 관련 §7 미결 사항 M-39는 이미 "현행 순서
+    유지"로 결정돼 있어 블로킹 없음).
 
 먼저 이 순서로 읽어주세요 (짐작하지 말고 실제로 읽어야 합니다):
 

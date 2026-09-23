@@ -501,7 +501,7 @@ D1 AppShell                         레이아웃만
   - **렌더러**: `exportSlice.ts`에 `exportMode`(localStorage `gde:exportMode`, 기본 `sub`)·`exportTargetValidation`·`setExportMode`·`revalidateExportTarget`(오래된 응답이 최신 상태를 덮어쓰지 않도록 `requestGuard.ts` 재사용) 추가. `repositorySlice.ts`의 `browseRepository`/`reloadRepository` 끝에서 `revalidateExportTarget()` 호출(검증 시점 ②). `lib/exportPath.ts`에 `loadExportMode`/`saveExportMode`/`formatDeployDirDisplay`(네이티브 다이얼로그가 돌려준 경로의 구분자 스타일을 그대로 따라감) 추가. `FooterActionBar.tsx`(ExportBar)에 `ExportModeSelect.tsx`(신규) 배치 + 검사 우선순위(경로 검증 실패 > RT-17 분석 중 > isStale)를 반영한 상태 메시지, 경로 미선택 시 "추출할 폴더를 선택하세요" 표시(REQ-012 정정 — 저장소 루트 기본값 완전 폐지).
   - **vitest**: `classifyExportTarget.test.ts`(순수 함수, INSIDE_REPO/CONTAINS_REPO/OK + `-old`/`2` 접두사 오판 방지), `validateExportTarget.test.ts`(임시 폴더 통합 테스트 — 동일/끝 구분자/`.`·`..`/심볼릭 링크/하위 폴더 전부 INSIDE_REPO, F가 저장소를 포함하면 CONTAINS_REPO, 형제·접두사만 같은 형제는 통과, direct의 빈 폴더/비어 있지 않음/아직 없는 경로, sub는 비어 있어도 NOT_EMPTY를 반환하지 않음, `normalizeForCasePolicy`는 `process.platform`을 강제로 바꿔가며 Windows/macOS/Linux 세 갈래 모두 결정적으로 확인), `buildPackage.test.ts`에 direct 모드 케이스(무관한 기존 파일이 `fs.rm` 없이 보존됨) 추가. `npm test`(220개, 신규 26개)·`typecheck`·`lint`·`build`·`test:e2e`(24개) 전부 통과.
   - **e2e**: `package:browseExportDir`도 `repository:browse`(`GDE_E2E_REPO_PATH`)와 같은 이유로 `GDE_E2E_EXPORT_DIR` 우회를 추가(REQ-012 정정으로 경로를 반드시 "골라야" 하므로 Playwright도 예외 없음) — `e2e/support/launchApp.ts`(`exportDir` 2번째 인자)·`fixtureRepo.ts`(`createExportDirFixture`). `preview-export.spec.ts`·`export-feedback.spec.ts`가 저장소 루트 기본값에 의존하던 부분을 "변경" 클릭 + 별도 빈 폴더로 교체(기존 저장소 루트 Export는 이제 `INSIDE_REPO`로 막힌다).
-- [ ] **RT-57 (U-17)** Export 산출물 변경: ① `deploy-summary.json` 생성·`DeploySummary` 삭제 ② `deploy-files.txt`+`delete-list.txt` → `extract-list.txt` 통합(경계선·섹션 제목·개수) ③ `treeText`(폴더 먼저·이름순·커넥터·체인 병합) + 머리말(생성 시각·기준 브랜치) 생성 순수 함수, vitest(빈 목록·루트 파일·체인 병합·정렬·한글 경로·머리말 형식·시각 주입으로 결정적 테스트) ④ `verify-phase3.ts`·README·ARCHITECTURE 갱신 ⑤ `BuildPackageParams`/`runExport` 불필요 필드 정리
+- [x] **RT-57 (U-17)** Export 산출물 변경: ① `deploy-summary.json` 생성·`DeploySummary` 삭제 ② `deploy-files.txt`+`delete-list.txt` → `extract-list.txt` 통합(경계선·섹션 제목·개수) ③ `treeText`(폴더 먼저·이름순·커넥터·체인 병합) + 머리말(생성 시각·기준 브랜치) 생성 순수 함수, vitest(빈 목록·루트 파일·체인 병합·정렬·한글 경로·머리말 형식·시각 주입으로 결정적 테스트) ④ `verify-phase3.ts`·README·ARCHITECTURE 갱신 ⑤ `BuildPackageParams`/`runExport` 불필요 필드 정리 — **구현 완료(2026-09-23)**. 착수 전 M-30(체인 병합·서버 경로 기준)·M-31(BOM 없는 UTF-8)·M-32(커밋 머리말 형식)를 AskUserQuestion으로 확정(전부 명세 가정대로 채택). `src/main/package/extractListText.ts` 신규(`treeText`·`buildExtractListText` 순수 함수, component-playground.html의 buildTree/treeText 이식) + `extractListText.test.ts`(vitest 20케이스). `buildPackage.ts`가 `deploy-files.txt`/`delete-list.txt`/`deploy-summary.json` 3종 대신 `extract-list.txt` 하나만 씀. `DeploySummary` 타입 삭제, `BuildPackageParams`에서 `mappingProfileName`·`warnings`(요약 전용 필드) 제거, `BuildPackageResult`는 `{ deployDir }`만 남김 — `exportSlice.ts` 호출부도 맞춰 정리. `verify-phase3.ts`는 P0에서 이미 삭제된 파일이라 갱신 대상 없음(확인만). README.md(3·8번 항목)·ARCHITECTURE.md(§4.4 Package Builder, 파이프라인 다이어그램) 갱신. 검증: `npm test`(238개, 신규 20개)·`typecheck`·`lint`·`build`·`test:e2e`(24개) 전부 통과.
 - [ ] **RT-59 (U-21)** `RepositoryBar` 배치: `Browse...`·`Reload`·버전 배지를 저장소 바 **오른쪽 끝**에 모은다(상세 §5.1 RT-59)
 - [x] **RT-49 (U-9·U-10)** `CommitQueryBar` 레이아웃(작성자·해시 우측), 기본 창 크기 결정 — RT-48과 함께 구현(위 항목의 "함께 진행" 경위 참고, 2026-09-23). 착수 전 M-42 세부(a~d)를 전부 "가정대로" 확정, M-13 잔여분(기본 창 폭)도 "가정대로 반영"을 사용자에게 직접 확인받았다.
   - **그룹 분리**: 조회 조건 본문을 `SplitPane`(가로, `gde:splitRatio:queryGroups`, 기본 50:50, 최소 폭 왼쪽 320px/오른쪽 330px)으로 검색 조건 그룹·필터 그룹으로 나눴다 — 본문 컨테이너 자체는 테두리가 없고 두 그룹만 각자 `.panel`(명세 "각 그룹은 자기 테두리 상자"). `SearchConditionGroup.tsx`(신규) — Branch·Search 버튼(1행) + 조회 기간·최대 개수·Merge 제외(2행), 기존 동작 무변경(컴포넌트만 분리). `QueryFilterGroup.tsx`(신규) — 키워드(RT-48, flex 1.5)·작성자(flex 1)·해시 필터(flex 1) 세 텍스트 영역이 한 줄에, 키워드 헤더에 검색 대상 라디오(왼쪽 그룹에서 이동).
@@ -713,16 +713,16 @@ D1 AppShell                         레이아웃만
 
 #### RT-57 — `extract-list.txt` 형식
 
-- **한 파일**로 생성: `<결과 폴더>/extract-list.txt` (`deploy-files.txt`·`delete-list.txt`·`deploy-summary.json`은 더 이상 생성하지 않음). 사람이 읽는 용도(프로그램이 읽지 않음). LF, UTF-8(BOM 여부는 결정 대기 M-31).
+- **한 파일**로 생성: `<결과 폴더>/extract-list.txt` (`deploy-files.txt`·`delete-list.txt`·`deploy-summary.json`은 더 이상 생성하지 않음). 사람이 읽는 용도(프로그램이 읽지 않음). LF, BOM 없는 UTF-8(M-31, 2026-09-23 확정).
 - **구조**:
   1. 머리말 블록: `=` 64자 / ` Extract 목록` / ` 생성 시각   : YYYY-MM-DD HH:mm:ss ±HH:MM` / ` 기준 브랜치 : <브랜치>` / ` 원본 커밋 (N개)` + 커밋 행들 / `=` 64자 / 빈 줄
-     - **커밋 행(가정, M-32)**: 3칸 들여쓰기 + `<해시 7자리>  <YYYY-MM-DD>  <작성자>  <제목 한 줄>`, 작성자 열은 가장 긴 이름에 맞춰 정렬. **선택한 커밋 전체**가 대상이며 순서는 커밋 목록의 표시 순서(최신순).
+     - **커밋 행(M-32, 2026-09-23 확정)**: 3칸 들여쓰기 + `<해시 7자리>  <YYYY-MM-DD>  <작성자>  <제목 한 줄>`, 작성자 열은 가장 긴 이름에 맞춰 정렬. **선택한 커밋 전체**가 대상이며 순서는 커밋 목록의 표시 순서(최신순).
      - **상한**: 기본 **10줄**. 초과하면 10줄 뒤에 `   … 외 K개` 한 줄. 커밋이 0개(해시 필터 등으로 비는 경우는 없음)면 `원본 커밋 (0개)`만 표시.
      - 제목은 개행 없는 첫 줄(git `%s`), 길이 자르지 않음.
   2. `=`64 / ` 배포 대상 파일 (N개)` / `=`64 / **트리** / 빈 줄
   3. `=`64 / ` 삭제 대상 파일 (M개)` / `=`64 / **트리**
 - **트리**: `├── `·`└── `·`│   `·`    ` 커넥터, 폴더는 `이름/`, 폴더 먼저·이름순, 단일 자식 폴더 체인은 한 줄로 합침(화면과 동일), 목록이 비면 `  (없음)`.
-- **내용**: 배포 대상 = Extract 목록 − 활성 패턴 해당 항목(서버 경로, 결정 대기 M-30). 삭제 대상 = 삭제 서버 경로.
+- **내용**: 배포 대상 = Extract 목록 − 활성 패턴 해당 항목(서버 경로, M-30 2026-09-23 확정). 삭제 대상 = 삭제 서버 경로.
 - **코드**: `treeText(paths)`·`buildExtractListText({ branch, generatedAt, commits, files, deleted })` 순수 함수(시각 주입 → 결정적 테스트). `DeploySummary` 타입·`deploy-summary.json` 생성 코드 삭제, `BuildPackageParams`에서 요약 전용 필드 정리, `verify-phase3.ts`·README(33, 50행)·ARCHITECTURE §5(160~162행) 갱신.
 - **수용 기준(vitest)**: 빈 목록 → `  (없음)` · 루트 파일 · 체인 병합 · 정렬(폴더 먼저) · 한글 경로 · 머리말 형식(고정 시각) · **커밋 행 형식·정렬·10줄 상한과 `… 외 K개`(0·1·10·11·25개 경계)** · 배포/삭제 개수가 제목과 일치 · 패턴 제외 항목이 배포 목록에 없음.
 
@@ -793,9 +793,9 @@ D1 AppShell                         레이아웃만
 | M-27 | ~~선택상자 라벨 문구·순서, 기본값 유지(`sub`) 및 모드 저장 여부(전역 저장 vs 세션)~~ — **구현 완료(RT-56, 2026-09-23)**: 권장값 그대로 — 기본 `sub`, `localStorage`(`gde:exportMode`)에 전역 저장(저장소별 구분 없음, `exportParentDir`과 동일 패턴) | 기본 `sub`, 전역 저장(결정됨) |
 | M-28 | ~~통합 txt 파일명~~ — **`extract-list.txt` 채택**(의견 제시 후 사용자 제안 수용) | (결정됨) |
 | M-29 | ~~감사 정보 머리말~~ — **결정: 생성 시각·기준 브랜치명·원본 커밋 목록(몇 줄)을 머리말에 기재**. 경고·매핑 프로필은 남기지 않음 | (결정됨) |
-| M-30 | 텍스트 트리에서 단일 자식 폴더 체인 합침 여부(화면과 동일하게 합침 가정 vs 파일 시스템 그대로 펼침), 경로를 서버 경로 기준으로 쓸지(가정) | 화면과 동일하게 합침 |
-| M-31 | `extract-list.txt` 인코딩: BOM 없는 UTF-8이면 구형 Windows 메모장에서 박스 문자·한글이 깨질 수 있음 → BOM 추가 여부. 생성 시각의 시간대 표기(로컬+오프셋 가정) 확인 | UTF-8 BOM 검토 |
-| M-32 | 머리말 원본 커밋 목록의 세부(가정): 행 형식(`해시7 날짜 작성자 제목`), 대상(선택한 커밋 전체), 상한 10줄 + `… 외 K개`, 작성자 포함 여부, 해시 자릿수 | 가정대로 |
+| M-30 | ~~텍스트 트리에서 단일 자식 폴더 체인 합침 여부(화면과 동일하게 합침 가정 vs 파일 시스템 그대로 펼침), 경로를 서버 경로 기준으로 쓸지(가정)~~ — **결정(RT-57, 2026-09-23, 사용자 확인)**: 가정대로 확정 — **화면 TreeList와 동일하게 단일 자식 폴더 체인을 한 줄로 합침**(`RT-53`의 `compressChains` 재사용), 경로는 **서버(원격 저장소) 상대경로만** 사용(로컬 경로 병기 없음) | (결정됨) |
+| M-31 | ~~`extract-list.txt` 인코딩: BOM 없는 UTF-8이면 구형 Windows 메모장에서 박스 문자·한글이 깨질 수 있음 → BOM 추가 여부. 생성 시각의 시간대 표기(로컬+오프셋 가정) 확인~~ — **결정(RT-57, 2026-09-23, 사용자 확인)**: **BOM 없는 UTF-8**로 확정(리포 내 다른 텍스트 산출물과 통일, 최신 에디터 호환 우선). 생성 시각 표기는 명세 원문(§5.1 RT-57) 가정대로 **로컬 시각 + 오프셋**(`YYYY-MM-DD HH:mm:ss ±HH:MM`) 확정 | (결정됨) |
+| M-32 | ~~머리말 원본 커밋 목록의 세부(가정): 행 형식(`해시7 날짜 작성자 제목`), 대상(선택한 커밋 전체), 상한 10줄 + `… 외 K개`, 작성자 포함 여부, 해시 자릿수~~ — **결정(RT-57, 2026-09-23, 사용자 확인)**: 명세 가정 그대로 확정 — 3칸 들여쓰기 `<해시7자리>  <YYYY-MM-DD>  <작성자>  <제목>`(작성자 열은 최장 이름에 맞춰 정렬), 대상은 선택한 커밋 전체(표시 순서=최신순), 상한 10줄 초과 시 `   … 외 K개` | (결정됨) |
 | M-33 | ~~저장소 경로 검증의 범위~~ — **결정: 저장소 하위 폴더까지 차단**(= 저장소 안). 함께 확인: 저장소를 포함하는 상위 폴더는 `sub`에서 산출물이 저장소 옆에 생기면 허용하되, **산출물 폴더가 저장소를 포함하면(`fs.rm`으로 저장소가 삭제될 수 있음) 차단**(CONTAINS_REPO, 제가 추가한 방어 — 이견 있으면 알려달라) | (결정됨) |
 | M-34 | 복사 경로 구분자: 기본 `/`(git 형식, 내부망 저장소 경로와 동일 구조). Windows 사용자가 `\` 형식을 원할 가능성 → 후속으로 설정 제공 여부 | `/` 고정 |
 | M-35 | 삭제 목록 행의 복사 값: 표시되는 경로(서버 경로)와 동일. Mapping이 항등이 아니게 되면 로컬 경로를 복사할지 서버 경로를 복사할지 | 표시 경로와 동일 |

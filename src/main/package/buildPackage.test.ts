@@ -50,7 +50,7 @@ describe('buildPackage', () => {
 
   afterAll(() => cleanupRepo(dir))
 
-  it('(a) 바이트 단위 동일성 + Export 3종 파일(UTF-8/LF, deploy-files/delete-list/summary)', async () => {
+  it('(a) 바이트 단위 동일성 + extract-list.txt(UTF-8 BOM 없음/LF, 배포·삭제·커밋 반영)', async () => {
     const profile: MappingProfile = {
       profileName: 'test-profile',
       version: '1.0',
@@ -63,14 +63,12 @@ describe('buildPackage', () => {
     const result = await buildPackage({
       repoPath: dir,
       branch: 'main',
-      mappingProfileName: profile.profileName,
       selectedCommits: [
         { hash: hashes.c1, author: 'Tester', date: '2026-01-01T00:00:00+09:00', message: 'c1' },
         { hash: hashes.c2, author: 'Tester', date: '2026-01-02T00:00:00+09:00', message: 'c2' }
       ],
       files: plan.files,
       deletedServerPaths: plan.deletedServerPaths,
-      warnings: plan.warnings,
       mode: 'sub'
     })
 
@@ -100,26 +98,21 @@ describe('buildPackage', () => {
     expect(existsSync(join(result.deployDir, 'config/override/deploy-only.properties'))).toBe(true)
     expect(existsSync(join(result.deployDir, 'config/deploy-only.properties'))).toBe(false)
 
-    // Export 3종 파일: UTF-8(BOM 없음), LF
-    for (const name of ['deploy-files.txt', 'delete-list.txt', 'deploy-summary.json']) {
-      const raw = readFileSync(join(result.deployDir, name))
-      expect(raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf).toBe(false)
-      expect(raw.toString('utf8')).not.toContain('\r\n')
-    }
+    // extract-list.txt: UTF-8(BOM 없음), LF(RT-57, M-31)
+    const raw = readFileSync(join(result.deployDir, 'extract-list.txt'))
+    expect(raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf).toBe(false)
+    expect(raw.toString('utf8')).not.toContain('\r\n')
 
-    const deployFilesTxt = readFileSync(join(result.deployDir, 'deploy-files.txt'), 'utf8')
-    expect(deployFilesTxt).toContain('config/override/deploy-only.properties')
-
-    const deleteListTxt = readFileSync(join(result.deployDir, 'delete-list.txt'), 'utf8')
-    expect(deleteListTxt.trim()).toBe('old.js')
-
-    const summaryJson = JSON.parse(
-      readFileSync(join(result.deployDir, 'deploy-summary.json'), 'utf8')
-    )
-    expect(summaryJson.summary.files).toBe(result.summary.files.length)
-    expect(summaryJson.summary.deleted).toBe(1)
-    expect(summaryJson.mappingProfile).toBe('test-profile')
-    expect(summaryJson.commits).toHaveLength(2)
+    const extractListTxt = raw.toString('utf8')
+    // 트리 렌더링이라 경로가 폴더/파일 두 줄로 나뉜다 — 배포 대상 트리 쪽에서
+    // 폴더명과 파일명이 각각 나타나는지 확인한다.
+    expect(extractListTxt).toContain('config/override/')
+    expect(extractListTxt).toContain('deploy-only.properties')
+    expect(extractListTxt).toContain('old.js')
+    expect(extractListTxt).toContain(' 기준 브랜치 : main')
+    expect(extractListTxt).toContain(' 원본 커밋 (2개)')
+    expect(extractListTxt).toContain(`배포 대상 파일 (${plan.files.length}개)`)
+    expect(extractListTxt).toContain('삭제 대상 파일 (1개)')
   })
 
   it('(b) 재실행하면 이전 잔여 파일이 제거된다', async () => {
@@ -133,11 +126,9 @@ describe('buildPackage', () => {
     const result = await buildPackage({
       repoPath: dir,
       branch: 'main',
-      mappingProfileName: profile.profileName,
       selectedCommits: [],
       files: plan.files,
       deletedServerPaths: plan.deletedServerPaths,
-      warnings: plan.warnings,
       mode: 'sub'
     })
 
@@ -167,24 +158,22 @@ describe('buildPackage', () => {
     const deployDir = join(dir, 'git-deploy-extracted')
     const beforeExists = existsSync(deployDir)
     const beforeSnapshot = beforeExists
-      ? readFileSync(join(deployDir, 'deploy-files.txt'), 'utf8')
+      ? readFileSync(join(deployDir, 'extract-list.txt'), 'utf8')
       : null
 
     await expect(
       buildPackage({
         repoPath: dir,
         branch: 'main',
-        mappingProfileName: collidingProfile.profileName,
         selectedCommits: [],
         files: plan.files,
         deletedServerPaths: plan.deletedServerPaths,
-        warnings: plan.warnings,
         mode: 'sub'
       })
     ).rejects.toThrow(/대소문자만 다른 경로 충돌/)
 
     if (beforeExists) {
-      const afterSnapshot = readFileSync(join(deployDir, 'deploy-files.txt'), 'utf8')
+      const afterSnapshot = readFileSync(join(deployDir, 'extract-list.txt'), 'utf8')
       expect(afterSnapshot).toBe(beforeSnapshot)
     } else {
       expect(existsSync(deployDir)).toBe(false)
@@ -230,11 +219,9 @@ describe('buildPackage — 전체 파이프라인(Repository -> Commit 선택 ->
       const result = await buildPackage({
         repoPath: dir,
         branch: branch!,
-        mappingProfileName: profile.profileName,
         selectedCommits: commits,
         files: plan.files,
         deletedServerPaths: plan.deletedServerPaths,
-        warnings: plan.warnings,
         mode: 'sub'
       })
 
@@ -270,11 +257,9 @@ describe('buildPackage — mode: direct (RT-56 §5.1)', () => {
         const result = await buildPackage({
           repoPath: repoDir,
           branch: 'main',
-          mappingProfileName: 'default',
           selectedCommits: [],
           files: plan.files,
           deletedServerPaths: plan.deletedServerPaths,
-          warnings: plan.warnings,
           exportParentDir: targetDir,
           mode: 'direct'
         })

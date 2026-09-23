@@ -1,27 +1,10 @@
 import { promises as fs } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { getHeadFileContent } from '../git/showFile'
-import type {
-  BuildPackageParams,
-  BuildPackageResult,
-  DeploySummary,
-  ExportMode
-} from '../../shared/types'
+import { buildExtractListText } from './extractListText'
+import type { BuildPackageParams, BuildPackageResult, ExportMode } from '../../shared/types'
 
-export type { BuildPackageParams, BuildPackageResult, DeploySummary }
-
-function formatIsoWithOffset(date: Date): string {
-  const pad = (n: number): string => String(n).padStart(2, '0')
-  const offsetMinutes = -date.getTimezoneOffset()
-  const sign = offsetMinutes >= 0 ? '+' : '-'
-  const offsetHours = pad(Math.floor(Math.abs(offsetMinutes) / 60))
-  const offsetMins = pad(Math.abs(offsetMinutes) % 60)
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-    `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
-    `${sign}${offsetHours}:${offsetMins}`
-  )
-}
+export type { BuildPackageParams, BuildPackageResult }
 
 function findCaseInsensitiveCollisions(paths: string[]): string[][] {
   const groups = new Map<string, Set<string>>()
@@ -32,10 +15,6 @@ function findCaseInsensitiveCollisions(paths: string[]): string[][] {
     groups.set(key, group)
   }
   return [...groups.values()].filter((group) => group.size > 1).map((group) => [...group])
-}
-
-function toLfText(lines: string[]): string {
-  return lines.length > 0 ? lines.join('\n') + '\n' : ''
 }
 
 // Export 결과물이 생성될 위치. 사용자가 부모 디렉터리를 지정하지 않으면
@@ -66,17 +45,8 @@ export async function deployDirHasContent(deployDir: string): Promise<boolean> {
 }
 
 export async function buildPackage(params: BuildPackageParams): Promise<BuildPackageResult> {
-  const {
-    repoPath,
-    branch,
-    mappingProfileName,
-    selectedCommits,
-    files,
-    deletedServerPaths,
-    warnings,
-    exportParentDir,
-    mode
-  } = params
+  const { repoPath, branch, selectedCommits, files, deletedServerPaths, exportParentDir, mode } =
+    params
 
   // §4.1: 파일을 쓰기 전에 대소문자만 다른 경로 충돌부터 검사한다.
   // 발견되면 아무것도 쓰지 않고 즉시 중단한다(자동 덮어쓰기 금지).
@@ -108,34 +78,16 @@ export async function buildPackage(params: BuildPackageParams): Promise<BuildPac
     await fs.writeFile(targetPath, content) // Buffer 그대로 — 텍스트 처리 없음 (§4.2)
   }
 
-  await fs.writeFile(
-    join(deployDir, 'deploy-files.txt'),
-    toLfText(files.map((f) => f.serverPath)),
-    'utf8'
-  )
-  await fs.writeFile(join(deployDir, 'delete-list.txt'), toLfText(deletedServerPaths), 'utf8')
-
-  const summary: DeploySummary = {
-    generatedAt: formatIsoWithOffset(new Date()),
-    repository: repoPath,
+  // RT-57(U-17) — deploy-files.txt/delete-list.txt/deploy-summary.json 3종을
+  // extract-list.txt 하나로 통합. 사람이 읽는 용도(프로그램이 읽지 않음).
+  const extractListText = buildExtractListText({
     branch,
-    mappingProfile: mappingProfileName,
+    generatedAt: new Date(),
     commits: selectedCommits,
-    summary: {
-      files: files.length,
-      added: files.filter((f) => f.status === 'added').length,
-      modified: files.filter((f) => f.status === 'modified').length,
-      deleted: deletedServerPaths.length
-    },
-    files,
-    deleted: deletedServerPaths,
-    warnings
-  }
-  await fs.writeFile(
-    join(deployDir, 'deploy-summary.json'),
-    JSON.stringify(summary, null, 2) + '\n',
-    'utf8'
-  )
+    files: files.map((f) => f.serverPath),
+    deleted: deletedServerPaths
+  })
+  await fs.writeFile(join(deployDir, 'extract-list.txt'), extractListText, 'utf8')
 
-  return { deployDir, summary }
+  return { deployDir }
 }

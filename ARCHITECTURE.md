@@ -159,9 +159,13 @@ Rename을 별도 상태로 분류하지 않는다(DR-008) — Delete+Add를 각�
 
 1. `git-deploy-extracted/` 디렉터리 생성
 2. Mapping Rule 엔진 출력에 따라 각 파일을 HEAD 버전 내용으로 복사 (원본 디렉터리 구조 유지, DR-011/012)
-3. `delete-list.txt` 기록 (DR-007)
-4. `deploy-files.txt` 기록
-5. `deploy-summary.json` 생성 (Files/Added/Modified/Deleted 카운트 등 — 필드 스키마는 상세 설계에서 확정)
+3. **`extract-list.txt` 생성(U-17, RT-57, 2026-09-23 — 기존 `delete-list.txt`·
+   `deploy-files.txt`·`deploy-summary.json` 3종 통합)**: 머리말(생성 시각·기준
+   브랜치·원본 커밋 목록, 최대 10줄) + 배포 대상 파일 트리 + 삭제 대상 파일 트리를
+   BOM 없는 UTF-8·LF 텍스트 한 파일로 기록한다. 사람이 읽는 용도이며 프로그램이
+   다시 읽지 않는다. 순수 함수 `treeText`/`buildExtractListText`
+   (`src/main/package/extractListText.ts`)로 분리돼 있어 시각을 주입해
+   결정적으로 테스트한다.
 
 ## 4.5 의존성 완결성 검사 엔진 (REQ-013, 2026-08-07 추가)
 
@@ -233,9 +237,9 @@ IPC 채널 2개만 추가된다: `git:listTrackedFiles`(자동완성 후보 풀 
 [Renderer] Deployment Preview / Deploy Files 렌더링 (사용자 확인, 개별/전체 파일 선택 — REQ-011)
         │ IPC ([Preview] 재계산 → [Export] 트리거)
         ▼
-[Main] Package Builder ── 파일 복사·delete-list 기록 ──► git-deploy-extracted/
+[Main] Package Builder ── 파일 복사 ──► git-deploy-extracted/
         ▼
-[Main] Package Builder ── Export ──► deploy-files.txt, delete-list.txt, deploy-summary.json
+[Main] Package Builder ── Export ──► extract-list.txt (RT-57, U-17)
 ```
 
 Main Process 내부 모듈 간 호출은 함수 호출이며, Renderer와의 경계에서만 IPC 직렬화 비용이 발생한다. Commit 목록처럼 큰 데이터는 IPC 페이로드를 페이지 단위로 나눠 전달한다(성능 요구사항 대응).

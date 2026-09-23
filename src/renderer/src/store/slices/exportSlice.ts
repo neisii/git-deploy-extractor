@@ -111,13 +111,11 @@ export const createExportSlice: StateCreator<AppState, [], [], ExportSlice> = (s
     const {
       repository,
       selectedBranch,
-      selectedProfile,
       commits,
       selectedHashes,
       deployFiles,
       filePatterns,
       deleteList,
-      warnings,
       exportParentDir,
       exportMode,
       exportTargetValidation
@@ -134,13 +132,12 @@ export const createExportSlice: StateCreator<AppState, [], [], ExportSlice> = (s
       const result = await api.package.export({
         repoPath: repository.path,
         branch: selectedBranch,
-        mappingProfileName: selectedProfile,
+        // extract-list.txt 머리말의 원본 커밋 목록(RT-57)에도 그대로 쓰인다.
         selectedCommits: commits.filter((c) => selectedHashes.has(c.hash)),
         // 어떤 파일이 실제 Export 대상인지의 판정 로직(REQ-019/DR-018)은
         // services/exportPlan.ts에 있다(RT-33).
         files: buildExportFiles(deployFiles, filePatterns),
         deletedServerPaths: deleteList.map((d) => d.path),
-        warnings,
         exportParentDir: exportParentDir ?? undefined,
         mode: exportMode
       })
