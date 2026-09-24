@@ -70,20 +70,11 @@
 /* `.file-list__body`는 `.fill-scroll`(flex:1+min-height:0, fill.css)만
    className으로 덧붙여 쓴다 — 이 컴포넌트만의 추가 CSS는 없다. */
 
-/* RT-41 — "전체 선택" TriStateCheckbox만 남은 헤더 행(예전 이름
-   .deploy-files-panel__columns). 리사이즈 핸들·"Local Path" 헤더 글자는
-   삭제됐다(컬럼이 하나뿐이고 행에 파일명만 보여 의미가 없어짐).
-   ~~RT-53부터는 ExtractTargetsPane의 "모두 되돌리기" 버튼도 이 클래스를
-   재사용한다~~ — M-54(2026-09-24) 정정: 그 버튼은 제목 줄 우측 끝으로
-   옮겨가 이 클래스를 더는 쓰지 않는다(IncludedFilesPane의 "전체 선택"만
-   남음). */
-.file-list__header-row {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  flex: 0 0 auto;
-  background: var(--color-background-soft);
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--ev-c-gray-3);
-}
+/* M-58(2026-09-24) — RT-41 이후 "전체 선택" TriStateCheckbox만 남아있던
+   전용 헤더 행(.file-list__header-row, sticky + 자체 border-bottom)을
+   없앴다. 체크박스는 .included-toolbar-row(filterPattern.css)로 옮겨
+   검색창 왼쪽에 둔다 — panel-frame__header(panel.css)가 title+toolbar
+   전체 아래에 이미 border-bottom을 갖고 있어서, 체크박스가 그 toolbar
+   안으로 들어가면 구분선을 새로 그릴 필요 없이 "검색 줄 바로 아래"로
+   자연히 옮겨진다. 스크롤 중에도 항상 보이던 성질도 애초에 toolbar가
+   PanelHeader(스크롤 영역 바깥)에 있어서 sticky 없이 그대로 유지된다. */

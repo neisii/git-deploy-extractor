@@ -107,8 +107,19 @@ export function IncludedFilesPane({ onOpenManualAdd }: IncludedFilesPaneProps): 
     </>
   )
 
+  // M-58(2026-09-24) — "전체 선택"이 전용 헤더 행(파일 목록 스크롤 영역
+  // 맨 위, sticky)에서 이 toolbar 줄 맨 왼쪽으로 옮겨왔다. 토글 로직은
+  // 그대로(화면에 보이는 items 전부를 Extract로 이동), 위치만 바뀐다.
   const toolbar = (
     <div className="included-toolbar-row">
+      <TriStateCheckbox
+        checked={false}
+        indeterminate={false}
+        disabled={items.length === 0}
+        onChange={() => toggleAll(items.map((item) => item.localPath))}
+        aria-label="전체 선택"
+        title="화면에 보이는 변경 파일을 모두 Extract 대상으로 이동"
+      />
       <div className="included-search-bar">
         <input
           type="text"
@@ -182,16 +193,6 @@ export function IncludedFilesPane({ onOpenManualAdd }: IncludedFilesPaneProps): 
     <PanelState kind="stale" />
   ) : (
     <div className="file-list__scroll fill-scroll">
-      <div className="file-list__header-row">
-        <TriStateCheckbox
-          checked={false}
-          indeterminate={false}
-          disabled={items.length === 0}
-          onChange={() => toggleAll(items.map((item) => item.localPath))}
-          aria-label="전체 선택"
-          title="화면에 보이는 변경 파일을 모두 Extract 대상으로 이동"
-        />
-      </div>
       <div className="file-list__body fill-scroll">
         <TreeList
           items={items}

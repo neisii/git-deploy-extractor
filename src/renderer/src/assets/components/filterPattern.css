@@ -2,7 +2,9 @@
    (검색창) */
 
 /* M-52(2026-09-24) — 검색창과 패턴 요약(FilterPatternBar)을 한 줄에
-   나란히(검색창 왼쪽, 패턴 요약 오른쪽) 배치한다. */
+   나란히(검색창 왼쪽, 패턴 요약 오른쪽) 배치한다. M-58(2026-09-24) —
+   "전체 선택" TriStateCheckbox가 자기 전용 행(.file-list__header-row,
+   filePane.css 참고)에서 이 줄 맨 왼쪽으로 옮겨왔다. */
 .included-toolbar-row {
   display: flex;
   align-items: center;
