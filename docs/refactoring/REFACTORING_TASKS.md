@@ -517,8 +517,8 @@ D1 AppShell                         레이아웃만
 
 - [ ] **RT-60** 문서 동기화(§6) — REQUIREDMENT / UI_UX_SPEC / DETAILED_DESIGN / RISK_ISSUES(§7.5 와이어프레임) / ARCHITECTURE / HANDOFF
 - [ ] **RT-61 (L4)** 루트의 `*.html` 3개(ambiguity-explainer, core-scenario-diagram, ui-wireframe)를 `docs/`로 이동 (이 문서와 목업은 `docs/refactoring/`으로 이동 완료)
-- [ ] **RT-62 (L5)** untracked 파일 정리(`resources/icon 복사본.png`, `.gitignore`에 vim 스왑 추가)
-- [ ] **RT-63** 릴리스: P3까지는 v0.6.0과 동작 동일 → 리팩토링 완료 후 별도 버전(예: v0.7.0) 결정(M-6)
+- [ ] **RT-62 (L5)** untracked 파일 정리(~~`resources/icon 복사본.png`~~ 삭제 완료 — 앱 아이콘 교체 작업 중 2026-09-24, 아래 참고, `.gitignore`에 vim 스왑 추가는 아직)
+- [x] **RT-63** 릴리스: P3까지는 v0.6.0과 동작 동일 → 리팩토링 완료 후 별도 버전(예: v0.7.0) 결정(M-6) — **v0.7.0으로 릴리스(2026-09-24)**. 사용자 요청("버전 갱신하고 릴리즈 올리자")으로 RT-60·RT-61·RT-62(vim 스왑) 완료 전에 먼저 진행하기로 확정 — 셋 다 문서·저장소 정리용이라 배포되는 앱 동작에는 영향이 없어, "P5 순서대로"보다 "지금 릴리스"를 우선했다. 이번 릴리스에 담긴 것: M-45~M-58(REQ-016 폐기, B안 검색 부활, 패턴 팝업 이동, 여러 UI 조정, `.DS_Store` 버그 수정, "전체 선택" 위치 이동) + 새 앱 아이콘(goraeng 캐릭터, nearest-neighbor 업스케일 후 LANCZOS 다운샘플로 계단현상 없이 생성). `npm version 0.7.0 --no-git-tag-version`으로 `package.json`/`package-lock.json` 갱신, 태그 전 `typecheck`·`lint`·`npm test`(235개)·`npm run build`·`npx playwright test`(전체 23개) 전부 통과 재확인
 
 ### 5.1 P4 작업 상세 명세
 

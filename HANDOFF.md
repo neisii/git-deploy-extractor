@@ -1212,10 +1212,34 @@ UI 변경 단계라 P0~P3의 "동작 불변" 원칙이 더 이상 적용되지 �
     `.file-list__header-row` 규칙 삭제. 목업도 동일하게 반영(`#chkAll`을
     `FileListHeaderRow`에서 `toolbarRow`로). 검증: `typecheck`·`lint`·
     `npm test`(235개)·전체 e2e(23개) 전부 통과, 실제 앱+목업 스크린샷
-    으로 확인 후 삭제. 상세는 §7 M-58. **아직 커밋 안 했습니다.**
+    으로 확인 후 삭제. 상세는 §7 M-58. **커밋 `5938cac`로 완료.**
 
-    **다음 착수 지점은 P5(RT-60 문서 동기화 → RT-61 루트
-    html 이동 → RT-62 untracked 정리 → RT-63 릴리스)입니다.**
+    **앱 아이콘 교체(2026-09-24, 커밋 `79181fc`)** — `Credit.tsx`가 쓰던
+    `goraeng.png`(50×50 도트 아트)를 앱 아이콘으로 채택. 단순 확대는
+    도트 경계가 흐려져서(bicubic/Lanczos류 부드러운 보간 때문), 대신
+    nearest-neighbor로 정확히 20배(1000×1000) 키운 크리스프 마스터를
+    만든 뒤 그 마스터에서 각 필요 해상도로 고품질 축소(LANCZOS)해
+    `build/icon.icns`(macOS)·`build/icon.ico`(Windows)·`build/icon.png`
+    + `resources/icon.png`(Linux, 512×512)를 생성. `electron-builder --mac
+    --dir`로 실제 `.app`을 만들어 그 안의 `.icns`를 꺼내 계단현상·블러
+    없이 선명함을 확인 후 빌드 산출물 삭제. `resources/icon 복사본.png`
+    (RT-62가 지목한 아이콘 교체 시도 흔적)도 이 작업 중에 삭제 — RT-62
+    남은 항목은 `.gitignore` vim 스왑 추가뿐.
+
+    **v0.7.0 릴리스(2026-09-24)** — 사용자 요청("버전 갱신하고 릴리즈
+    올리자")으로 RT-60(문서 동기화)·RT-61(루트 html 이동)·RT-62(vim
+    스왑) 완료 전에 먼저 진행 — 셋 다 배포 앱 동작과 무관한 문서/저장소
+    정리라 순서를 바꿔도 안전하다고 판단(§7 RT-63 참고). `npm version
+    0.7.0 --no-git-tag-version`으로 `package.json`/`package-lock.json`
+    갱신, 태그 전 전체 검증(`typecheck`·`lint`·`npm test` 235개·`build`·
+    `test:e2e` 23개) 재확인 통과. 이번 릴리스 범위: M-45~M-58 + 새 앱
+    아이콘. `HEAD`가 이미 `origin/main`과 동일(이번 세션 커밋들이 이미
+    푸시돼 있었음)해서 버전 커밋 하나만 추가로 푸시 후 `v0.7.0` 태그를
+    올려 `.github/workflows/release.yml`(태그 `v*` 푸시 시 mac·win 빌드
+    + GitHub Release 생성)을 트리거.
+
+    **다음 착수 지점은 P5 잔여(RT-60 문서 동기화 → RT-61 루트
+    html 이동 → RT-62 vim 스왑 `.gitignore` 추가)입니다.**
 
 먼저 이 순서로 읽어주세요 (짐작하지 말고 실제로 읽어야 합니다):
 
