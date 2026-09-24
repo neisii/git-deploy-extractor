@@ -50,8 +50,15 @@ test('커밋 선택 → Preview → Export까지 한 번에 끝난다', async ()
 
   await window.getByRole('button', { name: 'Preview' }).click()
 
-  // RT-51(M-14) — Preview 직후 기본값은 전체 Extract로 이동이라 FileB는
-  // 오른쪽 Extract 대상 목록에 바로 나타난다.
+  // M-14 정정(2026-09-23) — Preview 직후 기본값은 "전체 미선택"이라
+  // FileB는 왼쪽 "포함된 파일"에 남아있다 — 직접 체크해서 Extract로 옮긴다.
+  const includedRow = window.locator('.included-row', { hasText: 'FileB.txt' })
+  await expect(includedRow).toBeVisible()
+  // .check() 대신 .click()을 쓴다 — 체크하는 순간 이 행이 왼쪽 목록에서
+  // 사라져 Extract로 옮겨가므로, .check()의 클릭 후 "checked 상태 확인"
+  // 단계가 사라진 요소를 계속 기다리다 타임아웃난다(실측 확인).
+  await includedRow.locator('input[type="checkbox"]').click()
+
   const extractRow = window.locator('.extract-row', { hasText: 'FileB.txt' })
   await expect(extractRow).toBeVisible()
   // FileA는 이번 선택의 변경 파일이 아니므로 어느 목록에도 없어야 한다.

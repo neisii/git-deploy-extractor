@@ -182,6 +182,39 @@ describe('validateExportTarget', () => {
       }
     })
 
+    it('OS 메타데이터 파일(.DS_Store 등)만 있으면 빈 폴더로 간주해 통과한다(사용자 보고, 2026-09-24)', async () => {
+      const target = mkdtempSync(join(tmpdir(), 'gde-validate-metadata-only-'))
+      try {
+        writeFileSync(join(target, '.DS_Store'), 'binary-ish')
+        writeFileSync(join(target, 'Thumbs.db'), 'binary-ish')
+        writeFileSync(join(target, 'desktop.ini'), '[.ShellClassInfo]')
+        const result = await validateExportTarget({
+          repoPath: repoDir,
+          exportParentDir: target,
+          mode: 'direct'
+        })
+        expect(result).toEqual({ ok: true })
+      } finally {
+        rmSync(target, { recursive: true, force: true })
+      }
+    })
+
+    it('OS 메타데이터 파일과 실제 파일이 같이 있으면 여전히 NOT_EMPTY', async () => {
+      const target = mkdtempSync(join(tmpdir(), 'gde-validate-metadata-plus-real-'))
+      try {
+        writeFileSync(join(target, '.DS_Store'), 'binary-ish')
+        writeFileSync(join(target, 'existing.txt'), 'hello')
+        const result = await validateExportTarget({
+          repoPath: repoDir,
+          exportParentDir: target,
+          mode: 'direct'
+        })
+        expect(result).toMatchObject({ ok: false, code: 'NOT_EMPTY' })
+      } finally {
+        rmSync(target, { recursive: true, force: true })
+      }
+    })
+
     it('아직 존재하지 않는 경로는 direct에서도 통과(첫 Export)', async () => {
       const parent = mkdtempSync(join(tmpdir(), 'gde-validate-newparent-'))
       try {

@@ -30,8 +30,8 @@ test('Esc로 팝업이 닫히고, 닫히면 트리거 버튼으로 포커스가 
     .locator('input[type="checkbox"]')
     .check()
   await window.getByRole('button', { name: 'Preview' }).click()
-  // RT-51(M-14) — Preview 직후 기본값은 전체 Extract로 이동.
-  await expect(window.locator('.extract-row', { hasText: 'FileB.txt' })).toBeVisible()
+  // M-14 정정(2026-09-23) — Preview 직후 기본값은 전체 미선택.
+  await expect(window.locator('.included-row', { hasText: 'FileB.txt' })).toBeVisible()
 
   const trigger = window.getByRole('button', { name: '+ 파일 추가' })
   await trigger.click()

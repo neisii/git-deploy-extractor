@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useAppStore } from '../store/appStore'
-import type { CommitSearchMode } from '../../../shared/types'
 import { useDebouncedAction } from '../lib/useDebouncedAction'
 import { parseKeywordText } from '../services/commitQueryParams'
 import { CollapsibleSection } from './CollapsibleSection'
@@ -11,14 +10,14 @@ import { QueryFilterGroup } from './QueryFilterGroup'
 
 const SEARCH_DEBOUNCE_MS = 300
 
-// RT-49(§5.1 RT-49) — 메시지/파일명 + 포함 키워드(", "로 연결) + 제외
-// 개수를 하나의 요약 조각으로 합친다(RT-48 명세 예시: `메시지 "guarantee,
-// payment" · 제외 1`). 둘 다 없으면 모드 라벨만(기존 searchTerm 없을 때
-// searchModeLabel만 보이던 동작과 동일).
-function buildKeywordSummary(mode: CommitSearchMode, keywordText: string): string {
-  const label = mode === 'filename' ? '파일명' : '메시지'
+// 키워드(메시지 대상, 2026-09-23부터 파일명 모드 제거) 포함 키워드(", "로
+// 연결) + 제외 개수를 하나의 요약 조각으로 합친다(예: `"guarantee, payment"
+// · 제외 1`). 작성자/해시 필터와 같은 방식으로, 값이 없으면 요약에서
+// 아예 빠진다(null).
+function buildKeywordSummary(keywordText: string): string | null {
   const { include, exclude } = parseKeywordText(keywordText)
-  const parts = [include.length > 0 ? `${label} "${include.join(', ')}"` : label]
+  if (include.length === 0 && exclude.length === 0) return null
+  const parts = include.length > 0 ? [`"${include.join(', ')}"`] : []
   if (exclude.length > 0) parts.push(`제외 ${exclude.length}`)
   return parts.join(' · ')
 }
@@ -29,8 +28,6 @@ export function BranchSearchBar(): React.JSX.Element {
   const setBranch = useAppStore((s) => s.setBranch)
   const keywordText = useAppStore((s) => s.keywordText)
   const setKeywordText = useAppStore((s) => s.setKeywordText)
-  const searchMode = useAppStore((s) => s.searchMode)
-  const setSearchMode = useAppStore((s) => s.setSearchMode)
   const triggerSearch = useAppStore((s) => s.triggerSearch)
   const startDate = useAppStore((s) => s.startDate)
   const endDate = useAppStore((s) => s.endDate)
@@ -85,12 +82,13 @@ export function BranchSearchBar(): React.JSX.Element {
     }
   }
 
-  // RT-47(§5.1 RT-47), RT-48(U-8) — 접힌 요약: "<브랜치> · <메시지|파일명>
-  // ["<포함 키워드>"] [· 제외 N] · <시작>~<종료> · Merge 제외|포함
-  // [· 작성자 필터] [· 해시 필터]".
+  // RT-47(§5.1 RT-47), RT-48(U-8) — 접힌 요약: "<브랜치> [· "<포함 키워드>"
+  // [· 제외 N]] · <시작>~<종료> · Merge 제외|포함 [· 작성자 필터]
+  // [· 해시 필터]". 키워드가 비어있으면 그 조각은 통째로 빠진다(작성자/
+  // 해시 필터와 같은 방식).
   const summaryParts = [
     selectedBranch ?? '—',
-    buildKeywordSummary(searchMode, keywordText),
+    buildKeywordSummary(keywordText),
     `${startDate}~${endDate}`,
     excludeMerges ? 'Merge 제외' : 'Merge 포함',
     authorFilter.trim() ? '작성자 필터' : null,
@@ -113,7 +111,7 @@ export function BranchSearchBar(): React.JSX.Element {
         // 필드 폭 축소와 함께 적용) — 50:50이면 "조회 기간" 행이 줄바꿈돼
         // 왼쪽이 더 높아진다. 상세 근거는 commitQueryBar.css 주석 참고.
         storageKey="gde:splitRatio:queryGroups"
-        defaultRatio={0.67}
+        defaultRatio={0.58}
         minStartPx={320}
         minEndPx={330}
         start={
@@ -146,11 +144,6 @@ export function BranchSearchBar(): React.JSX.Element {
             onKeywordChange={(text) => {
               setKeywordText(text)
               debouncedKeyword.run()
-            }}
-            searchMode={searchMode}
-            onSearchModeChange={(mode) => {
-              cancelPendingSearches()
-              void setSearchMode(mode)
             }}
             authorFilter={authorFilter}
             onAuthorChange={(text) => {

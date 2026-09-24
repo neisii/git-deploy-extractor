@@ -28,6 +28,13 @@ test.beforeEach(async () => {
     .locator('input[type="checkbox"]')
     .check()
   await window.getByRole('button', { name: 'Preview' }).click()
+  // M-14 정정(2026-09-23) — Preview 직후 기본값은 전체 미선택이라, 이
+  // 파일의 세 테스트가 전제하는 "둘 다 Extract에서 시작"을 재현하려면
+  // 왼쪽 "src" 폴더 체크박스로 둘 다 옮겨야 한다.
+  await window
+    .locator('.included-row.tree-row--folder', { hasText: 'src' })
+    .locator('input[type="checkbox"]')
+    .click()
 })
 
 test.afterEach(async () => {
@@ -36,7 +43,7 @@ test.afterEach(async () => {
 })
 
 test('Extract 폴더 ×로 하위 전체를 되돌리고, 왼쪽 폴더 체크박스로 다시 한꺼번에 이동한다', async () => {
-  // RT-51(M-14) 기본값 — 둘 다 Extract에서 시작, "src" 폴더 하나에 2개.
+  // beforeEach에서 폴더 체크박스로 옮겨둔 상태 — 둘 다 Extract에서 시작, "src" 폴더 하나에 2개.
   await expect(window.locator('.file-pane__title-text', { hasText: 'Extract 대상' })).toContainText(
     '2개'
   )

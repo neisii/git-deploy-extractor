@@ -217,10 +217,10 @@ export const createAnalysisSlice: StateCreator<AppState, [], [], AnalysisSlice> 
       set({
         analyzing: false,
         summary: plan.summary,
-        // RT-51(M-14) — Preview 직후 기본값은 "전체 Extract로 이동"(기존
-        // 동작 유지). source:'changed'만 이후 included:false(미선택 변경
-        // 파일로 복귀)가 될 수 있다.
-        deployFiles: plan.files.map((f) => ({ ...f, included: true, source: 'changed' as const })),
+        // M-14 정정(2026-09-23, 사용자 요청) — Preview 직후 기본값을 "전체
+        // 미선택"으로 뒤집었다(RT-51 당시엔 "전체 Extract 유지"였음). 사용자가
+        // 직접 체크하기 전까지 Extract 대상을 임의로 채우지 않는다.
+        deployFiles: plan.files.map((f) => ({ ...f, included: false, source: 'changed' as const })),
         deleteList: plan.deletedServerPaths.map((path) => ({ path })),
         warnings: plan.warnings,
         analyzedSelection: requestSelection,

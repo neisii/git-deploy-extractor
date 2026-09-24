@@ -32,12 +32,21 @@ export function getDeployDir(
   return mode === 'direct' ? parent : join(parent, 'git-deploy-extracted')
 }
 
+// OS가 폴더를 열람할 때 스스로 만들어두는 메타데이터 파일들. 사용자가
+// Finder/탐색기로 안에 있던 파일을 전부 지워도 이런 파일은 남을 수
+// 있어(macOS Finder는 폴더를 열어보기만 해도 .DS_Store를 새로 만듦),
+// 육안으로는 빈 폴더인데도 "비어 있지 않음"으로 오판하게 된다 — 사용자
+// 보고(2026-09-24) 재현: `/Users/.../git-deploy-extracted` 안 내용물을
+// 다 지웠는데도 direct 모드 NOT_EMPTY가 계속 뜸, 원인은 남아 있던
+// .DS_Store.
+const IGNORED_METADATA_FILES = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini'])
+
 // 덮어쓰기 확인 팝업을 띄울지 판단하기 위해 IPC 핸들러가 먼저 호출한다.
 // 디렉터리가 없으면(첫 Export) false — 확인 없이 바로 진행.
 export async function deployDirHasContent(deployDir: string): Promise<boolean> {
   try {
     const entries = await fs.readdir(deployDir)
-    return entries.length > 0
+    return entries.some((entry) => !IGNORED_METADATA_FILES.has(entry))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
     throw error

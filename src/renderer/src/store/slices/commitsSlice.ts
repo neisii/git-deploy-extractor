@@ -55,7 +55,7 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
   // 호출자가 결정한다(케이스 A/B: Repository 전환·Branch 전환은 지움 —
   // 다른 저장소/Branch의 hash가 남아있으면 최종 Export가 "현재 선택된
   // Branch의 HEAD" 기준으로 엉뚱하게 해석될 위험이 있다. 그 외 — Reload,
-  // 검색어/모드, 조회 기간, 최대 개수 변경 — 는 전부 유지한다. 그래야
+  // 검색어, 조회 기간, 최대 개수 변경 — 는 전부 유지한다. 그래야
   // "검색 조건을 바꿔가며 여러 번 찾아 누적 체크"하는 워크플로우가 성립한다).
   loadCommitsFirstPage: async (keepSelection = false) => {
     const {
@@ -65,7 +65,6 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
       endDate,
       maxCount,
       keywordText,
-      searchMode,
       authorFilter,
       excludeMerges,
       hashFilterText
@@ -105,7 +104,6 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
             endDate,
             maxCount,
             keywordText,
-            searchMode,
             authorFilter,
             excludeMerges,
             hashFilterText
@@ -140,7 +138,6 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
       endDate,
       maxCount,
       keywordText,
-      searchMode,
       authorFilter,
       excludeMerges,
       hashFilterText,
@@ -167,7 +164,6 @@ export const createCommitsSlice: StateCreator<AppState, [], [], CommitsSlice> = 
             endDate,
             maxCount,
             keywordText,
-            searchMode,
             authorFilter,
             excludeMerges,
             hashFilterText

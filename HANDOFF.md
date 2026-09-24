@@ -982,10 +982,211 @@ UI 변경 단계라 P0~P3의 "동작 불변" 원칙이 더 이상 적용되지 �
     수정 안 됨**(§5/§5.1/§7처럼 "구현하면서 갱신하는 로그"가 아니라
     "한 번 쓰고 끝"인 스펙 섹션이라 구조상 자연스럽지만, 지난 이틀간
     43개 항목(P0~P4)을 구현하면서 실제 코드와 재대조된 적은 없다 —
-    RT-60(문서 동기화)이 원래 이걸 하려던 작업임). **사용자가 "쉬었다가
-    다시 얘기하자"며 중단** — §7 M-46에 미결 사항으로 기록해뒀다: 다음
-    세션에서 "화면만" UX A/B/C 중 하나를 고르거나, RT-60 착수 시 §0~§4/§8을
-    실제 구현과 대조 확인하는 걸 잊지 마세요.
+    RT-60(문서 동기화)이 원래 이걸 하려던 작업임). 사용자가 "쉬었다가
+    다시 얘기하자"며 중단했다가, **같은 날(2026-09-23) 대화를 재개해
+    "화면만" B안(검색 부활) 세부 설계까지 확정했다**(검색은 왼쪽
+    "포함된 파일"에만·오른쪽엔 안 만듦, 매칭은 `lib/matchesFileName.ts`
+    재사용, `screenOnly` 필드는 완전히 제거) — **하지만 구현 착수 전에
+    사용자가 "선택지를 잘못 이해했다"며 완전히 다른 화제로 전환해 B안
+    구현은 착수하지 않은 채 보류 중이다**(§7 M-46 갱신 완료).
+
+    **대신 "현재 구현 기준으로 요구사항 3건을 제시하겠다"며 시작된
+    새 작업 흐름에서 실제로 3건을 처리했다(전부 §7 M-47/M-14/M-13에
+    기록, 2026-09-23)**:
+    1. **M-47(신규)** — "파일 추가 팝업 초기 화면에 트리가 안 보인다"는
+       관찰로 시작했으나, 실제 앱을 Playwright로 열어 확인해보니 Preview
+       실행 후엔 트리가 바로 보여(U-19 정상 동작) 버그가 아니었다 — 사용자가
+       스스로 "Preview 실행 전에 팝업을 본 것 같다"고 정정(`AddFilesPopup.tsx`의
+       `headTreeFiles.length===0` 분기가 "Preview 후 사용할 수 있습니다"
+       안내만 보여주는 걸 착각). 여기서 나온 진짜 요구사항: **Preview
+       실행 전엔 "+ 파일 추가" 버튼 자체를 비활성화** — `IncludedFilesPane.tsx`에
+       `headTreeFiles` 구독 추가, `disabled={headTreeFiles.length===0}`
+       + 비활성 시 안내 `title`. 목업(`component-playground.html`의
+       `btnAdd`)도 `st.phase`가 `ready`/`depLoading`/`depNa`가 아니면
+       같은 방식으로 비활성화해 동기화.
+    2. **M-14 재정정** — Preview 직후 기본값을 "전체 Extract로 이동"(RT-51
+       결정)에서 **"전체 미선택"**으로 뒤집었다. `analysisSlice.ts`의
+       `runPreview`가 `included:true`→`included:false`로 매핑하도록 한 줄
+       수정. **파급 효과가 컸다** — 기존 e2e 7개 파일(`preview-export`·
+       `export-feedback`·`included-files-pane`·`reload-reset`·`tree-list`·
+       `work-area-popups`·`add-files-popup`)이 전부 "Preview 직후 자동으로
+       Extract에 들어가 있다"를 전제하고 있어서, 각 테스트에 "왼쪽에서
+       체크해서 Extract로 옮기는" 단계를 추가해야 했다. **그 과정에서 실제
+       버그급 함정을 하나 발견**: 체크하는 순간 그 행이 DOM에서 사라지는
+       체크박스(포함된 파일 목록의 체크박스는 체크하자마자 Extract로 이동해
+       사라짐)에 Playwright의 `.check()`를 쓰면, 클릭 후 "실제로 checked가
+       됐는지" 확인하는 내장 단계가 이미 사라진 요소를 계속 기다리다
+       30초 타임아웃난다 — `.click()`으로 바꾸면 그 사후 확인이 없어 문제
+       없다(전부 교체, 재현 스크립트로 원인 직접 확인). 처음엔 소스만
+       고치고 빌드 없이 e2e를 돌려서 8개가 실패했었는데(스테일 빌드),
+       재빌드 후에도 같은 8개가 또 실패해서 이 `.check()`/`.click()` 문제를
+       발견한 것 — 다음에 비슷한 "액션 성공 로그는 찍히는데 타임아웃나는"
+       Playwright 실패를 보면 이 패턴부터 의심하세요.
+    3. **M-13 재정정** — 화면 폭을 1100px에서 **1200px**로 올렸다. 목업
+       (`#optW` 슬라이더 min/max/기본값, `#stage` 초기 폭)과 실제 앱
+       (`src/main/index.ts`의 `width`) 둘 다 반영, 높이(760)는 그대로.
+
+    검증: `npm test`(238개)·`typecheck`·`lint`·`build`·`test:e2e`(24개,
+    전부 갱신된 채로 통과) 전부 통과.
+
+    **M-48(신규, 같은 날 이어서)** — "최대 [N]개" 입력창(`MaxCountField`,
+    조회 조건 왼쪽)의 폭이 브라우저 기본값 153px라 숫자 3~4자리엔
+    과하다는 지적으로 1/3인 51px로 줄였다(`MaxCountField.tsx`에
+    `className="max-count-field"` 추가, `commitQueryBar.css`에
+    `width:51px`). `npm test`(238개)·`typecheck`·`lint`·`build`·
+    `test:e2e`(24개) 전부 통과.
+
+    **M-49(신규, 2026-09-24) — REQ-016(파일명으로 커밋 검색) 전체 폐기**:
+    사용자가 키워드 필드의 "메시지"/"파일명" 검색 대상 라디오를 없애고
+    항상 메시지만 대상으로 하도록 요청했다. 범위가 커서(렌더러 UI뿐
+    아니라 `main/git/commits.ts`의 실제 git 분기, `shared/types.ts`의
+    `CommitSearchMode` 타입까지) 먼저 서브에이전트로 전체 참조 지점을
+    조사한 뒤 제거했다 — `shared/types.ts`(타입+필드)·`main/git/commits.ts`
+    (파일명 모드 git 분기 전체, `matchesFileName`, `listTrackedFiles`
+    import까지)·`main/git/commits.test.ts`(파일명 모드 테스트 2건)·
+    `services/commitQueryParams.ts`/`.test.ts`·`store/slices/
+    commitQuerySlice.ts`(state·액션·리셋)·`store/slices/commitsSlice.ts`
+    (파라미터 조립 2곳)·`store/repositorySlice.reload.test.ts`·
+    `components/QueryFilterGroup.tsx`(라디오 UI 삭제, 키워드 필드를 이제
+    작성자/해시와 완전히 같은 `<label>` 구조로 통일 — 예전엔 라디오 때문에
+    중첩 label을 피하려고 키워드만 `<div>`를 썼었다)·`components/
+    BranchSearchBar.tsx`(`buildKeywordSummary`가 모드 라벨 없이, 키워드가
+    비면 요약에서 통째로 빠지도록 — 작성자/해시 필터와 같은 방식)·
+    `commitQueryBar.css`(`--keyword` 변형·모드 라디오 CSS 삭제, 세 필드가
+    이제 완전히 같은 폭 규칙 공유)·`e2e/query-filter-group.spec.ts`(파일명
+    모드 테스트 삭제). **부수 발견**: 작업 중 자정을 넘겨(9/23→24)
+    `repositorySlice.reload.test.ts`의 날짜 재계산 테스트가 실패 — 원인은
+    테스트가 기준값을 `toISOString()`(UTC)으로 계산하는데 실제 로직
+    (`getDefaultDateRange`)은 로컬 시간 기준이라 KST 자정~오전 9시엔
+    하루 어긋나는, 작업과 무관한 기존 결함이었다 — 같은 함수로 기준값을
+    잡도록 고쳤다. REQUIREDMENT.md REQ-016은 "문서 관리 원칙"에 따라
+    RT-60(문서 정식 병합) 때 삭제 반영 예정, 지금은 안 건드림. 검증:
+    `npm test`(236개, 파일명 모드 테스트 2건 삭제로 238→236)·`typecheck`·
+    `lint`·`build`·`test:e2e`(23개, 24→23) 전부 통과. 상세는 §7 M-49.
+
+    **M-50(신규, 같은 날 이어서)** — "포함된 파일" 패턴 입력창이
+    `flex:1`이라 353px까지 늘어나 있던 걸 200px로 고정해달라는 요청 —
+    `filterPattern.css`의 `.filter-pattern-bar__row input[type='text']`를
+    `flex:0 0 200px;min-width:200px`로 변경. `npm test`(236개)·
+    `typecheck`·`lint`·`build`·`test:e2e`(23개) 전부 통과.
+
+    **B안 구현 완료(2026-09-24, §7 M-46 — "화면만" 체크박스 대신 검색
+    부활)** — 사용자가 "B안 구현 승인"으로 확정 설계를 그대로 구현하라고
+    했다. `screenOnly` 필드를 `FilePattern`(`lib/filePattern.ts`)에서
+    완전히 삭제하고, 그걸 참조하던 5곳(`exportPlan.ts`·
+    `useIncludedFilesView.ts`·`useExtractTargetsView.ts`·
+    `deployFilesSlice.ts`의 `addFilePatterns`/`togglePatternScreenOnly`·
+    `FilterPatternBar.tsx`/`FilterPatternsPopup.tsx`의 UI)를 전부
+    단순화(패턴은 다시 "항상 Export에 영향을 주는 영구 규칙"이라는
+    단일한 의미로 복귀). 대신 `deployFilesSlice.ts`에
+    `includedSearchTerm`/`setIncludedSearchTerm`을 새로 추가(생명주기는
+    `headTreeFiles`와 동일 — `emptyManualAddState`에 편입), 매칭은
+    AddFilesPopup이 쓰던 `lib/matchesFileName.ts`를 그대로 재사용,
+    `IncludedFilesPane.tsx` 툴바에 패턴 입력 줄 바로 위 검색창을 추가했다.
+    `e2e/included-files-pane.spec.ts`의 옛 "화면만" 테스트 2건을 검색
+    기능 테스트 2건으로 교체(화면만 걸러내고 Extract·선택 개수엔 영향
+    없음 확인, `*` 와일드카드 + 빈 결과 안내 문구 확인) — 첫 번째 기존
+    테스트 이름도 "Filter·검색 UI가 없고"에서 "상태 Filter UI가 없고"로
+    정정했다(검색 UI가 이제 다시 있으므로 이름이 거짓말이 됨). 검증:
+    `npm test`(233개, screenOnly 테스트 3건 삭제로 236→233)·`typecheck`·
+    `lint`·`build`·`test:e2e`(23개, 화면만 2건→검색 2건 교체라 개수
+    동일) 전부 통과, Playwright 임시 스크린샷(검색창 평시 모습 +
+    타이핑 중 필터링 동작)으로 육안 확인 후 삭제. REQUIREDMENT.md
+    REQ-025는 "문서 관리 원칙"에 따라 지금 안 건드리고 RT-60(문서 정식
+    병합) 때 "부활"로 반영 예정. 상세는 §7 M-46(해소로 상태 갱신)·U-5
+    행(정정 표시).
+
+    **M-51(신규, 같은 날 이어서, 2026-09-24)** — M-50(패턴 입력창
+    200px 고정) 직후 사용자가 "패턴 입력란을 파일 패턴 팝업으로
+    옮길까?"로 제안, 팝업에서 추가한 게 왼쪽 "포함된 파일" 목록에 즉시
+    반영되는지 확인 질문에 zustand 구독 구조(툴바·팝업·
+    `useIncludedFilesView` 모두 같은 `filePatterns` state 구독)를
+    근거로 즉시 반영됨을 답변, 순서도 시각화 후 "승인"으로 확정. 패턴
+    추가 입력 전체(모드 선택·텍스트 입력·`+추가` 버튼·붙여넣기 처리·
+    해석 오버레이·피드백 메시지)를 `FilterPatternBar.tsx`에서
+    `FilterPatternsPopup.tsx`로 이동 — 툴바는 "패턴: 활성 N개 [보기+추가]"
+    요약줄만 남았고, 이 버튼이 이제 패턴 추가의 유일한 진입점이라
+    `filePatterns.length===0`이어도 더는 비활성화하지 않는다. 팝업의
+    "패턴 0개면 자동으로 닫는다" 로직도 삭제(0개에서 추가를 시작하는
+    화면이 됐으므로). `e2e/included-files-pane.spec.ts`의
+    `clearAllPatterns` 헬퍼와 `e2e/work-area-popups.spec.ts`의 패턴
+    테스트를 새 흐름(팝업 먼저 열고 그 안에서 추가, 자동 닫힘 대신
+    직접 닫기)에 맞게 갱신. 검증: `typecheck`·`lint` 클린,
+    `npm test`(233개, 개수 변화 없음), `npx playwright test`(전체
+    23개) 전부 통과 — 추가로 임시 스크린샷 4장으로 툴바→팝업 열기→
+    입력→추가 후 칩 표시·피드백·툴바 "활성 N개" 실시간 갱신을 육안
+    확인 후 삭제. 상세는 §7 M-51.
+
+    **M-52(신규, 같은 날 이어서, 2026-09-24)** — "포함된 파일" 검색란
+    가로 길이를 절반으로 줄이고, 패턴 요약·"보기+추가" 버튼을 검색란
+    오른쪽 같은 줄에 배치해달라는 요청. `IncludedFilesPane.tsx` toolbar를
+    `.included-toolbar-row`(flex row)로 감싸 검색창과 `FilterPatternBar`를
+    한 줄에 배치, `.included-search-bar`는 `width:50%`, `.filter-pattern-bar`는
+    남는 공간을 채우며 오른쪽 끝에 붙도록(`flex:1;justify-content:flex-end`)
+    변경. 검증: `typecheck`·`lint`·`npm test`(233개)·전체 e2e(23개) 전부
+    통과, Playwright `boundingBox()` 실측(검색창 285px/전체 570px = 정확히
+    절반)으로 확인 후 임시 파일 삭제. 상세는 §7 M-52.
+
+    **M-53(버그 수정, 2026-09-24)** — 사용자가 "선택한 경로에 바로 추출"
+    (direct 모드)에서 실제로는 빈 폴더인데 NOT_EMPTY 오류가 계속 뜬다고
+    보고. 실측해보니 macOS Finder가 폴더를 열람하며 남긴 `.DS_Store`가
+    원인 — `deployDirHasContent`(`buildPackage.ts`)가 `fs.readdir` 결과
+    엔트리 개수만 보고 판단해서 점 파일도 "내용물"로 셌다. `.DS_Store`·
+    `Thumbs.db`·`desktop.ini`를 무시하도록 `deployDirHasContent`를
+    수정(이 함수는 direct 모드 NOT_EMPTY 판정과 sub 모드 덮어쓰기 확인
+    팝업 둘 다에서 쓰여 양쪽 다 같이 고쳐짐). `validateExportTarget.test.ts`에
+    2건 추가. 사용자의 실제 `~/Downloads/git-deploy-extracted`에서
+    `.DS_Store` 존재를 확인 후 삭제해 즉시 해결됨을 검증. 검증:
+    `typecheck`·`lint`·`npm test`(235개, +2)·전체 e2e(23개) 전부 통과.
+    상세는 §7 M-53.
+
+    **M-54(2026-09-24)** — "Extract 대상" 패널의 "모두 되돌리기" 버튼을
+    제목 텍스트 우측 끝에 배치해달라는 요청(좌측 "포함된 파일"의
+    "+ 파일 추가"와 같은 패턴). `ExtractTargetsPane.tsx`의 `title`을
+    프래그먼트로 바꿔 버튼을 카운터 텍스트 옆에 넣음(`FilePane`의
+    `.file-pane__title`이 이미 `justify-content:space-between`이라
+    추가 레이아웃 작업 없이 우측 정렬됨), 본문의 `.file-list__header-row`
+    div는 버튼이 빠지며 비어서 제거. `filePane.css`에
+    `.file-pane__title-action{flex-shrink:0}` 신설(`.add-file-button`과
+    역할은 같지만 이름이 안 맞아 분리). 검증: `typecheck`·`lint`·
+    `npm test`(235개)·전체 e2e(23개) 전부 통과, 스크린샷으로 확인 후
+    삭제. 상세는 §7 M-54.
+
+    **M-55(2026-09-24)** — 패턴 요약 텍스트를 "활성 N개"(포함/제외
+    합산)에서 "포함 N개/제외 N개"로 나눠 표기, 팝업을 여는 "보기+추가"
+    버튼 텍스트를 "설정"으로 변경해달라는 요청. `FilterPatternBar.tsx`가
+    `activePatterns`를 `mode`별로 나눠 `activeIncludeCount`/
+    `activeExcludeCount`를 계산, 배지 텍스트와 버튼 라벨을 각각 변경.
+    e2e 셀렉터(`getByRole('button', { name: '보기+추가' })`) 2곳을
+    `'설정'`으로 갱신. 검증: `typecheck`·`lint`·`npm test`(235개)·전체
+    e2e(23개) 전부 통과, 스크린샷으로 "패턴: 포함 1개/제외 1개 [설정]"
+    표기 확인 후 삭제. 상세는 §7 M-55.
+
+    **M-56(2026-09-24)** — "포함된 파일" 파일명 검색란 placeholder 문구를
+    바꾸고 싶다는 요청에 4가지 안(정보 유지+간결화/구체적 예시/최소화/
+    직접 입력)을 제시, AskUserQuestion으로 "구체적 예시로 대체" 채택.
+    `IncludedFilesPane.tsx`의 placeholder를 `파일명 검색... (* 와일드카드
+    가능, 화면에만 적용)` → `파일명 검색 (예: *.java)`로 변경. 검증:
+    `typecheck`·`lint`·`npm test`(235개)·전체 e2e(23개) 전부 통과. 상세는
+    §7 M-56.
+
+    **M-57(2026-09-24, "문서 업데이트할 것 남아있는지 확인" 요청에 대한
+    점검·조치)** — `REFACTORING_TASKS.md`·`HANDOFF.md`는 M-45~M-56 전부
+    빠짐없이 반영돼 있었지만, `component-playground.html`(목업)이
+    M-46(B안 검색 부활)부터는 동기화가 끊겨 있었음을 발견(이번 세션에서
+    M-13/M-14 재정정·M-47만 반영되고 그 뒤 M-50~M-52·M-55·M-56은 누락).
+    AskUserQuestion으로 "지금 갱신"/"동결(정책대로 방치)" 확인 — "지금
+    갱신" 채택. 목업에 검색(`includedSearchTerm`+`matchesFileName()`
+    이식)·패턴 입력을 팝업으로 이동·검색+패턴 요약 한 줄 배치·포함/제외
+    분리 표기·"설정" 버튼명·검색 placeholder까지 전부 반영. 목업은
+    typecheck/lint/test 대상이 아니라(실제 앱 코드 아님), 로컬 Playwright
+    Chromium 캐시가 오래돼(`npx playwright install chromium`으로 리비전
+    1243 설치) 임시 스크립트로 headless Chromium을 띄워 3가지 상태(검색+
+    패턴 요약 한 줄, 패턴 추가 입력이 팝업 안, 검색 필터링+빈 결과 안내)를
+    스크린샷으로 확인 후 스크립트·스크린샷 삭제. 상세는 §7 M-57.
+
+    **M-47·M-14 재정정·M-13 재정정·M-48·M-49·M-50·B안(M-46)·M-51·M-52·
+    M-53·M-54·M-55·M-56·M-57 전부 아직 커밋 안 했습니다.**
 
     **다음 착수 지점은 P5(RT-60 문서 동기화 → RT-61 루트
     html 이동 → RT-62 untracked 정리 → RT-63 릴리스)입니다.**

@@ -39,6 +39,14 @@ test('Reload하면 키워드 필터·커밋 선택·Extract 결과가 초기화�
     .locator('input[type="checkbox"]')
     .check()
   await window.getByRole('button', { name: 'Preview' }).click()
+  // M-14 정정(2026-09-23) — Preview 직후 기본값은 전체 미선택이라 직접
+  // 체크해서 Extract로 옮긴다.
+  // .check() 대신 .click() — 체크 즉시 행이 사라져(Extract로 이동)
+  // .check()의 사후 checked 확인이 타임아웃난다(실측 확인).
+  await window
+    .locator('.included-row', { hasText: 'FileA.txt' })
+    .locator('input[type="checkbox"]')
+    .click()
   await expect(window.locator('.extract-row', { hasText: 'FileA.txt' })).toBeVisible()
 
   await window.getByRole('button', { name: 'Reload' }).click()

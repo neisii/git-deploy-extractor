@@ -34,7 +34,10 @@ export interface DeployFileEntry {
 // analysisSlice도 같은 초기화가 필요해 여기서 export한다.
 export const emptyManualAddState = {
   headTreeFiles: [] as string[],
-  manuallyAddedPaths: [] as string[]
+  manuallyAddedPaths: [] as string[],
+  // B안(2026-09-24, §7 M-46) — 왼쪽 "포함된 파일" 화면 검색어. headTreeFiles와
+  // 같은 생명주기(DR-019) — `[Preview]` 재실행·Reload 때 함께 초기화된다.
+  includedSearchTerm: ''
 }
 
 // RT-31(S1) — appStore.ts에서 "포함된 파일"(좌측) + "누락된 의존성"(우측)을
@@ -47,8 +50,7 @@ export interface DeployFilesSlice {
   // REQ-019/DR-018 + RT-46(§3.1) — "포함된 파일"에만 적용(누락된 의존성은
   // 항상 .java만 나와 무의미). localStorage(gde:excludePatterns)로 동기
   // 초기화. 제외/포함 두 모드를 갖는다(예전 ExcludePatternEntry는 제외
-  // 전용이었음). RT-45 — 좌측 파일명 검색(REQ-025) 삭제로 상태 Filter/검색
-  // 상태는 없어지고, 그 대체 안전장치로 screenOnly 플래그가 추가됐다.
+  // 전용이었음).
   filePatterns: FilePattern[]
   // REQ-021/DR-019 — 배포 대상 파일 수동 추가. headTreeFiles는 팝업
   // 자동완성 후보 풀(선택된 Branch의 HEAD 트리 전체, Preview 성공 시
@@ -57,21 +59,21 @@ export interface DeployFilesSlice {
   // 전체 교체와 같은 시점) 함께 초기화된다(DR-019 "생명주기").
   headTreeFiles: string[]
   manuallyAddedPaths: string[]
+  // B안(2026-09-24, §7 M-46) — 왼쪽 "포함된 파일" 화면 검색어(파일명,
+  // `*` 와일드카드 가능 — lib/matchesFileName.ts 재사용). 패턴과 달리
+  // 항상 화면 표시에만 적용되고 Export 대상 계산에는 절대 관여하지
+  // 않는다 — REQ-025(v0.6.0 검색)가 하던 역할을 대신한다.
+  includedSearchTerm: string
+  setIncludedSearchTerm: (text: string) => void
 
   // RT-46 — 쉼표·줄바꿈으로 구분한 여러 패턴을 한 번에 추가한다(모드는
   // 입력 전체에 동일 적용). 이미 있는 (pattern, mode)는 새로 만들지 않고
-  // enabled만 켠다(screenOnly는 새로 추가되는 항목에만 적용 — 이미 있는
-  // 항목의 screenOnly는 togglePatternScreenOnly로 따로 바꾼다). 피드백
-  // 문구용으로 추가/활성화 개수를 반환한다.
+  // enabled만 켠다. 피드백 문구용으로 추가/활성화 개수를 반환한다.
   addFilePatterns: (
     rawInput: string,
-    mode: FilePattern['mode'],
-    screenOnly: boolean
+    mode: FilePattern['mode']
   ) => { added: number; activated: number }
   toggleFilePattern: (pattern: string, mode: FilePattern['mode']) => void
-  // RT-45(M-1) — 화면 필터링에만 적용되고 Export 대상 계산에는 영향을
-  // 주지 않는 패턴으로 전환/복귀한다.
-  togglePatternScreenOnly: (pattern: string, mode: FilePattern['mode']) => void
   removeFilePattern: (pattern: string, mode: FilePattern['mode']) => void
   addManualFile: (localPath: string) => Promise<void>
   removeManualFile: (localPath: string) => void
@@ -109,7 +111,7 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
   // 있으면 새로 추가하지 않고 enabled만 켠다(중복 방지 — 예전에 껐던
   // 패턴을 다시 입력했을 때 자연스럽게 "다시 켜기"로 동작). 모드는 입력
   // 전체(쉼표·줄바꿈으로 나뉜 여러 패턴)에 동일하게 적용된다.
-  addFilePatterns: (rawInput, mode, screenOnly) => {
+  addFilePatterns: (rawInput, mode) => {
     const inputs = parsePatternList(rawInput)
     if (inputs.length === 0) return { added: 0, activated: 0 }
 
@@ -126,7 +128,7 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
           }
         } else {
           added += 1
-          next = [...next, { pattern, mode, enabled: true, screenOnly }]
+          next = [...next, { pattern, mode, enabled: true }]
         }
       }
       saveFilePatterns(next)
@@ -145,15 +147,7 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
     })
   },
 
-  togglePatternScreenOnly: (pattern, mode) => {
-    set((state) => {
-      const next = state.filePatterns.map((p) =>
-        p.pattern === pattern && p.mode === mode ? { ...p, screenOnly: !p.screenOnly } : p
-      )
-      saveFilePatterns(next)
-      return { filePatterns: next }
-    })
-  },
+  setIncludedSearchTerm: (text) => set({ includedSearchTerm: text }),
 
   // REQ-024 — 토글과 달리 이력 자체에서 빠진다(확인 다이얼로그 없이 즉시
   // 처리 — 토글/removeManualFile과 동일한 관례).

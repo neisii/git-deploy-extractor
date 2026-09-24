@@ -182,7 +182,7 @@ describe('listCommits — 해시 필터 옵션 주입 방지', () => {
 // RT-48(U-8, M-4) — 키워드(포함/제외) 필터. `-P`(PCRE) + `\Q…\E`로
 // `--grep`의 기존 BRE 결함(`[skip ci]`가 문자 클래스로 오인되던 것)을
 // 해소하고, 리터럴 취급·대소문자 무시·OR/AND 결합을 실제 git으로 검증한다.
-describe('listCommits — 키워드(포함/제외), 메시지 모드', () => {
+describe('listCommits — 키워드(포함/제외)', () => {
   let dir: string
   const hashes: Record<string, string> = {}
 
@@ -298,53 +298,6 @@ describe('listCommits — 제외 키워드 페이지네이션(중복/누락 방�
     // 최신순(date desc)이므로 surviving도 같은 순서로 뒤집어 비교한다.
     expect(collected).toEqual([...surviving].reverse())
     expect(new Set(collected).size).toBe(surviving.length)
-  })
-})
-
-describe('listCommits — 키워드(포함), 파일명 모드', () => {
-  let dir: string
-
-  beforeAll(() => {
-    dir = initRepo('gde-keyword-filename-')
-    writeFixtureFile(dir, 'src/PaymentService.java', 'x')
-    writeFixtureFile(dir, 'src/GuaranteeService.java', 'x')
-    writeFixtureFile(dir, 'README.md', 'x')
-    commitAll(dir, 'init')
-  })
-
-  afterAll(() => cleanupRepo(dir))
-
-  it('포함 키워드 여러 개는 OR로 파일명 부분 일치', async () => {
-    const result = await listCommits({
-      repoPath: dir,
-      branch: 'main',
-      startDate: '2020-01-01',
-      endDate: '2030-01-01',
-      maxCount: 100,
-      skip: 0,
-      pageSize: 100,
-      searchMode: 'filename',
-      includeKeywords: ['payment', 'guarantee']
-    })
-    expect(result.commits).toHaveLength(1)
-  })
-
-  it('파일명 모드에서는 제외 키워드를 무시한다', async () => {
-    // README.md만 있는 커밋이 없어 결과가 0건이 되면(제외가 적용됐다면)
-    // "무시"를 증명할 수 없으니, 포함 없이 제외만 준 경우 필터 자체가
-    // 걸리지 않아 전체(1개 커밋)가 그대로 나오는지로 확인한다.
-    const result = await listCommits({
-      repoPath: dir,
-      branch: 'main',
-      startDate: '2020-01-01',
-      endDate: '2030-01-01',
-      maxCount: 100,
-      skip: 0,
-      pageSize: 100,
-      searchMode: 'filename',
-      excludeKeywords: ['payment']
-    })
-    expect(result.commits).toHaveLength(1)
   })
 })
 

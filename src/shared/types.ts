@@ -54,10 +54,6 @@ export interface RepositoryValidation {
   error?: string
 }
 
-// RISK_ISSUES.md §7.3 — 메시지 검색(`git log --grep`)과 파일명 검색(HEAD
-// 트리 파일명 부분 일치 → pathspec)은 완전히 다른 git 경로라 모드로 분리한다.
-export type CommitSearchMode = 'message' | 'filename'
-
 export interface ListCommitsParams {
   repoPath: string
   branch: string
@@ -66,12 +62,10 @@ export interface ListCommitsParams {
   maxCount: number
   skip: number
   pageSize: number
-  searchMode?: CommitSearchMode // 기본 'message'
   // RT-48(U-8) — 키워드 필드(줄바꿈 구분, `-` 접두는 제외)를 파싱한 결과.
-  // message 모드: 둘 다 하나의 `-P`(PCRE) `--grep` 패턴으로 결합
-  // (포함 OR · 제외 OR · 둘 다 있으면 AND, `main/git/keywordGrep.ts`
-  // 참고). filename 모드: includeKeywords만 파일명 부분 일치 OR로 쓰고
-  // excludeKeywords는 무시한다(§5.1 RT-48).
+  // 항상 커밋 메시지를 대상으로 한다(REQ-016 파일명 검색 모드는 2026-09-23
+  // 제거됨) — includeKeywords는 `-F -i --grep`을 반복(OR), excludeKeywords는
+  // 결과를 클라이언트에서 한 번 더 걸러낸다(둘 다 있으면 AND).
   includeKeywords?: string[]
   excludeKeywords?: string[]
   // REQ-022 — 작성자명 부분 일치(대소문자 무관). 여러 개면 OR(하나라도

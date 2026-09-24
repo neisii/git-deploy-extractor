@@ -63,13 +63,3 @@ test('힌트 툴팁은 값을 입력하고 포커스가 있는 동안만 보인�
   await window.getByLabel('작성자').click()
   await expect(hint).not.toBeVisible()
 })
-
-test('파일명 모드에서 제외(-) 줄이 있으면 힌트에 무시 경고가 추가된다', async () => {
-  await window.getByRole('radio', { name: '파일명' }).check()
-  const keyword = window.getByLabel('키워드')
-  await keyword.click()
-  await keyword.fill('-FileB')
-
-  const hint = window.locator('#query-filter-keyword-hint')
-  await expect(hint).toContainText('제외(-) 줄')
-})

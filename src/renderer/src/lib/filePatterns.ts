@@ -23,8 +23,9 @@ export function loadFilePatterns(): FilePattern[] {
       .map((entry) => ({
         pattern: entry.pattern as string,
         enabled: entry.enabled as boolean,
-        mode: entry.mode === 'include' ? 'include' : 'exclude',
-        screenOnly: entry.screenOnly === true
+        mode: entry.mode === 'include' ? 'include' : 'exclude'
+        // B안(2026-09-24) — screenOnly 필드 제거. 기존에 저장돼 있던 값은
+        // (릴리스 전 필드라 실사용자 데이터 없음) 그냥 무시된다.
       }))
   } catch {
     return []

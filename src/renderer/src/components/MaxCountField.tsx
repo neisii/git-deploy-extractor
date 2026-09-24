@@ -37,6 +37,7 @@ export function MaxCountField({ value, onCommit }: MaxCountFieldProps): React.JS
   return (
     <input
       type="number"
+      className="max-count-field"
       min={1}
       value={text}
       onFocus={() => {

@@ -6,9 +6,10 @@ import type { ElectronApplication, Page } from '@playwright/test'
 // RT-02 시나리오 ③ — 파일 수동 추가·팝업(REQ-021/DR-019). RT-51/52로
 // ManualAddPopup → AddFilesPopup, 좌측 체크 목록 → Extract 목록(오른쪽)
 // 모델로 바뀌었다: "add FileB" 커밋만 선택해 Preview하면 Preview 직후
-// 기본값(M-14, 전체 Extract로 이동)에 따라 FileB는 바로 Extract 대상에
-// 들어간다. FileA는 이 선택의 변경 파일이 아니라 deployFiles에 없고
-// HEAD 트리에는 있으므로 "+ 파일 추가" 팝업의 후보로 남는다.
+// 기본값(M-14 정정, 2026-09-23: 전체 미선택)에 따라 FileB는 왼쪽
+// "포함된 파일"에 남는다. FileA는 이 선택의 변경 파일이 아니라
+// deployFiles에 없고 HEAD 트리에는 있으므로 "+ 파일 추가" 팝업의
+// 후보로 남는다.
 
 let fixture: Fixture
 let electronApp: ElectronApplication
@@ -35,10 +36,10 @@ test('파일 추가 팝업에서 검색 → 추가 → 칩 표시 → Extract �
     .locator('input[type="checkbox"]')
     .check()
   await window.getByRole('button', { name: 'Preview' }).click()
-  // RT-51(M-14) — Preview 직후 기본값은 전체 Extract로 이동이라 FileB는
-  // 왼쪽(포함된 파일)이 아니라 오른쪽 Extract 목록에 바로 나타난다.
-  // RT-53 — 리프는 파일명만 표시한다(전체 경로는 title 툴팁).
-  await expect(window.locator('.extract-row', { hasText: 'FileB.txt' })).toBeVisible()
+  // M-14 정정(2026-09-23) — Preview 직후 기본값은 전체 미선택이라 FileB는
+  // 왼쪽(포함된 파일)에 남는다. RT-53 — 리프는 파일명만 표시한다(전체
+  // 경로는 title 툴팁).
+  await expect(window.locator('.included-row', { hasText: 'FileB.txt' })).toBeVisible()
 
   // FileA는 이번 선택의 변경 파일이 아니므로 어느 목록에도 아직 없다.
   await expect(window.locator('.included-row', { hasText: 'FileA.txt' })).toHaveCount(0)
@@ -76,7 +77,8 @@ test('검색어 없이 열면 HEAD 트리 전체를 탐색할 수 있다(RT-53, 
     .locator('input[type="checkbox"]')
     .check()
   await window.getByRole('button', { name: 'Preview' }).click()
-  await expect(window.locator('.extract-row', { hasText: 'FileB.txt' })).toBeVisible()
+  // M-14 정정(2026-09-23) — Preview 직후 기본값은 전체 미선택.
+  await expect(window.locator('.included-row', { hasText: 'FileB.txt' })).toBeVisible()
 
   await window.getByRole('button', { name: '+ 파일 추가' }).click()
   const popup = window.locator('.popup')

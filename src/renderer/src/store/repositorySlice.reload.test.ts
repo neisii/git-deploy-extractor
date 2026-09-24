@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { useAppStore } from './appStore'
 import { setApiForTesting, resetApiForTesting } from '../api'
+import { getDefaultDateRange } from '../../../shared/dateRange'
 import type { Api } from '../api'
 
 // RT-55(U-15, §5.1 RT-55) — Reload 전체 초기화 회귀 테스트. 조회 조건·
@@ -38,7 +39,6 @@ describe('reloadRepository (RT-55)', () => {
       endDate: '2020-01-02',
       maxCount: 5,
       keywordText: 'foo',
-      searchMode: 'filename',
       authorFilter: 'alice',
       excludeMerges: false,
       hashFilterText: 'deadbeef',
@@ -67,7 +67,6 @@ describe('reloadRepository (RT-55)', () => {
     expect(state.endDate).not.toBe('2020-01-02')
     expect(state.maxCount).toBe(100)
     expect(state.keywordText).toBe('')
-    expect(state.searchMode).toBe('message')
     expect(state.authorFilter).toBe('')
     expect(state.excludeMerges).toBe(true)
     expect(state.hashFilterText).toBe('')
@@ -95,7 +94,10 @@ describe('reloadRepository (RT-55)', () => {
 
     await useAppStore.getState().reloadRepository()
 
-    const today = new Date().toISOString().slice(0, 10)
+    // getDefaultDateRange()는 로컬 시간 기준(shared/dateRange.ts)이라
+    // toISOString()(UTC)로 비교하면 KST 자정~오전 9시 사이 날짜가 하루
+    // 어긋난다(2026-09-24 새벽에 재현·수정) — 같은 함수로 기준값을 잡는다.
+    const { endDate: today } = getDefaultDateRange()
     expect(useAppStore.getState().endDate).toBe(today)
   })
 

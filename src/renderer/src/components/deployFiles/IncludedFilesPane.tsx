@@ -28,8 +28,14 @@ export interface IncludedFilesPaneProps {
 // 접근을 가져도 된다.
 //
 // RT-45(U-3·U-5) — 상태 Filter(all/added/modified) UI와 파일명 검색
-// (REQ-025)을 삭제했다. 검색 대체 안전장치(M-1)는 FilterPatternBar의
-// screenOnly 옵션. `+ 파일 추가`를 toolbar 줄에서 제목 줄 우측으로 옮겼다.
+// (REQ-025)을 삭제했다. `+ 파일 추가`를 toolbar 줄에서 제목 줄 우측으로
+// 옮겼다.
+//
+// B안(2026-09-24, §7 M-46) — RT-45가 지운 파일명 검색을 다시 들였다.
+// 이번엔 패턴과 완전히 분리된 순수 화면 필터라 "화면만" 같은 예외
+// 플래그가 필요 없다(패턴은 다시 "항상 Export에 영향을 주는 영구
+// 규칙"이라는 단일한 의미로 돌아간다). 매칭은 AddFilesPopup이 쓰던
+// lib/matchesFileName.ts를 그대로 재사용(`*` 와일드카드, 대소문자 무시).
 //
 // RT-46 — 제외 패턴 입력·칩 UI를 FilterPatternBar로 뺐다(모드 선택
 // (제외/포함)·쉼표 다중 입력·해석 오버레이·"활성 K개" 요약이 새로 생겨
@@ -46,13 +52,16 @@ export function IncludedFilesPane({ onOpenManualAdd }: IncludedFilesPaneProps): 
   const deployFiles = useAppStore((s) => s.deployFiles)
   const filePatterns = useAppStore((s) => s.filePatterns)
   const missingDependencies = useAppStore((s) => s.missingDependencies)
+  const headTreeFiles = useAppStore((s) => s.headTreeFiles)
   const toggleIncluded = useAppStore((s) => s.toggleDeployFileIncluded)
   const toggleAll = useAppStore((s) => s.toggleAllDeployFiles)
   const isStale = useAppStore(selectIsAnalysisStale)
+  const searchTerm = useAppStore((s) => s.includedSearchTerm)
+  const setSearchTerm = useAppStore((s) => s.setIncludedSearchTerm)
   const expansion = useTreeExpansion(ALWAYS_OPEN)
 
   const { items, selectedCount, patternHiddenCount, includedSet, totalBeforeFilter, changedFiles } =
-    useIncludedFilesView(deployFiles, filePatterns)
+    useIncludedFilesView(deployFiles, filePatterns, searchTerm)
 
   // RT-52(§5.1 RT-52) — "+ 파일 추가" 버튼 배지 `누락 N`(분석 완료 +
   // N>0일 때만, 50 초과면 붉은색 — REQ-020 이월). AddFilesPopup이 아직
@@ -74,7 +83,12 @@ export function IncludedFilesPane({ onOpenManualAdd }: IncludedFilesPaneProps): 
         type="button"
         className="add-file-button"
         onClick={onOpenManualAdd}
-        title="HEAD 트리의 임의 파일을 배포 대상에 직접 추가하거나, 누락된 의존성을 확인합니다"
+        disabled={headTreeFiles.length === 0}
+        title={
+          headTreeFiles.length === 0
+            ? 'Preview를 먼저 실행하세요 — HEAD 트리를 아직 불러오지 않았습니다'
+            : 'HEAD 트리의 임의 파일을 배포 대상에 직접 추가하거나, 누락된 의존성을 확인합니다'
+        }
       >
         + 파일 추가
         {missingCount > 0 && (
@@ -93,15 +107,31 @@ export function IncludedFilesPane({ onOpenManualAdd }: IncludedFilesPaneProps): 
     </>
   )
 
-  const toolbar = <FilterPatternBar hiddenCount={patternHiddenCount} />
+  const toolbar = (
+    <div className="included-toolbar-row">
+      <div className="included-search-bar">
+        <input
+          type="text"
+          value={searchTerm}
+          placeholder="파일명 검색 (예: *.java)"
+          aria-label="포함된 파일 검색"
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+      <FilterPatternBar hiddenCount={patternHiddenCount} />
+    </div>
+  )
 
-  // RT-51(§5.1) — 빈 상태 문구 둘: 전부 Extract로 이동했으면(패턴과
-  // 무관하게 원본이 0개) 그 사실을, 원본은 있는데 패턴에 전부 걸렸으면
-  // 그 사실을 알려준다.
+  // RT-51(§5.1) — 빈 상태 문구: 전부 Extract로 이동했으면(패턴/검색과
+  // 무관하게 원본이 0개) 그 사실을 알려준다. B안(M-46) — 검색어가 있으면
+  // 그게 원인일 가능성이 높으니 우선 안내하고(패턴에도 걸렸을 수 있지만
+  // 검색어를 지워서 먼저 확인하면 됨), 없으면 기존대로 패턴 탓으로 본다.
   const emptyMessage =
     totalBeforeFilter === 0
       ? '미선택 변경 파일이 없습니다 — 전부 Extract 대상으로 이동했습니다'
-      : '패턴에 걸려 모든 변경 파일이 숨겨졌습니다'
+      : searchTerm.trim().length > 0
+        ? '검색어와 일치하는 파일이 없습니다'
+        : '패턴에 걸려 모든 변경 파일이 숨겨졌습니다'
 
   const renderLeaf = (item: IncludedFileItem, info: TreeLeafInfo): React.JSX.Element => {
     const isAdded = item.status === 'added'

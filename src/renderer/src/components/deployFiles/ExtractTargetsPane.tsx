@@ -38,10 +38,20 @@ export function ExtractTargetsPane(): React.JSX.Element {
   const { items, patternExcludedCount } = useExtractTargetsView(deployFiles, filePatterns)
 
   const title = (
-    <span className="file-pane__title-text">
-      Extract 대상 ({items.length}개
-      {patternExcludedCount > 0 && ` · 패턴 제외 ${patternExcludedCount}개`})
-    </span>
+    <>
+      <span className="file-pane__title-text">
+        Extract 대상 ({items.length}개
+        {patternExcludedCount > 0 && ` · 패턴 제외 ${patternExcludedCount}개`})
+      </span>
+      <button
+        type="button"
+        className="file-pane__title-action"
+        disabled={items.length === 0}
+        onClick={returnAllExtractItems}
+      >
+        모두 되돌리기
+      </button>
+    </>
   )
 
   const renderLeaf = (item: ExtractItem, info: TreeLeafInfo): React.JSX.Element => {
@@ -122,11 +132,6 @@ export function ExtractTargetsPane(): React.JSX.Element {
     <PanelState kind="stale" />
   ) : (
     <div className="file-list__scroll fill-scroll">
-      <div className="file-list__header-row">
-        <button type="button" disabled={items.length === 0} onClick={returnAllExtractItems}>
-          모두 되돌리기
-        </button>
-      </div>
       <div className="file-list__body fill-scroll">
         <TreeList
           items={items}

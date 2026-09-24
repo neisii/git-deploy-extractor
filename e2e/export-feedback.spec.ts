@@ -28,7 +28,14 @@ test.beforeEach(async () => {
     .locator('input[type="checkbox"]')
     .check()
   await window.getByRole('button', { name: 'Preview' }).click()
-  // RT-51(M-14) — Preview 직후 기본값은 전체 Extract로 이동.
+  // M-14 정정(2026-09-23) — Preview 직후 기본값은 전체 미선택이라 직접
+  // 체크해서 Extract로 옮긴다.
+  // .check() 대신 .click() — 체크 즉시 행이 사라져(Extract로 이동)
+  // .check()의 사후 checked 확인이 타임아웃난다(실측 확인).
+  await window
+    .locator('.included-row', { hasText: 'FileB.txt' })
+    .locator('input[type="checkbox"]')
+    .click()
   await expect(window.locator('.extract-row', { hasText: 'FileB.txt' })).toBeVisible()
   // RT-56 — Export 대상 목록 테스트만 있는 세 번째 케이스는 이 클릭이
   // 없어도 상관없지만, 공유 beforeEach라 항상 골라 둔다(GDE_E2E_EXPORT_DIR

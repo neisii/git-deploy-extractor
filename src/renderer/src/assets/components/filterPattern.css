@@ -1,29 +1,53 @@
-/* FilterPatternBar.tsx / FilterPatternsPopup.tsx */
+/* FilterPatternBar.tsx / FilterPatternsPopup.tsx / IncludedFilesPane.tsx
+   (검색창) */
 
-/* RT-46(§3.1·§5.1) — 파일 패턴(제외/포함) 입력 줄. "포함된 파일" 쪽
-   toolbar에만 렌더링된다(IncludedFilesPane.tsx가 조립). */
-.filter-pattern-bar {
+/* M-52(2026-09-24) — 검색창과 패턴 요약(FilterPatternBar)을 한 줄에
+   나란히(검색창 왼쪽, 패턴 요약 오른쪽) 배치한다. */
+.included-toolbar-row {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
   width: 100%;
 }
 
-.filter-pattern-bar__row {
+/* B안(2026-09-24, §7 M-46) — 왼쪽 "포함된 파일" 화면 검색창. Export
+   대상 계산과는 무관한 순수 화면 필터라 패턴과 시각적으로도 분리해
+   둔다. M-52(2026-09-24) — 패턴 요약을 같은 줄 오른쪽에 두게 되면서
+   전체 폭을 다 쓰지 않고 절반만 차지하도록 줄였다. */
+.included-search-bar {
+  width: 50%;
+}
+
+.included-search-bar input[type='text'] {
+  width: 100%;
+}
+
+/* RT-46(§3.1·§5.1) — 패턴 요약 줄. "포함된 파일" 쪽 toolbar에만
+   렌더링된다(IncludedFilesPane.tsx가 조립). M-51(2026-09-24) — 입력
+   자체는 FilterPatternsPopup으로 옮겨서, 이제 이 컴포넌트는 요약과
+   팝업 트리거 버튼만 갖는다. M-52(2026-09-24) — 검색창과 한 줄에
+   나란히 놓이면서 자기 줄을 독점하던 `flex-direction:column`·
+   `width:100%`를 버리고, 남는 공간을 채우는 오른쪽 칸으로 바뀌었다. */
+.filter-pattern-bar {
+  display: flex;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+/* M-51(2026-09-24) — 패턴 추가 입력 줄, FilterPatternsPopup 안(720px
+   폭)으로 옮겨왔다. 툴바 안 좁은 폭 제약이 없어졌으니 입력창이 남는
+   공간을 채우게 한다(flex:1, 최소 200px는 유지). */
+.filter-patterns-popup__add-row {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  margin-bottom: 4px;
 }
 
-.filter-pattern-bar__row input[type='text'] {
+.filter-patterns-popup__add-row input[type='text'] {
   flex: 1;
-  min-width: 160px;
-}
-
-/* RT-45(M-1) — "화면만" 체크박스(검색 대체 안전장치). */
-.filter-pattern-bar__screen-only {
-  white-space: nowrap;
+  min-width: 200px;
 }
 
 /* 입력창 바로 아래 겹쳐 뜨는 해석 미리보기 — 레이아웃(아래 목록 높이)에
@@ -59,24 +83,4 @@
   flex-wrap: wrap;
   gap: 4px;
   margin-bottom: 8px;
-}
-
-/* RT-45(M-1) — Chip 옆에 붙는 "화면만" 토글. 한 쌍으로 줄바꿈되도록
-   inline-flex로 묶는다. */
-.filter-patterns-popup__chip-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.filter-patterns-popup__screen-only-toggle {
-  font-size: 11px;
-  padding: 1px 6px;
-  opacity: 0.5;
-}
-
-.filter-patterns-popup__screen-only-toggle--on {
-  opacity: 1;
-  border-color: #67c090;
-  color: #67c090;
 }

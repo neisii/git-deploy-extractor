@@ -1,5 +1,4 @@
 import { runGit, assertSafeRevisionArg } from './exec'
-import { listTrackedFiles } from './lsTree'
 import type { CommitEntry, ListCommitsParams, ListCommitsResult } from '../../shared/types'
 import { getDefaultDateRange } from '../../shared/dateRange'
 
@@ -18,13 +17,6 @@ function parseCommitRecords(stdout: string): CommitEntry[] {
       const [hash, author, date, message] = record.split(FIELD_SEP)
       return { hash, author, date, message }
     })
-}
-
-// RISK_ISSUES.md §7.3 — 파일 경로의 마지막 조각(파일명)에 대한 부분 일치.
-// §7.2의 좌우 검색 필드와 매칭 기준을 통일했다.
-function matchesFileName(path: string, term: string): boolean {
-  const fileName = path.slice(path.lastIndexOf('/') + 1)
-  return fileName.toLowerCase().includes(term.toLowerCase())
 }
 
 // RT-48(U-8) — 대소문자 무관 부분 일치, 글자 그대로(정규식 아님).
@@ -138,7 +130,6 @@ export async function listCommits(params: ListCommitsParams): Promise<ListCommit
     excludeMerges,
     hashFilter
   } = params
-  const searchMode = params.searchMode ?? 'message'
 
   if (hashFilter && hashFilter.length > 0) {
     return listCommitsByHash(repoPath, hashFilter, skip, pageSize, maxCount)
@@ -182,25 +173,7 @@ export async function listCommits(params: ListCommitsParams): Promise<ListCommit
   const include = includeKeywords ?? []
   const exclude = excludeKeywords ?? []
 
-  let pathspecArgs: string[] = []
-  if (searchMode === 'filename') {
-    // RT-48 — 파일명 모드는 제외(`-`) 줄을 무시하고(§5.1), 포함 키워드가
-    // 하나도 없으면 파일명 필터 자체를 걸지 않는다.
-    if (include.length > 0) {
-      // 2단계 구현(RISK_ISSUES.md §7.3): ① HEAD 트리 전체 파일 목록 조회
-      // ② 파일명이 매치하는 경로만 pathspec으로 좁혀 git log에 전달.
-      const allPaths = await listTrackedFiles(repoPath, branch)
-      const matched = allPaths.filter((path) => include.some((k) => matchesFileName(path, k)))
-      // `git log ... --`처럼 `--` 뒤에 경로를 하나도 안 주면 "필터 없음"으로
-      // 해석되어 오히려 전체 커밋을 돌려준다(재현 테스트로 확인,
-      // DETAILED_DESIGN.md §0.1) — 매치가 0건이면 git을 호출하지 않고
-      // 바로 빈 결과를 반환해 이 함정을 피한다.
-      if (matched.length === 0) {
-        return { commits: [], hasMore: false }
-      }
-      pathspecArgs = ['--', ...matched]
-    }
-  } else if (include.length > 0) {
+  if (include.length > 0) {
     // RT-48(M-4) — `-F`(고정 문자열) + `--grep`을 여러 번(git이 기본
     // OR로 묶음, authors와 동일한 관례) 넘긴다. 애초에 정규식으로 해석하지
     // 않으므로 기존 `--grep=<검색어>`(BRE)의 `[skip ci]`가 문자 클래스로
@@ -209,7 +182,7 @@ export async function listCommits(params: ListCommitsParams): Promise<ListCommit
     for (const k of include) args.push(`--grep=${k}`)
   }
 
-  if (searchMode !== 'filename' && exclude.length > 0) {
+  if (exclude.length > 0) {
     // RT-48(M-4) — 원래 가정("-P PCRE + `\Q…\E`로 포함·제외를 패턴 하나에
     // 결합")은 실제 git(2.53)으로 재현한 결과 무효였다: `-P --grep`에
     // negative lookahead가 들어가면(예 `\A(?!fix)`) 그 커밋이 실제로는
@@ -239,7 +212,7 @@ export async function listCommits(params: ListCommitsParams): Promise<ListCommit
     return { commits, hasMore }
   }
 
-  args.push(`--skip=${skip}`, '-n', String(limit), ...pathspecArgs)
+  args.push(`--skip=${skip}`, '-n', String(limit))
 
   const result = await runGit(repoPath, args)
   if (result.exitCode !== 0) {

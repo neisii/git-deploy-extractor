@@ -1,4 +1,4 @@
-import type { CommitSearchMode, ListCommitsParams } from '../../../shared/types'
+import type { ListCommitsParams } from '../../../shared/types'
 
 // RT-32(S2) — commitsSlice의 loadCommitsFirstPage와 loadNextPage가 각자
 // 복붙해서 조립하던 listCommits 파라미터(필터 8개)를 여기 한 곳으로
@@ -50,7 +50,6 @@ export interface CommitQueryFilters {
   endDate: string
   maxCount: number
   keywordText: string
-  searchMode: CommitSearchMode
   authorFilter: string
   excludeMerges: boolean
   hashFilterText: string
@@ -74,7 +73,6 @@ export function buildListCommitsParams(
     maxCount: filters.maxCount,
     skip,
     pageSize,
-    searchMode: filters.searchMode,
     includeKeywords: include.length > 0 ? include : undefined,
     excludeKeywords: exclude.length > 0 ? exclude : undefined,
     authors: authors.length > 0 ? authors : undefined,

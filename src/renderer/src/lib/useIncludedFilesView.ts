@@ -4,6 +4,7 @@ import type { DeployFileStatus } from '../../../shared/types'
 import type { FilePattern } from './filePattern'
 import { hiddenByPatterns } from './filePattern'
 import { includedPathsSet } from './includedPathsSet'
+import { matchesFileName } from './matchesFileName'
 
 export interface IncludedFileItem {
   localPath: string
@@ -15,12 +16,11 @@ export interface IncludedFilesView {
   // REQ-020 — "선택". RT-51 이후로는 "이미 Extract로 이동한 변경 파일
   // 개수"를 뜻한다(화면에 보이는 이 목록 자체는 정의상 전부 미체크라 —
   // 아래 items 참고 — 필터와 무관한 절대값이라는 REQ-020 원칙은 그대로
-  // 유지된다). RT-45(M-1) — screenOnly 패턴은 화면만 걸러낼 뿐 Export
-  // 대상은 그대로라 여기서는 제외하고 계산한다(exportPlan.buildExportFiles와
-  // 같은 기준).
+  // 유지된다).
   selectedCount: number
-  // RT-45/46 — 파일 패턴(screenOnly 포함 전부)에 걸려 화면에서 숨겨진
-  // 개수(FilterPatternBar의 "· N개 숨김" 배지용).
+  // RT-45/46 — 파일 패턴에 걸려 화면에서 숨겨진 개수(FilterPatternBar의
+  // "· N개 숨김" 배지용). 검색어로 추가로 좁혀진 건 포함하지 않는다
+  // (검색은 별도 UI라 그쪽에서 자기 결과만 보면 된다).
   patternHiddenCount: number
   // "누락된 의존성" 중복 제거(RT-17)·AddFilesPopup 후보 필터링에 재사용된다
   // — deployFiles 원본에서 바로 유도되는 값이라 이 훅이 함께 계산해 둔다.
@@ -52,7 +52,12 @@ export interface IncludedFilesView {
 // 항목이 있는지"로 disabled를 판정).
 export function useIncludedFilesView(
   deployFiles: DeployFileEntry[],
-  filePatterns: FilePattern[]
+  filePatterns: FilePattern[],
+  // B안(2026-09-24, §7 M-46) — 검색은 왼쪽 "포함된 파일" 화면 표시에만
+  // 적용되고 Export 대상 계산에는 전혀 관여하지 않는다(패턴과 달리 항상
+  // 화면 전용). 빈 문자열이면 matchesFileName이 그대로 true를 반환해
+  // 필터가 통과한다.
+  searchTerm = ''
 ): IncludedFilesView {
   const changedFiles = useMemo(
     () => deployFiles.filter((f) => f.source === 'changed'),
@@ -60,27 +65,22 @@ export function useIncludedFilesView(
   )
   const unmoved = useMemo(() => changedFiles.filter((f) => !f.included), [changedFiles])
 
-  const items = useMemo((): IncludedFileItem[] => {
-    return unmoved
-      .filter((f) => !hiddenByPatterns(f.localPath, filePatterns))
-      .map((f) => ({ localPath: f.localPath, status: f.status }))
-  }, [unmoved, filePatterns])
-
-  const patternHiddenCount = unmoved.length - items.length
-
-  // Export는 screenOnly 패턴을 적용하지 않는다(services/exportPlan.ts와
-  // 동일한 필터) — "선택"(이미 Extract로 이동한 개수 중 실제 Export될
-  // 개수)이 이 기준을 따른다.
-  const exportRelevantPatterns = useMemo(
-    () => filePatterns.filter((p) => !p.screenOnly),
-    [filePatterns]
+  const patternFiltered = useMemo(
+    () => unmoved.filter((f) => !hiddenByPatterns(f.localPath, filePatterns)),
+    [unmoved, filePatterns]
   )
+  const patternHiddenCount = unmoved.length - patternFiltered.length
+
+  const items = useMemo((): IncludedFileItem[] => {
+    return patternFiltered
+      .filter((f) => matchesFileName(f.localPath, searchTerm))
+      .map((f) => ({ localPath: f.localPath, status: f.status }))
+  }, [patternFiltered, searchTerm])
+
   const selectedCount = useMemo(
     () =>
-      changedFiles.filter(
-        (f) => f.included && !hiddenByPatterns(f.localPath, exportRelevantPatterns)
-      ).length,
-    [changedFiles, exportRelevantPatterns]
+      changedFiles.filter((f) => f.included && !hiddenByPatterns(f.localPath, filePatterns)).length,
+    [changedFiles, filePatterns]
   )
 
   // RT-42 — 이 값은 패턴과 무관해서(원본 deployFiles만 있으면 됨) 다른

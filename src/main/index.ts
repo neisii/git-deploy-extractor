@@ -8,10 +8,10 @@ import { seedDefaultProfileIfEmpty } from './mapping/profileStore'
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    // RT-49(M-13 잔여분) — 목업 기본 화면 폭(U-10, 1100px)을 반영(기존
-    // 900px). 조회 조건 필터 그룹(최소 폭 왼쪽 320px/오른쪽 330px, M-42)이
-    // 900px에서는 항상 가로 스크롤이 뜨는 폭이라 넉넉히 맞췄다.
-    width: 1100,
+    // RT-49(M-13 잔여분, 2026-09-23 1200px로 정정) — 목업 기본 화면 폭
+    // (U-10)을 반영. 조회 조건 필터 그룹(최소 폭 왼쪽 320px/오른쪽 330px,
+    // M-42)이 900px에서는 항상 가로 스크롤이 뜨는 폭이라 넉넉히 맞췄다.
+    width: 1200,
     height: 760,
     show: false,
     autoHideMenuBar: true,

@@ -11,7 +11,6 @@ const baseFilters: CommitQueryFilters = {
   endDate: '2026-01-31',
   maxCount: 100,
   keywordText: '',
-  searchMode: 'message',
   authorFilter: '',
   excludeMerges: true,
   hashFilterText: ''
@@ -28,7 +27,6 @@ describe('buildListCommitsParams', () => {
       maxCount: 100,
       skip: 0,
       pageSize: 100,
-      searchMode: 'message',
       includeKeywords: undefined,
       excludeKeywords: undefined,
       authors: undefined,
