@@ -1,6 +1,6 @@
 # Git Deploy Extractor 상세 설계 문서
 
-> **현행 기준: v0.6.0.** 리팩토링 계획·스펙은 [`docs/refactoring/REFACTORING_TASKS.md`](docs/refactoring/REFACTORING_TASKS.md)에 있으며, 구현·병합 전까지 이 문서가 현행이다.
+> **현행 기준: v0.7.0**(2026-09-24 RT-60 문서 동기화로 갱신). §12·§13·§16은 옛 구조 설명이 남아있는 부분 역사적 기록이니 각 섹션 상단의 정정 안내를 먼저 확인하라 — 현재 설계는 §18(신규).
 
 > Version: 0.1
 > Status: Draft
@@ -104,78 +104,51 @@ interface MappingOverride {
 
 # 2. Export 포맷
 
-## 2.1 deploy-files.txt
+**정정(2026-09-24 문서 동기화, RT-57/U-17)**: 세 파일(`deploy-files.txt`·`delete-list.txt`·`deploy-summary.json`)이 `extract-list.txt` 하나로 통합됐다(REQ-010 정정). 아래는 이 파일 하나의 포맷이다.
 
-배포 대상 파일의 **Server Path**(Mapping Rule 적용 결과, `git-deploy-extracted/` 기준 상대경로)를 한 줄에 하나씩 기록한다.
+## 2.1 extract-list.txt
 
-```
-src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeListController.java
-src/main/resources/static/js/guarantee/list.js
-src/main/resources/templates/guarantee/list.html
-```
-
-## 2.2 delete-list.txt
-
-내부망에서 삭제해야 할 파일의 Server Path를 한 줄에 하나씩 기록한다.
+`src/main/package/extractListText.ts`의 `buildExtractListText()`가 생성한다. 사람이 읽기 좋은 고정폭 텍스트이며, 배포 대상 파일과 삭제 대상 파일을 각각 **폴더 트리**로 표현한다(UI의 TreeList와 같은 트리 빌드 로직 재사용 — 단일 자식 폴더 체인은 한 줄로 병합).
 
 ```
+================================================================
+ Extract 목록
+ 생성 시각   : 2026-08-04 09:12:00 +09:00
+ 기준 브랜치 : contract2/main
+ 원본 커밋 (2개)
+   b61e2ab  2026-07-30 11:02  hong  guarantee html
+   8dd9e91  2026-07-30 11:40  hong  guarantee backend
+================================================================
+
+================================================================
+ 배포 대상 파일 (18개)
+================================================================
+src/main/
+├── java/com/example/sell/interfaces/receipt/controller/
+│   └── GuaranteeListController.java
+└── resources/
+    ├── static/js/guarantee/
+    │   └── list.js
+    └── templates/guarantee/
+        └── list.html
+
+================================================================
+ 삭제 대상 파일 (2개)
+================================================================
 old.js
-src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeController.java
+src/main/java/com/example/sell/interfaces/receipt/controller/
+└── GuaranteeController.java
 ```
 
-**정정 (Rename 처리 단순화, 2026-08-04)**: 이전 초안은 Rename된 파일의 이전 경로에 `#` 주석으로 새 이름을 남기는 방식을 썼다. 하지만 DR-008이 "Rename을 별도로 감지하지 않는다"로 바뀌면서, 애초에 도구가 "이 삭제가 Rename 때문"이라는 사실 자체를 알지 못한다 — `--find-renames` 없이 git이 넘겨주는 정보는 그냥 삭제/추가일 뿐이다. 그래서 이 파일에는 더 이상 주석이 붙지 않는다. 위 예시의 `GuaranteeController.java`가 실제로는 `GuaranteeListController.java`로 이름이 바뀐 것인지는, Preview 화면에서 Added/Deleted 목록을 같이 보고 **사용자가 직접** 판단한다.
-
-## 2.3 deploy-summary.json
-
-```json
-{
-  "generatedAt": "2026-08-04T09:12:00+09:00",
-  "repository": "D:\\workspace\\contract2",
-  "branch": "contract2/main",
-  "mappingProfile": "contract2-prod",
-  "commits": [
-    { "hash": "b61e2ab", "author": "hong", "date": "2026-07-30T11:02:00+09:00", "message": "guarantee html" },
-    { "hash": "8dd9e91", "author": "hong", "date": "2026-07-30T11:40:00+09:00", "message": "guarantee backend" }
-  ],
-  "summary": {
-    "files": 18,
-    "added": 4,
-    "modified": 14,
-    "deleted": 2
-  },
-  "files": [
-    {
-      "localPath": "src/main/resources/templates/guarantee/list.html",
-      "serverPath": "src/main/resources/templates/guarantee/list.html",
-      "status": "modified"
-    },
-    {
-      "localPath": "src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeListController.java",
-      "serverPath": "src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeListController.java",
-      "status": "added"
-    }
-  ],
-  "deleted": [
-    "old.js",
-    "src/main/java/com/example/sell/interfaces/receipt/controller/GuaranteeController.java"
-  ],
-  "warnings": [
-    { "path": "src/main/java/com/example/sell/legacy/Deprecated.java", "reason": "HEAD에 존재하지 않음 (DR-009)" }
-  ]
-}
-```
-
-| 필드 | 설명 | 대응 |
+| 구간 | 설명 | 대응 |
 |---|---|---|
-| `commits` | 선택된 Commit 목록 (REQ-004) | UI Commit List 선택 결과 |
-| `summary` | 섹션 8 Deployment Preview 패널과 동일 집계 | Files/Added/Modified/Deleted (Renamed 없음, DR-008) |
-| `files[].status` | `added` \| `modified` (deleted는 별도 배열) | DR-008 |
-| `deleted` | 삭제된 파일(DR-007). Rename으로 인한 삭제와 구분하지 않는다 | delete-list.txt와 1:1 대응 |
-| `warnings` | HEAD 미존재로 제외된 파일 | DR-009 |
+| 머리말 | 생성 시각, 기준 브랜치, 선택된 커밋 이력(최대 10개 표시, 초과 시 "… 외 N개") | REQ-004 |
+| 배포 대상 파일 트리 | Export 시점 기준 Extract 대상 중 **활성 파일 패턴에 걸리지 않는** 파일만(Server Path 기준, REQ-026) | REQ-005~008, REQ-011 |
+| 삭제 대상 파일 트리 | DR-007. Rename으로 인한 삭제와 구분하지 않는다(DR-008) — 배포 대상 파일 트리의 Added 파일과 함께 보고 사용자가 직접 판단 |
 
-두 번째 `files[]` 예시(`GuaranteeListController.java`)와 `deleted`의 `GuaranteeController.java`가 실제로는 같은 파일의 Rename이지만, JSON도 이 둘을 연결 짓는 필드를 두지 않는다 — 그 판단은 도구가 아니라 Preview를 보는 사용자의 몫이다.
+**정정(Rename 처리 단순화, 2026-08-04)**: 삭제 대상 트리는 Rename의 "이전 이름"에 대한 주석을 달지 않는다 — DR-008에 따라 도구 자체가 그 삭제가 Rename 때문인지 알지 못한다(`--find-renames` 미사용).
 
-**인코딩/줄바꿈 결정**: 세 Export 파일 모두 UTF-8(BOM 없음), LF(`\n`) 줄바꿈으로 고정한다. Windows에서 생성하더라도 CRLF를 쓰지 않는다 — 내부망 git이 이 파일을 그대로 diff/commit할 때 줄바꿈 문자로 인한 불필요한 변경이 발생하지 않도록 하기 위함이다.
+**인코딩/줄바꿈 결정**: UTF-8(BOM 없음), LF(`\n`) 줄바꿈으로 고정한다. Windows에서 생성하더라도 CRLF를 쓰지 않는다 — 내부망 git이 이 파일을 그대로 diff/commit할 때 줄바꿈 문자로 인한 불필요한 변경이 발생하지 않도록 하기 위함이다.
 
 ---
 
@@ -267,25 +240,34 @@ git -C <repo> diff-tree --no-commit-id --name-status -r 4b825dc642cb6eb9a060e54b
 
 ## 4.3 Export 경로 계산 및 덮어쓰기 확인 (REQ-012, DR-013, RISK_ISSUES.md §7.1)
 
-**배경**: 지금까지 Export 결과물은 항상 저장소 루트 바로 아래 `git-deploy-extracted/`로 고정이었다(결정 이력 #20으로 이름은 고정 확정). 사용자가 원하는 위치로 결과물을 보내고 싶다는 요구에 따라, **이름이 아니라 부모 디렉터리 위치**만 사용자가 선택하도록 확장한다.
+**정정(2026-09-24 문서 동기화, RT-56/U-16)**: "선택 안 하면 저장소 루트가 기본값" 원칙을 폐지하고, 추출 위치 **방식**(폴더 생성/바로 추출)과 저장소 겹침 검증을 추가했다. 아래가 현재 설계다.
 
-**deployDir 계산** (`src/main/package/buildPackage.ts`의 `getDeployDir`):
+**deployDir 계산** (`src/main/package/buildPackage.ts`의 `getDeployDir(repoPath, exportParentDir, mode)`):
 
 ```
-deployDir = join(exportParentDir ?? repoPath, 'git-deploy-extracted')
+deployDir = mode === 'direct' ? exportParentDir : join(exportParentDir, 'git-deploy-extracted')
 ```
 
-`exportParentDir`는 사용자가 OS 네이티브 폴더 다이얼로그(`package:browseExportDir` IPC, `repository:browse`와 동일한 `dialog.showOpenDialog({ properties: ['openDirectory'] })` 패턴)로 선택한 절대 경로다. 미선택 시 `undefined`이며 이 경우 저장소 루트가 기본값이다.
+`exportParentDir`는 사용자가 OS 네이티브 폴더 다이얼로그(`package:browseExportDir` IPC)로 선택한 절대 경로다 — 더 이상 옵셔널이 아니다, 선택 전까지 `[Export]` 자체가 비활성화된다(REQ-012 정정). `mode`는 `'sub'`(기본값, 하위 폴더 생성) \| `'direct'`(바로 추출).
 
-**저장**: 선택한 `exportParentDir`는 Renderer의 `localStorage`(`gde:exportParentDir` 키, `src/renderer/src/lib/exportPath.ts`)에 저장되는 전역 설정이다 — 저장소별로 구분하지 않는다(DeployFilesPanel 컬럼 폭 저장, `columnWidths.ts`와 동일 패턴). 값을 한 번도 선택하지 않으면 아무것도 저장하지 않고, 매번 현재 `repository.path`를 기본값으로 계산한다.
+**저장**: `exportParentDir`는 `localStorage`(`gde:exportParentDir`), `exportMode`는 `localStorage`(`gde:exportMode`)에 저장되는 전역 설정이다(저장소 무관).
 
-**덮어쓰기 확인(DR-013)**: `package:export` IPC 핸들러가 `buildPackage()`를 호출하기 **전에** `deployDir`가 이미 존재하고 내용이 있는지(`fs.readdir`가 빈 배열이 아닌지 — 없으면 `ENOENT`를 잡아 false로 취급) 확인한다(`deployDirHasContent`). 있으면 `dialog.showMessageBox`(Main Process, 네이티브 모달 — Renderer에 별도 커스텀 모달 컴포넌트를 두지 않는다, `repository:browse`의 네이티브 다이얼로그와 같은 이유로 일관성 유지)로 "이미 있는 git-deploy-extracted를 덮어씁니다, 계속할까요?"를 확인한다(버튼: `['취소', '계속']`, `defaultId`/`cancelId` 모두 0 — 안전한 선택지가 기본값). 사용자가 "취소"를 선택하면 `buildPackage()`를 호출하지 않고 IPC가 `null`을 반환한다.
+**저장소 겹침 검증(신규, `src/main/package/validateExportTarget.ts`)**: `package:validateExportTarget`(UI 즉시 피드백)과 `package:export`(Export 직전 재검증) 둘 다 아래 우선순위로 판정한다.
 
-**`null` 반환의 의미**: `repository:browse`가 취소 시 `null`을 반환하는 기존 패턴을 그대로 재사용한다(`package:export`의 반환 타입이 `BuildPackageResult | null`로 바뀜). Renderer(`appStore.ts`의 `runExport`)는 `null`을 에러가 아니라 "사용자가 명시적으로 중단함"으로 처리한다 — `exportStatus`를 `'error'`가 아니라 `'idle'`로 되돌리고 에러 배너를 띄우지 않는다.
+1. `NO_PATH` — 경로 미선택
+2. `INSIDE_REPO` — 선택 위치가 저장소와 같거나 저장소 안의 하위 경로
+3. `CONTAINS_REPO` — 선택 위치가 저장소를 포함(저장소가 그 하위에 있음)
+4. `NOT_EMPTY`(`direct` 모드만) — 선택 경로가 비어 있지 않음
 
-**모듈 분리**: `getDeployDir(repoPath, exportParentDir)`와 `deployDirHasContent(deployDir)`를 `buildPackage()`와 별도로 export한다 — 덮어쓰기 확인은 실제 파일 삭제/쓰기가 시작되기 전에 IPC 핸들러 레벨에서 먼저 판단해야 하므로, `buildPackage()` 내부에 숨기지 않고 호출자가 먼저 조회할 수 있게 분리했다. `buildPackage.ts`는 여전히 Electron API(`dialog`)에 의존하지 않는 순수 fs 로직으로 유지한다 — Main Process 모듈 중 `ipc/handlers.ts`만 Electron API 경계를 직접 다루는 기존 설계(ARCHITECTURE.md §3)와 일관된다.
+겹침 판정은 `fs.realpath`로 심볼릭 링크·정션·`.`/`..`를 해소한 뒤 문자열 비교한다(존재하지 않는 경로 꼬리는 존재하는 접두사까지만 realpath하고 이어 붙인다 — 아직 한 번도 Export하지 않은 새 경로일 수 있으므로). 대소문자 정책은 §4.1과 같이 OS 기본값(mac/win 무시, linux 구분)을 따른다.
 
-**UI 파생 결정**: Mapping Profile 드롭다운은 FooterActionBar에서 숨긴다 — 현재 프로필이 `default` 하나뿐이고 사용자가 커스텀 프로필을 만들거나 편집할 UI가 없어 사실상 무의미하기 때문이다(내부 로직은 `selectedProfile: 'default'`를 그대로 계산에 넘기며 동작 변경 없음). 이 과정에서 `default` 프로필의 `overrides`가 항상 빈 배열이라는 게 재확인되었고(`profileStore.ts`), 즉 Server Path가 사실상 항상 Local Path와 같다는 뜻이므로 `DeployFilesPanel`의 **Server Path 열도 함께 삭제**했다(UI_UX_SPEC.md §2.6).
+**`NOT_EMPTY` 판정에서 OS 메타데이터 파일 제외(버그 수정, 2026-09-24)**: `deployDirHasContent(deployDir)`가 `fs.readdir` 엔트리 개수만으로 "비어 있음"을 판정하면, macOS Finder가 폴더를 열람하며 자동으로 남기는 `.DS_Store`(Windows는 `Thumbs.db`/`desktop.ini`) 때문에 실제로는 빈 폴더인데도 "비어 있지 않다"고 오판한다. `IGNORED_METADATA_FILES` 세트(`.DS_Store`·`Thumbs.db`·`desktop.ini`)에 속한 엔트리는 "내용물"로 치지 않도록 수정했다 — `entries.some(e => !IGNORED_METADATA_FILES.has(e))`. 이 함수는 `direct` 모드의 `NOT_EMPTY` 판정과 `sub` 모드의 덮어쓰기 확인(아래) 양쪽에서 공유되므로 둘 다 같이 고쳐진다.
+
+**덮어쓰기 확인(DR-013, `sub` 모드만)**: `package:export` IPC 핸들러가 `buildPackage()`를 호출하기 전에 `deployDirHasContent(deployDir)`로 확인한다. 있으면 `dialog.showMessageBox`(`['취소', '계속']`, 안전한 선택지가 기본값)로 확인한다. `direct` 모드는 애초에 완전히 빈 폴더에서만 허용되므로(위 `NOT_EMPTY` 검증) 이 확인창 자체가 뜨지 않는다. 사용자가 "취소"를 선택하면 `buildPackage()`를 호출하지 않고 IPC가 `null`을 반환한다 — Renderer는 이를 에러가 아니라 "사용자가 명시적으로 중단함"으로 처리한다(`exportStatus`를 `'idle'`로).
+
+**모듈 분리**: `getDeployDir`·`deployDirHasContent`를 `buildPackage()`와 별도로 export한다 — 덮어쓰기 확인/겹침 검증은 실제 파일 삭제/쓰기가 시작되기 전에 IPC 핸들러 레벨에서 먼저 판단해야 하므로다. `buildPackage.ts`는 여전히 Electron API(`dialog`)에 의존하지 않는 순수 fs 로직으로 유지한다.
+
+**UI 파생 결정**: Mapping Profile 드롭다운은 여전히 FooterActionBar에서 숨겨져 있다(v0.6.0부터, `selectedProfile: 'default'` 내부 고정). `default` 프로필의 `overrides`가 항상 빈 배열이라 Server Path가 사실상 항상 Local Path와 같으므로, IncludedFilesPane/ExtractTargetsPane 모두 Local Path 단일 컬럼만 보여준다.
 
 ---
 
@@ -388,46 +370,34 @@ deployDir = join(exportParentDir ?? repoPath, 'git-deploy-extracted')
 
 ---
 
-# 8. 커밋 선택 유지 및 파일명 검색 설계 (REQ-015/016, DR-015, RISK_ISSUES.md §6.1/§7.3)
+# 8. 커밋 선택 유지/초기화, 키워드 검색 설계 (REQ-003/015, DR-015, RISK_ISSUES.md §6.1/§7.3)
 
 ## 8.1 선택 유지/초기화 (DR-015)
 
-`loadCommitsFirstPage(keepSelection = false)`가 Renderer(`appStore.ts`)의 모든 커밋 재조회 경로의 단일 진입점이다. 호출자가 `keepSelection`을 명시적으로 넘긴다.
+`loadCommitsFirstPage(keepSelection = false)`가 Renderer(`commitsSlice.ts`)의 모든 커밋 재조회 경로의 단일 진입점이다. 호출자가 `keepSelection`을 명시적으로 넘긴다.
 
 | 호출자 | keepSelection | 근거 |
 |---|---|---|
 | `browseRepository()` | `false`(기본값) | DR-015 예외 (a) — 다른 저장소 |
 | `setBranch()` | `false`(기본값) | DR-015 예외 (b) — 다른 Branch |
-| `reloadRepository()` | `true` | 같은 저장소를 다시 읽을 뿐, 예외 (a)/(b) 어느 쪽도 아님 |
-| `setSearchTerm()`(디바운스), `triggerSearch()`, `setSearchMode()`, `setDateRange()`, `setMaxCount()` | `true` | 검색 조건만 바뀜 — REQ-015가 유지를 요구하는 대상 |
+| `reloadRepository()` | **`false`**(정정, 2026-09-24 RT-47/RT-55·U-15) | Reload가 조회 조건·분석 결과까지 전부 기본값으로 되돌리는 동작으로 바뀌면서, 선택도 함께 지우는 세 번째 예외가 됐다(§8.1 정정 참고) — `resetQuery()`·`clearSelection()`도 함께 호출 |
+| 키워드/작성자/해시/기간/최대 개수 변경, `triggerSearch()` | `true` | 검색 조건만 바뀜 — REQ-015가 유지를 요구하는 대상 |
 
-`keepSelection=false`일 때만 `set()` 페이로드에 `selectedHashes: new Set()`을 포함시키고, `true`면 아예 그 필드를 생략해 기존 `Set`을 그대로 둔다(스프레드 조건부 포함 — `...(keepSelection ? {} : { selectedHashes: new Set() })`).
+`keepSelection=false`일 때만 `set()` 페이로드에 `selectedHashes: new Set()`을 포함시키고, `true`면 아예 그 필드를 생략해 기존 `Set`을 그대로 둔다.
 
-**Preview 관련 상태는 keepSelection과 무관하게 항상 리셋된다**(`summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection`/의존성 상태). `commits` 목록 자체가 매번 새로 로드되므로, `selectedHashes`가 그대로여도 "마지막 Preview가 지금 선택과 일치하는가"는 항상 다시 확인시킨다 — `isStale`이 즉시 true가 되어 사용자가 `[Preview]`를 다시 눌러야 한다(REQ-015 이전부터 있던 안전장치, 이번 기능으로 바뀌지 않음).
+**정정(Reload 전체 초기화, 2026-09-24, RT-47/RT-55)**: 예전엔 Reload가 "같은 저장소를 다시 읽는 것뿐"이라 DR-015 예외 (a)/(b) 어느 쪽도 아니라고 보고 선택을 유지했다. 하지만 Reload 시점에 분석 결과(Extract 대상 포함)가 폐기되는데 선택만 남아있으면 화면과 실제 상태가 어긋나 보이는 문제(결정 이력 #33과 같은 유형)가 있어, `reloadAll()`이 `resetQuery()`(조회 조건을 REQ-003 기본값으로) + `clearSelection()` + `loadCommitsFirstPage(false)`를 순서대로 호출하도록 바꿨다. 유지되는 것은 파일 패턴(REQ-026)·Export 경로·화면 접힘 상태·SplitPane 비율뿐이다.
+
+**Preview 관련 상태는 keepSelection과 무관하게 항상 리셋된다**(`summary`/`deployFiles`/`deleteList`/`warnings`/`analyzedSelection`/의존성 상태). `commits` 목록 자체가 매번 새로 로드되므로, `selectedHashes`가 그대로여도 "마지막 Preview가 지금 선택과 일치하는가"는 항상 다시 확인시킨다 — `isStale`이 즉시 true가 되어 사용자가 `[Preview]`를 다시 눌러야 한다.
 
 ## 8.2 레이스 컨디션 가드 (§6.1 케이스 C)
 
-`runAnalysis()`가 IPC 응답을 받은 시점에, 요청을 보낸 시점의 선택(`requestSelection`)과 **현재** `selectedHashes`/`selectedBranch`/`selectedProfile`이 여전히 같은지 확인한다(`selectionMatches()` — `selectIsAnalysisStale`과 비교 로직을 공유). 다르면(계산 중 사용자가 체크박스를 바꿨다면) 결과를 적용하지 않고 조용히 버린다 — `analyzedSelection`이 "요청 시점의 옛 선택"을 가리키게 되는 걸 막기 위함이다. 이 가드는 메인 Preview 계산과 §7.2 의존성 체이닝 호출 양쪽에 동일하게 적용된다(성공/실패 경로 전부).
+`runAnalysis()`가 IPC 응답을 받은 시점에, 요청을 보낸 시점의 선택(`requestSelection`)과 **현재** `selectedHashes`/`selectedBranch`가 여전히 같은지 확인한다(`selectionMatches()` — `selectIsAnalysisStale`과 비교 로직을 공유). 다르면(계산 중 사용자가 체크박스를 바꿨다면) 결과를 적용하지 않고 조용히 버린다. 이 가드는 메인 Preview 계산과 §6.6 의존성 체이닝 호출 양쪽에 동일하게 적용된다(성공/실패 경로 전부). RT-11(R2)로 커밋 조회 자체에도, RT-17(R4·R5)로 분석 요청에도 같은 세대 비교 패턴(`lib/requestGuard.ts`의 `createRequestGuard`)이 적용됐다 — 자세한 근거는 §8.2 정정 참고.
 
-REQ-015로 선택이 여러 검색을 거쳐 누적되면서 "Preview 계산 중에 다시 검색해 선택을 바꾸는" 시나리오가 실사용에서 더 자주 노출될 수 있다고 판단해, 이번 세션에서 §6.1 케이스 C(원래 미결정)를 같이 고쳤다(사용자 확인).
+**정정(요청 ID 가드 공용화, 2026-09-24 문서 동기화, RT-11/RT-17)**: 커밋 조회(`loadCommitsFirstPage`)와 분석 요청(Preview) 둘 다 "새 요청을 시작할 때 세대(generation) 번호를 증가시키고, 응답이 왔을 때 그 세대가 여전히 최신인지 비교" 패턴을 쓴다 — `lib/requestGuard.ts`의 `createRequestGuard()`가 이 로직을 한 곳으로 모았다. stale 응답은 상태 플래그(`loading`/`analyzing`)를 건드리지 않고 조용히 버려진다 — 무효화는 "응답이 도착했을 때"가 아니라 "선택이 바뀌는 시점"에 이미 새 세대가 발급되므로, 늦게 도착한 옛 응답은 자동으로 무시된다.
 
-## 8.3 파일명으로 커밋 검색 (REQ-016)
+## 8.3 ~~파일명으로 커밋 검색 (REQ-016)~~ (폐기)
 
-**2단계 git 명령** (`src/main/git/commits.ts`):
-
-```
-1. git ls-tree -r <branch> --name-only        (listTrackedFiles 재사용, §6.3과 동일 함수)
-2. 파일명(경로 마지막 조각) 부분 일치로 클라이언트 측 필터링
-3. git log <branch> --since --until --pretty=format:... --skip --n -- <path1> <path2> ...
-```
-
-기존 메시지 검색(`--grep=<term> -i`)과는 완전히 다른 인자 구성이라 `listCommits()` 내부에서 `searchMode`로 분기한다 — `searchMode==='filename'`이면 `--grep`을 붙이는 대신 pathspec(`--`)을 맨 끝에 붙인다.
-
-**재현으로 확인한 git 함정 (§0.1)**: `git log ... --`처럼 `--` 뒤에 경로를 하나도 안 주면 pathspec이 "없음"으로 해석되어 **필터링되지 않은 전체 커밋**을 돌려준다 — 빈 배열을 "매치 없음"으로 의도했다면 정반대의 결과가 나오는 함정이다. 실제 저장소로 재현해 확인했고, 매치된 경로가 0건이면 git을 아예 호출하지 않고 `{ commits: [], hasMore: false }`를 바로 반환하는 방식으로 회피했다.
-
-pathspec 필터링과 `--skip`/`-n` 페이지네이션이 함께 정상 동작하는지도 재현 테스트로 확인했다(`--skip=1 -n 1 -- a b`가 필터링된 3건 중 2번째 항목만 정확히 반환).
-
-**모드 전환 UI**: BranchSearchBar에 "검색 대상 : (●메시지 ○파일명)" 라디오 토글 추가(RISK_ISSUES.md §7.5 TO-BE 와이어프레임 그대로). 모드를 바꾸면 같은 검색어로 즉시 재조회하며(`keepSelection=true`), 검색어 자체는 지우지 않는다.
+**폐기(2026-09-24 문서 동기화, 사용자 요청)**: REQ-016이 폐기되면서 이 절의 2단계 git 명령·`searchMode` 분기·모드 전환 라디오 UI가 전부 삭제됐다. 키워드는 이제 항상 커밋 메시지만 대상으로 한다(REQ-003 참고) — `git log --grep=<term> -i --extended-regexp`로 포함 키워드를 OR 결합하고, 제외 키워드(`-` 접두)에 매치되는 커밋을 결과에서 추가로 걸러낸다. `listTrackedFiles`/pathspec 관련 코드(`main/git/commits.ts`)는 삭제됐다 — 여전히 필요한 `listTrackedFiles` 소스는 AddFilesPopup(§13 정정)이 별도로 쓴다.
 
 ---
 
@@ -451,7 +421,10 @@ pathspec 필터링과 `--skip`/`-n` 페이지네이션이 함께 정상 동작�
 | `--skip` 페이지네이션 성능 | 기본값(maxCount=100)에서는 사실상 미사용. `maxCount`를 크게 늘릴 때만 유효한 우려로 축소 | Commit 조회 기본 범위 축소로 완화됨 | 낮음 — `maxCount` 대폭 확장 시에만 재검토 |
 | 경로 대소문자 구분 | 항상 대소문자 구분 비교, Package Builder 쓰기 전 충돌 사전 검사 | 내부망 서버가 대소문자 구분 환경. 개발 장비는 Windows 11(NTFS, 비구분)이라 로컬에서 덮어쓰기 위험 있음, 2026-08-04 확정 | 해결됨 |
 | 소스 파일 쓰기 모드 | binary/raw 모드, 텍스트 처리 없음 | Windows+IntelliJ System-Dependent 환경이라 CRLF 가능성 높음. `git show`가 이미 autocrlf 미적용이라 원본 보존되지만, 쓰기 단계에서 텍스트 모드 사용 시 훼손 위험, 2026-08-04 확정 | 해결됨 |
-| Export 결과물 위치(REQ-012) | 사용자가 부모 디렉터리만 선택 가능(네이티브 다이얼로그), 하위 폴더명(`git-deploy-extracted`)은 고정 | 결정 이력 #20(이름 고정)과 일관성 유지 — 이름이 아니라 위치만 커스터마이징. `localStorage` 전역 저장, 2026-08-07 확정 | 해결됨 |
+| Export 결과물 위치(REQ-012) | 사용자가 부모 디렉터리 선택(네이티브 다이얼로그, 미선택 시 Export 불가) + 추출 위치 방식(폴더 생성/바로 추출) 선택 + 저장소 겹침 검증 | 결정 이력 #20(이름 고정)과 일관성 유지. **정정(2026-09-24, RT-56)**: "미선택 시 저장소 루트 기본값" 폐지, 방식 분기와 겹침 검증 추가(§4.3) | 해결됨 |
+| 파일 패턴 제외+포함 통합(REQ-019→026) | §18 참고 | 제외 전용을 포함 모드까지 확장, 종류(경로/패키지/파일명) 자동 파생, 패턴 추가 입력을 별도 팝업으로 | 해결됨 |
+| Extract 대상 이동 모델(REQ-011 정정) | §2.6(UI_UX_SPEC.md), §18 참고 | "체크 = 제외 토글"에서 "체크 = Extract 대상으로 실제 이동"으로 — 활성 패턴에 걸린 항목은 숨기지 않고 흐리게+태그 표시(조용한 누락 방지) | 해결됨 |
+| `.DS_Store` 등 OS 메타데이터로 인한 NOT_EMPTY 오판(버그) | §4.3 참고 | `IGNORED_METADATA_FILES` 세트로 `.DS_Store`/`Thumbs.db`/`desktop.ini` 제외, 2026-09-24 사용자 보고로 발견·수정 | 해결됨 |
 | Export 대상 폴더 덮어쓰기(DR-013) | 기존 내용 있으면 `dialog.showMessageBox`로 확인, 취소 시 중단·기존 내용 보존 | 조용한 데이터 손실 방지("정확하게 추출" 원칙). `package:export`가 취소 시 `null` 반환(`repository:browse` 취소 패턴 재사용), 2026-08-07 확정 | 해결됨 |
 | Java 파싱 라이브러리(REQ-013) | `java-parser`(chevrotain 기반) 채택 | 실제 프로덕션 도구(prettier-java)가 쓰는 라이브러리, 재현 테스트로 실사용 Java 문법 파싱 확인. 전이 의존성 npm audit 경고(lodash)는 공격 표면 없다고 판단해 감수 | 낮음 — 업스트림이 lodash 의존성 정리하면 재검토 |
 | Base package 감지(DR-014) | `@SpringBootApplication` grep 사전필터 + 파싱 확정, 못 찾거나 모호하면 비활성화 | 하드코딩 금지 원칙(결정 이력 #3) 준수, "단순화 우선" | 해결됨 |
@@ -607,7 +580,9 @@ Playwright로 최종 배치(라벨+경로가 한 행, TitleBar 요소 자체가 
 
 ---
 
-# 12. DeployFilesPanel 개선 3건 설계 (REQ-019/020, DR-018, 2026-08-12)
+# 12. DeployFilesPanel 개선 3건 설계 (REQ-019/020, DR-018, 2026-08-12) — 역사적 기록
+
+> **정정(2026-09-24 문서 동기화, RT-40~53)**: 이 섹션이 설명하는 `DeployFilesPanel`/`FileListColumn`/`BulkAction` 구조는 P4 리팩토링으로 전면 교체됐다(IncludedFilesPane/ExtractTargetsPane/TreeList, UI_UX_SPEC.md §2.6). **아래 코드·컴포넌트 이름은 더 이상 저장소에 존재하지 않는다** — "왜 세 숫자 카운터 형식을 택했는가", "왜 전체 선택을 양방향으로 통일했는가" 같은 **설계 이유**는 지금도 유효해 그대로 남겨두지만(REQ-020은 지금도 같은 형식을 쓴다), 코드 경로를 그대로 믿고 따라가면 안 된다. 현재 설계는 §18을 참고.
 
 기존 기능+신규 3건 전체 UI/UX 회귀 검증(결정 이력 #39) 직후 실사용 중 나온 개선 요구 3건. 전부 DeployFilesPanel(`FileListColumn`) 영역이라 한 섹션에 묶는다.
 
@@ -725,7 +700,9 @@ Playwright로 검증: 헤더 체크박스가 각 행 체크박스와 같은 x �
 
 ---
 
-# 13. 배포 대상 파일 수동 추가 설계 (REQ-021, DR-019, 2026-08-22)
+# 13. 배포 대상 파일 수동 추가 설계 (REQ-021, DR-019, 2026-08-22) — 역사적 기록
+
+> **정정(2026-09-24 문서 동기화, RT-52/RT-53)**: `ManualAddPopup`(480px 고정 모달)·자동완성 후보 목록 UI는 `AddFilesPopup`(720×480, HEAD 트리 탐색)으로 교체됐다. §13.1(왜 참조 그래프 확장 대신 수동 추가를 택했는가)·§13.5(생명주기 트레이드오프)의 **설계 이유**는 지금도 유효해 남겨두지만, §13.2·§13.3·§13.4의 UI/코드 세부는 옛 구조 기준이다. 현재 설계는 §18을 참고.
 
 ## 13.1 배경과 §6(REQ-013)과의 관계
 
@@ -868,7 +845,9 @@ if (excludeMerges) {
 
 ---
 
-# 16. 제외 패턴 삭제 설계 (REQ-024, 2026-09-14)
+# 16. 제외 패턴 삭제 설계 (REQ-024, 2026-09-14) — 부분 역사적 기록
+
+> **정정(2026-09-24 문서 동기화, RT-40/RT-46)**: `excludePatterns`/`<span className="exclude-pattern-chip">` 마크업은 공용 `Chip.tsx` 프리미티브(§18)로 교체됐지만, **button-in-button 제약과 그걸 피한 구조(라벨 버튼+삭제 버튼 형제)는 지금도 그대로 유효**하다 — `Chip.tsx`가 정확히 이 구조를 재사용한다. `removeExcludePattern` 같은 개별 액션명은 `removeFilePattern`(제외+포함 공용, §18)으로 바뀌었다.
 
 ## 16.1 배경
 
@@ -908,7 +887,7 @@ removeExcludePattern: (pattern) => {
 
 ## 17.2 구현: `*` 유무로 분기, REQ-019 문법 재사용
 
-`DeployFilesPanel.tsx`의 `matchesFileName()`을 확장했다 — 새 매칭 엔진을 만들지 않고 REQ-019 제외 패턴(`excludePatternMatch.ts`)이 이미 쓰는 글롭→정규식 변환(`*` → `[^/]*`, 특수문자 이스케이프, 전체 앵커 `^...$`)과 동일한 문법을 재사용한다.
+**정정(2026-09-24 문서 동기화, RT-45/RT-46/RT-51)**: `matchesFileName()`은 `DeployFilesPanel.tsx`가 아니라 독립 모듈 `src/renderer/src/lib/matchesFileName.ts`로 옮겨졌다 — B안(§7 M-46)으로 이 검색이 잠깐 삭제됐다가 되살아나는 과정에서, AddFilesPopup의 통합 검색(HEAD 트리 후보 + 누락된 의존성)도 같은 함수를 쓰게 되어 공용 모듈로 뺐다. 새 매칭 엔진을 만들지 않고 REQ-019/026 제외+포함 패턴(`lib/filePattern.ts`)이 이미 쓰는 글롭→정규식 변환(`*` → `[^/]*`, 특수문자 이스케이프, 전체 앵커 `^...$`)과 동일한 문법을 재사용하는 원래 설계는 그대로다.
 
 ```ts
 function matchesFileName(path: string, term: string): boolean {
@@ -926,16 +905,108 @@ function matchesFileName(path: string, term: string): boolean {
 
 ## 17.3 좌우 공유, 경로 미확장
 
-`matchesFileName()`은 "포함된 파일"(`deployFilesSearchTerm`)과 "누락된 의존성"(`dependencySearchTerm`) 양쪽 검색에서 공유되므로, 와일드카드도 자동으로 양쪽에 다 적용된다 — §7.2가 확립한 "좌우 매칭 기준 통일" 원칙을 그대로 따른 것뿐, 우측만 따로 뺄 이유가 없었다.
+**정정(2026-09-24 문서 동기화)**: `deployFilesSearchTerm`/`dependencySearchTerm` 필드명은 이제 `includedSearchTerm`(IncludedFilesPane 전용) 하나다 — "누락된 의존성" 목록이 AddFilesPopup 안으로 통합되면서(§13 정정) 별도 검색어 필드 자체가 없어지고, AddFilesPopup은 자기 `query` 로컬 상태로 HEAD 트리 검색을 담당한다. `matchesFileName()` 공유 원칙(§7.2 "좌우 매칭 기준 통일")은 유지된다.
 
-경로 전체 검색(디렉터리 기준 필터링)은 별도로 논의됐으나(2026-09-14, "파일이 포함된 경로 기준 조회" 제안) 이번 범위에서 제외하고 보류했다 — REQ-019가 이미 슬래시 포함 패턴으로 절반쯤 커버하는 영역이고, 목록 크기 자체가 보통 작아(가상 스크롤 임계값 300개) 경로 기준 필터가 얼마나 자주 필요할지 불확실하다는 게 보류 근거였다.
+경로 전체 검색(디렉터리 기준 필터링)은 별도로 논의됐으나(2026-09-14, "파일이 포함된 경로 기준 조회" 제안) 이번 범위에서 제외하고 보류했다 — REQ-019가 이미 슬래시 포함 패턴으로 절반쯤 커버하는 영역이고, 목록 크기 자체가 보통 작아 경로 기준 필터가 얼마나 자주 필요할지 불확실하다는 게 보류 근거였다.
 
-## 17.4 REQ-016(커밋 파일명 검색)과의 의도적 불일치
+## 17.4 ~~REQ-016(커밋 파일명 검색)과의 의도적 불일치~~ (대상 소멸)
 
-`src/main/git/commits.ts`의 `matchesFileName()`(REQ-016, 파일명으로 커밋 검색)은 손대지 않았다 — §7.2/§7.3이 "좌우 검색 필드와 매칭 기준을 통일했다"고 명시한 것과 달리, 이 지점부터 두 `matchesFileName` 함수는 서로 다른 매칭 규칙을 갖게 됐다. 커밋 검색까지 와일드카드를 확장해달라는 요청은 아직 없어 범위를 벗어난 변경을 하지 않았다 — 필요해지면 그때 REQ 번호를 붙여 별도로 논의한다.
+**정정(2026-09-24 문서 동기화)**: REQ-016 자체가 폐기되면서(§8.3 정정) 이 절이 비교하던 대상(`src/main/git/commits.ts`의 파일명 검색)이 없어졌다 — "두 `matchesFileName`이 서로 다른 규칙을 가진 의도적 불일치"라는 서술은 더 이상 적용되지 않는다. 남은 `matchesFileName`(§17.2 정정, `lib/matchesFileName.ts`)은 렌더러의 화면 검색·파일 추가 전용 하나뿐이다.
 
 ## 17.5 검증
 
 12개 케이스(기존 부분 일치 유지, 접미사 와일드카드 매치/불일치, 대소문자 무관, 빈 검색어, 경로 레벨 오매치 방지 등)로 매칭 함수를 직접 실행해 확인했다.
 
 **추가 검증(2026-09-14) — 확장자 무관 확인**: `.html` 예시만 보고 그 확장자에 한정된 구현이 아니냐는 질문을 받아, `*.java`/`*Controller.java`(음성 케이스로 `*Repository.java`)/`*.js`/`*.test.js`(음성 케이스로 `*Test.js`)/`*.yml`(음성 케이스로 `.yaml`)/`*.py`(대소문자 무관, `Foo.PY`)까지 9개 케이스를 추가로 실행해 전부 통과 확인 — `*`를 `[^/]*`로 치환하는 로직 자체가 애초에 확장자·패턴 종류와 무관한 범용 글롭 변환이라, `.html`은 REQ-025 요청 당시 예시로 든 것일 뿐 구현을 한정하지 않는다.
+
+---
+
+# 18. 배포 대상 파일 P4 재구성 — 패턴 관리·Extract 대상 모델·팝업 시스템 (REQ-011/026, RT-40~53, 2026-09-24 신규)
+
+v0.6.0에는 이 섹션이 없었다. §12·§13이 설명하던 옛 `DeployFilesPanel` 구조 전체가 P4 리팩토링으로 교체되면서, 그 설계를 대신하는 현재 구조를 여기 새로 정리한다.
+
+## 18.1 파일 패턴 — 종류 자동 파생과 판정 (REQ-026)
+
+**핵심 로직**(`src/renderer/src/lib/filePattern.ts`, 순수 함수 — RT-01로 가장 먼저 테스트 이식됨):
+
+```ts
+const PKG_RE = /^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*\.\*\*$/
+
+function interpret(pattern: string): { kind: 'path'|'pkg'|'name'; glob: string } {
+  const t = pattern.trim()
+  if (t.includes('/')) return { kind: 'path', glob: t }
+  if (PKG_RE.test(t)) return { kind: 'pkg', glob: '**/' + t.slice(0, -3).split('.').join('/') + '/**' }
+  return { kind: 'name', glob: t }
+}
+
+function matchPattern(pattern: string, path: string): boolean {
+  const { kind, glob } = interpret(pattern)
+  return globToRe(glob).test(kind === 'name' ? basename(path) : path)
+}
+
+// 제외가 항상 우선. 활성 포함 패턴이 하나라도 있으면 그중 하나 이상에 매치돼야 남는다.
+function hiddenByPatterns(path: string, patterns: FilePattern[]): boolean {
+  const active = patterns.filter((p) => p.enabled)
+  if (active.some((p) => p.mode === 'exclude' && matchPattern(p.pattern, path))) return true
+  const includes = active.filter((p) => p.mode === 'include')
+  return includes.length > 0 && !includes.some((p) => matchPattern(p.pattern, path))
+}
+```
+
+**종류 파생 규칙**: `/`가 있으면 `path`(경로 전체 매치, REQ-019 원래 문법). 점 구분 식별자 나열이 `.**`로 끝나면(`com.acme.legacy.**`) `pkg` — 내부적으로 `**/com/acme/legacy/**` 경로 패턴으로 변환해서 매치한다(자바 패키지 표기를 경로로 자동 번역 — 같은 패키지의 리소스·테스트 소스까지 함께 잡힘, `.java` 한정 아님). 그 외는 `name`(파일명만 매치, REQ-019 원래 문법). 글롭→정규식 변환(`globToRe`)은 REQ-019 시절과 동일(`*` → `[^/]*`, 특수문자 이스케이프, 전체 앵커).
+
+**저장**: `localStorage`(`gde:filePatterns`) 전역 키, `FilePattern[] = { pattern, mode: 'exclude'|'include', enabled }[]`. 마이그레이션(`lib/filePatterns.ts`)이 v0.6.0의 `excludePatterns`(REQ-019, `mode` 필드 없음 — 전부 `exclude`로 취급)를 읽어 새 스키마로 자동 변환한다.
+
+## 18.2 Extract 대상 이동 모델 (REQ-011 정정)
+
+**핵심 발상 전환**: v0.6.0까지 `deployFiles[].included`는 "Export에 포함할지"를 뜻하는 단순 불리언 토글이었다(§12.4). RT-51부터는 같은 필드가 "이 파일이 지금 Extract 대상 목록에 있는가"를 뜻한다 — **체크 = 실제 이동**이라는 시각적 은유를 데이터 모델에도 그대로 반영했다. `useIncludedFilesView`/`useExtractTargetsView`(순수 훅, RT-34) 두 파생 훅이 각각 좌/우 화면을 계산한다.
+
+```ts
+// lib/useExtractTargetsView.ts — 개념적 정의
+extractItems = [
+  ...changedFiles.filter(f => f.included).map(f => ({ ...f, source: 'changed' })),
+  ...missingDependencies.filter(d => includedSet.has(d.localPath)).map(d => ({ ...d, source: 'dependency' })),
+  ...manuallyAddedPaths.map(p => ({ localPath: p, source: 'manual' })),
+].map(item => ({ ...item, patternExcluded: hiddenByPatterns(item.localPath, filePatterns) }))
+```
+
+**패턴 걸린 항목을 숨기지 않는 이유**: 좌측(포함된 파일)에서는 패턴에 걸리면 목록에서 완전히 사라지지만(REQ-026), Extract 대상에서는 **숨기지 않고** 흐리게+취소선+"패턴 제외" 태그로 표시한다 — 체크(=이동)했는데 그 파일이 조용히 화면에서 사라지면 "정말 빠진 건가, 아직 있는데 안 보이는 건가"를 사용자가 확인할 방법이 없다. RT-51(§5.1)이 이 "조용한 누락 방지"를 명시적 설계 원칙으로 확정했다.
+
+**되돌리기(×)**: 출처(`source`)에 따라 분기한다 — `changed`는 `included=false`(좌측으로 복귀), `dependency`는 `missingDependencies`에서 제거(AddFilesPopup 후보로 복귀), `manual`은 `manuallyAddedPaths`에서 제거(철회, 원위치가 없음). 폴더 단위 ×(`returnFolderFromExtract`)는 그 경로 접두사를 가진 항목 전체에 같은 규칙을 적용한다.
+
+## 18.3 팝업 시스템 (PopupHost/WorkArea, RT-43/44)
+
+**소유권**: `openPopup: OpenPopup`(`'addFiles'|'patterns'|'deleted'|'warnings'|null`)은 `WorkArea`에만 존재한다 — PreviewSummary(Deleted/경고 버튼)와 DeployFilesWorkspace(파일 추가/패턴 버튼)의 공통 부모이기 때문이다. `WorkAreaPopupContext`로 트리거 컴포넌트에 `open`/`close`를 내려준다(props 릴레이 없이).
+
+**동시 하나만**: 종류 무관 단일 값이라 구조적으로 둘 이상 동시에 열릴 수 없다.
+
+**자동 닫힘 트리거**: ① `[Preview]` 클릭 시작 시점(`analyzing`이 켜지는 순간) — 재계산 중 팝업이 가리키던 데이터가 무효해지므로. ② Reload/Browse 시작 시점(`repository.status`가 `'validating'`이 되는 순간). ③ WorkArea 소유 섹션(커밋/배포 대상 파일)이 접힐 때(RT-47) — CommitQueryBar가 접히는 건 무시(그쪽엔 팝업 트리거가 없음).
+
+**크기/접근성**: 720×480 고정, 부모 컨테이너 높이가 그보다 작으면 `min(480px, calc(100% - 20px))`로 클램프(U2). `Esc`로 닫힘, 닫히면 트리거 버튼으로 포커스 복귀, 포커스 트랩 포함(`Popup.tsx` 공용 프리미티브, RT-40).
+
+## 18.4 FilterPatternsPopup — 추가 입력 (RT-46/RT-51)
+
+패턴 추가 입력(모드 select·텍스트 input·`+추가` 버튼)은 처음 FilterPatternBar(툴바)에 있었으나 RT-51에서 팝업 안으로 옮겼다 — 좁은 툴바 폭 제약 없이 입력할 수 있게 하기 위함. 여러 패턴을 한 번에 추가할 수 있다(쉼표·줄바꿈 구분, 붙여넣기 시 줄바꿈을 자동으로 쉼표로 변환 — 텍스트 입력창은 기본적으로 붙여넣은 줄바꿈을 지워버리므로 `paste` 이벤트를 가로채 직접 삽입). 입력에 포커스가 있고 값이 있을 때만 입력창 바로 아래에 해석 미리보기가 겹쳐 뜬다(레이아웃 불변).
+
+**0개에서도 안 닫힘(RT-51 정정)**: v0.6.0 시절(§16) 칩 삭제 UI는 별도 팝업이 아니라 인라인이라 이 문제가 없었지만, 지금은 패턴이 전부 삭제돼도 팝업이 자동으로 닫히지 않는다 — 팝업 자체가 "0개에서 첫 패턴을 추가하는" 진입점이기도 해서, 자동으로 닫히면 그 흐름이 막히기 때문이다.
+
+## 18.5 AddFilesPopup — HEAD 트리 탐색 + 의존성 통합 (REQ-013/021, RT-52/53)
+
+**정정(§13 대체)**: 자동완성 텍스트 입력(§13.2)이 HEAD 트리 탐색으로 바뀌었다. `TreeList`(§18.6)로 렌더링하며, 두 모드를 완전히 분리된 펼침 상태(`useTreeExpansion`을 두 번 호출)로 관리한다.
+
+- **탐색 모드**(검색어 없음): HEAD 트리 전체. 기본 펼침 = 경로 세그먼트 1단계(`src`가 보이면 `main`까지) ∪ 누락된 의존성의 모든 조상 폴더(중요한 항목이 접혀서 안 보이는 일이 없도록).
+- **결과 모드**(검색어 있음): 매치 최대 50개, 전부 펼침. 50개 초과 시 "상위 50개만 표시합니다 — 더 구체적으로 입력하세요" 안내.
+
+**누락된 의존성 통합**: 이미 `deployFiles`에 있는 경로(출처 무관)는 후보에서 제외한다(§0.1 결정 이력 반영, `includedPathsSet`). 누락된 의존성은 트리 안에서 파일명이 붉은 글자 + `Impl`/`I` 종류 배지로 표시되고, "보이는 항목 모두 추가" 버튼(검색으로 좁힌 범위 + 접힌 폴더 안까지 포함)으로 한 번에 추가할 수 있다.
+
+**추가 시 곧바로 Extract 대상으로**: 후보를 클릭하면(의존성이든 일반 파일이든) `deployFiles`에 `included=true`로 바로 들어간다 — "포함된 파일"에는 들어가지 않는다(§18.2, 원래 그 목록에 없던 파일이라 되돌릴 원위치가 없음, × 클릭 시 이 팝업 후보로 복귀).
+
+## 18.6 TreeList 공용 컴포넌트 (RT-40/53)
+
+경로 목록 → 디렉터리 트리로 빌드하는 로직을 모든 목록(포함된 파일/Extract 대상/AddFilesPopup/Deleted/경고)이 공유한다(`components/TreeList.tsx`).
+
+**폴더 압축(compact)**: 하위가 디렉터리 하나뿐이고 파일이 없는 체인은 한 줄로 합친다(IDE의 compact middle packages와 동일 관례, 예: `src/main/java`가 파일 없이 폴더 하나씩만 이어지면 `src/main/java`로 한 줄). `compactFrom` 파라미터로 병합을 시작할 최소 깊이를 조절한다 — AddFilesPopup 탐색 트리는 3(`src`/`main`은 병합하지 않고 그대로 보여줌), 나머지 목록은 기본값 1(가능한 모든 체인을 병합).
+
+**indeterminate 판정(M-20)**: 폴더 체크박스는 "이 폴더 아래 원래 대상 개수(패턴·이동 여부 무관)가 화면에 실제로 보이는 개수보다 많을 때" indeterminate로 표시한다 — 그 차이가 "이미 Extract로 이동했거나 패턴에 걸려 안 보이는" 몫이다.
+
+**경로 복사 버튼**: 각 행에 호버/포커스 시에만 보이는 복사 버튼(`⧉`)을 자동 배치한다(`copyable` prop으로 끌 수 있음 — ExtractTargetsPane은 ×와의 16px 간격 규칙 때문에 자동 배치를 끄고 직접 배치한다).

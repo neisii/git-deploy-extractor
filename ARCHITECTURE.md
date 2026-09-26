@@ -1,6 +1,6 @@
 # Git Deploy Extractor 아키텍처 설계 문서
 
-> **현행 기준: v0.6.0.** 리팩토링 계획·스펙은 [`docs/refactoring/REFACTORING_TASKS.md`](docs/refactoring/REFACTORING_TASKS.md)에 있으며, 구현·병합 전까지 이 문서가 현행이다.
+> **현행 기준: v0.7.0**(2026-09-24 RT-60 문서 동기화로 갱신).
 
 > Version: 0.1
 > Status: Draft
@@ -47,6 +47,8 @@ REQUIREDMENT.md 섹션 10(비기능요구사항)에서 아키텍처를 직접 �
 
 > Profile 저장 포맷의 구체 스키마는 DOCUMENT_CHECKLIST.md 3번 항목(상세 설계)에서 확정한다.
 
+**추가(모듈 배치 기준, 2026-09-24 문서 동기화, RT-23/L2)**: `src/shared/`와 `src/renderer/src/lib/`를 나누는 기준을 명문화한다 — **Main과 Renderer 양쪽에서 참조하거나(타입·IPC 채널 정의) Node 런타임에 의존하지 않는 순수 로직**은 `shared/`, **Renderer 전용**(DOM/브라우저 API를 쓰거나 렌더러 상태에만 의존)은 `renderer/src/lib/`에 둔다. 예: `shared/ipc-channels.ts`(양쪽이 참조)는 `shared/`, `lib/filePattern.ts`(순수 함수지만 렌더러 스토어 타입에만 쓰임)는 `lib/`.
+
 ---
 
 # 3. 프로세스 경계
@@ -65,6 +67,11 @@ REQUIREDMENT.md 섹션 10(비기능요구사항)에서 아키텍처를 직접 �
 ```
 
 Git 프로세스 실행, 파일시스템 쓰기(Deploy Package 생성)는 전부 Main Process에서 수행한다. Renderer는 IPC를 통해 결과만 전달받아 렌더링한다 (Node 통합을 Renderer에 직접 노출하지 않음 — Electron 보안 권장사항).
+
+**추가(IPC 계층 구조화, 2026-09-24 문서 동기화, RT-12/20/21)**:
+- **채널명·타입 단일 정의**(RT-20): 모든 IPC 채널명과 요청/응답 타입은 `src/shared/ipc-channels.ts` 하나에서만 정의한다. `preload`/`main/ipc/handlers`/렌더러 쪽 `.d.ts` 전부 이 파일을 통해서만 채널을 참조한다 — 채널 문자열을 여러 곳에 따로 적어두다 오타로 어긋나는 걸 막는다.
+- **입력 검증 계층**(RT-12, R3): `main/ipc/validate.ts`가 Renderer에서 오는 IPC 요청 인자를 핸들러 진입 시점에 검증한다(예: 해시 필터 16진수 검증, Export 경로 검증) — Renderer가 신뢰할 수 없는 입력(사용자가 직접 타이핑)을 그대로 git/파일시스템 명령 인자로 흘려보내지 않기 위한 방어선.
+- **핸들러 그룹 분리**(RT-21): `main/ipc/handlers.ts` 단일 파일이 `main/ipc/handlers/`(채널 그룹별 — repository/commits/analysis/package 등) + `main/ipc/dialogs.ts`(네이티브 다이얼로그 공용 헬퍼)로 나뉘었다.
 
 ---
 
@@ -112,10 +119,10 @@ Git 프로세스 실행, 파일시스템 쓰기(Deploy Package 생성)는 전부
 |---|---|---|
 | Repository 유효성 검사 | `git rev-parse --is-inside-work-tree` | REQ-001 |
 | Branch 목록 조회 | `git branch --list` / `git for-each-ref` | REQ-002 |
-| Commit 목록 조회 | `git log --pretty=format:...` (lazy load, `--skip`/`-n` 페이지네이션). `searchMode`에 따라 `--grep`(메시지) 또는 pathspec(파일명, REQ-016) 분기. `--author=<값> -i`(작성자 부분 일치, 2026-09-14부터 여러 값을 반복 push해 git 기본 OR로 결합)/`--no-merges`(Merge 제외, REQ-022)는 조건부로 추가 결합. 해시 필터(REQ-023)가 있으면 위 조건을 전부 무시하고 `git log --no-walk <hash...>`로 완전히 분리된 경로로 조회 | REQ-003, REQ-016, REQ-022, REQ-023 |
+| Commit 목록 조회 | `git log --pretty=format:...` (lazy load, `--skip`/`-n` 페이지네이션). `--grep=<키워드> -i --extended-regexp`(포함 키워드 OR 결합, REQ-003 — **정정 2026-09-24**: REQ-016 폐기로 파일명 검색 분기는 삭제, 항상 메시지 대상)/`--author=<값> -i`(작성자 부분 일치, 여러 값을 반복 push해 git 기본 OR로 결합)/`--no-merges`(Merge 제외, REQ-022)는 조건부로 추가 결합. 해시 필터(REQ-023)가 있으면 위 조건을 전부 무시하고 `git log --no-walk <hash...>`로 완전히 분리된 경로로 조회 | REQ-003, REQ-022, REQ-023 |
 | Commit 상세 diff | `git diff-tree` / `git show --name-status` | REQ-005 |
 | HEAD 파일 조회 | `git show <branch>:<path>` | REQ-007, DR-003 |
-| 경로 접두사 하위 파일 목록 | `git ls-tree -r <branch> --name-only -- <prefix>`(접두사 생략 시 전체 트리 — REQ-016은 접두사 없이 호출) | REQ-013, REQ-016 |
+| 경로 접두사 하위 파일 목록 | `git ls-tree -r <branch> --name-only -- <prefix>`(접두사 생략 시 전체 트리 — AddFilesPopup의 HEAD 트리 탐색이 접두사 없이 호출) | REQ-013, REQ-021 |
 | 텍스트 사전 필터 검색 | `git grep -l -F <문자열> <branch> -- <pathspec>` | REQ-013 |
 | RepositoryPanel 라벨용 프로젝트 이름 유도 | `git remote get-url origin`(없거나 실패하면 `null`, 절대 throw 안 함) | REQ-018, DR-017 |
 
@@ -176,22 +183,23 @@ Rename을 별도 상태로 분류하지 않는다(DR-008) — Delete+Add를 각�
 3. 포함된 `.java` 파일들에서 시작해 BFS로 import/`implements`/`extends`/필드·생성자 파라미터 타입을 전이적으로 추적(깊이 제한 없음)
 4. 필드/파라미터로 참조된 타입이 인터페이스로 확인되면 `git grep`으로 구현체 후보를 좁히고 파싱으로 `implements` + stereotype 애노테이션 확정(모호하면 전부 후보로 제안)
 
-출력: `{ applicable: boolean, missingDependencies: DependencyCandidate[], parseWarnings }` — 자세한 알고리즘은 DETAILED_DESIGN.md §6 참고, 구현은 `src/main/analysis/dependencyAnalysis.ts`, `src/main/analysis/java/parseJavaFile.ts`.
+출력: `{ applicable: boolean, missingDependencies: DependencyCandidate[], parseWarnings }` — 자세한 알고리즘은 DETAILED_DESIGN.md §6 참고. **정정(2026-09-24, RT-22)**: 구현이 단일 파일 `dependencyAnalysis.ts`에서 `src/main/analysis/dependencyAnalysis/{projectIndex,resolve,implementations,index}.ts`(책임별 분할, `index.ts`가 재조립)로 나뉘었다. `src/main/analysis/java/parseJavaFile.ts`는 그대로.
 
 ## 4.6 UI 계층
 
-REQUIREDMENT.md 섹션 8 와이어프레임(및 RISK_ISSUES.md §7.5 TO-BE 와이어프레임) 기준. 담당 화면 요소:
+**정정(2026-09-24 문서 동기화, RT-40~53)**: REQUIREDMENT.md §8 와이어프레임(P4 리팩토링으로 전면 재구성, UI_UX_SPEC.md §1 참고) 기준. 담당 화면 요소:
 
-- Repository 선택 / Branch 선택 / Commit 검색(메시지·파일명 토글 — REQ-016, 작성자·Merge 제외 필터 — REQ-022, 해시 필터 — REQ-023)
-- Commit List (가상 스크롤, 다중 선택 체크박스, 재조회 시 선택 유지 — REQ-015/DR-015)
-- Deployment Preview (Files/Added/Modified/Deleted 집계, Rename 미감지 — DR-008)
-- Deploy Files 목록 — 포함된 파일(Mapping 결과 미리보기, 개별/전체 선택 — REQ-011) / 누락된 의존성(REQ-013) 좌우 분할, 파일 수동 추가 모달(REQ-021)
-- Delete List
-- Export 경로 선택 + Export 액션 (2버튼 — UI_UX_SPEC.md §0-3. Mapping Profile 선택 UI는 REQ-012로 숨김)
-- 분할 영역 드래그 리사이즈 (REQ-014)
+- Repository 선택 / Branch 선택 / Commit 키워드 검색(항상 메시지 대상, 제외는 `-` 접두 — REQ-003, REQ-016 폐기) / 작성자·Merge 제외 필터(REQ-022) / 해시 필터(REQ-023)
+- Commit List (가상 스크롤, 다중 선택 체크박스, 재조회 시 선택 유지·Reload 시 전체 초기화 — REQ-015/DR-015)
+- PreviewSummary (Files/Added/Modified/Deleted 집계, Rename 미감지 — DR-008. Deleted·경고는 버튼으로 여는 팝업)
+- IncludedFilesPane("포함된 파일") / ExtractTargetsPane("Extract 대상") — 체크 시 실제 이동(REQ-011 정정), 좌측에만 화면 검색(REQ-025)·파일 패턴 요약(REQ-026)
+- 팝업 4종(동시 하나만) — 파일 추가(HEAD 트리 탐색+누락된 의존성 통합, REQ-013/021), 파일 패턴 관리(REQ-026), 삭제 목록(DR-007), 경고 목록(DR-009)
+- Export 위치 방식 선택(폴더 생성/바로 추출) + 경로 선택 + Export 액션 (REQ-012 정정. Mapping Profile 선택 UI는 계속 숨김)
+- 분할 영역 드래그 리사이즈 (REQ-014, WorkArea 세로 분할 포함)
+- 섹션별 접기/펼치기 (CollapsibleSection)
 - 버전 배지 — 새 GitHub Release 알림 + 클릭 시 릴리스 페이지 오픈 (REQ-017)
 
-세부 컴포넌트 분해와 상태(State) 정의는 DOCUMENT_CHECKLIST.md 4번(UI/UX 명세)에서 진행한다.
+세부 컴포넌트 분해와 상태(State) 정의는 UI_UX_SPEC.md에서 진행한다.
 
 ## 4.7 업데이트 확인 모듈 (REQ-017, DR-016, 2026-08-12 추가)
 
@@ -207,9 +215,13 @@ Main process는 상태를 갖지 않는다(stateless) — 캐시(마지막 확�
 
 **책임**: 커밋 diff나 §4.5 의존성 완결성 검사와 무관하게, 선택된 Branch의 HEAD 트리에 있는 임의 파일을 사용자가 직접 검색해 배포 대상에 추가. 새 엔진을 두지 않고 기존 모듈을 재사용하는 얇은 조합이다 — §4.2가 이미 쓰는 `git ls-tree`(파일 목록)와 §4.3 Mapping Rule 엔진의 Server Path 계산을 그대로 가져다 쓴다.
 
-IPC 채널 2개만 추가된다: `git:listTrackedFiles`(자동완성 후보 풀 — HEAD 트리 전체 파일 경로, Java 한정 아님)와 `analysis:resolveManualFile`(선택한 경로 하나의 Server Path 계산, `status`는 항상 `'added'`로 고정). 둘 다 상태를 갖지 않는다 — Renderer(Zustand store)가 `headTreeFiles`/`manuallyAddedPaths`로 결과를 들고 있다가 `deployFiles`에 직접 병합한다.
+IPC 채널 2개만 추가된다: `git:listTrackedFiles`(후보 풀 — HEAD 트리 전체 파일 경로, Java 한정 아님)와 `analysis:resolveManualFile`(선택한 경로 하나의 Server Path 계산, `status`는 항상 `'added'`로 고정). 둘 다 상태를 갖지 않는다 — Renderer(Zustand store)가 `headTreeFiles`/`manuallyAddedPaths`로 결과를 들고 있다가 `deployFiles`에 직접 병합한다.
 
-리비전 싱크 문제(내부망에 실제로 뭐가 반영됐는지)는 이 모듈이 풀지 않는다 — 망분리 환경에서 GDE는 그 상태를 원리적으로 관측할 수 없어(RISK_ISSUES.md 결정 이력 #48), 탐지 대신 사용자 판단에 맡기는 것이 이 모듈의 설계 전제다. 구현은 `src/main/git/lsTree.ts`(재사용), `src/main/ipc/handlers.ts`, `src/renderer/src/components/deployFiles/ManualAddPopup.tsx`. 자세한 UI/생명주기는 DETAILED_DESIGN.md §13 참고.
+리비전 싱크 문제(내부망에 실제로 뭐가 반영됐는지)는 이 모듈이 풀지 않는다 — 망분리 환경에서 GDE는 그 상태를 원리적으로 관측할 수 없어(RISK_ISSUES.md 결정 이력 #48), 탐지 대신 사용자 판단에 맡기는 것이 이 모듈의 설계 전제다. **정정(2026-09-24, RT-52/53)**: UI는 자동완성 텍스트 입력에서 HEAD 트리 탐색(`AddFilesPopup.tsx`, 옛 `ManualAddPopup.tsx` 대체)으로 바뀌었고, REQ-013 누락된 의존성도 이 팝업 안으로 통합됐다. 자세한 UI/생명주기는 DETAILED_DESIGN.md §18.5 참고.
+
+## 4.9 파일 패턴 관리 (REQ-026, 2026-09-24 신규)
+
+**책임**: 사용자가 등록한 제외/포함 패턴으로 "포함된 파일"/"Extract 대상" 화면 표시와 Export 대상을 걸러낸다. 순수 함수 계층(`src/renderer/src/lib/filePattern.ts`)이며 IPC나 Main Process를 전혀 거치지 않는다 — 매치 판정이 로컬 문자열 비교(글롭→정규식)로 충분해 파일시스템/git 접근이 필요 없기 때문이다. 저장은 Renderer `localStorage`(`gde:filePatterns`, 전역). Package Builder(§4.4)가 Export 시점에 같은 판정 함수를 한 번 더 호출해 최종 대상을 거른다. 알고리즘은 DETAILED_DESIGN.md §18.1 참고.
 
 ---
 
