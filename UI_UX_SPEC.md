@@ -20,7 +20,7 @@ REQUIREDMENT.md 8번 섹션 와이어프레임을 컴포넌트/상태/인터랙�
 | 2 | Deploy Files 목록의 체크박스(`☑`)가 표시용인지 조작 가능한지 REQ에 명시 없음 | **확정**: 인터랙티브. 실제로 필요한 파일만 선택해서 추출할 수 있어야 하기 때문. **전체 선택/해제 토글도 추가** → REQ-011로 REQUIREDMENT.md에 반영 완료 |
 | 3 | `[Preview] [Export] [Build]` 세 버튼의 차이가 REQUIREDMENT.md에 없음 | **[Build] 버튼 제거, 2버튼 구조로 확정**: Preview=배포될 디렉터리 구조와 파일 목록을 보여주는 확인 단계(부작용 없음) / Export=Preview에서 확인한 내용 그대로 실제 추출(파일 복사 + git-deploy-extracted/ 생성 + txt/json 산출물까지 전부, 기존 "Build"가 하던 일을 흡수). 근거: REQUIREDMENT.md 원본 와이어프레임에 있던 `[Build]`는 "코드 컴파일"이 아니라 "배포 패키지 조립"을 뜻했는데(DR-011이 이미 컴파일은 범위 밖으로 확정), 사용자가 의도한 건 애초에 Preview/Export 2단계 구조였음 |
 
-**시각 자료**: 위 3가지를 그림으로 정리한 자료 — `ambiguity-explainer.html` (같은 프로젝트 루트에 위치)
+**시각 자료**: 위 3가지를 그림으로 정리한 자료 — `docs/ambiguity-explainer.html`(정정, 2026-09-25 RT-61 — 저장소 루트에서 `docs/`로 이동)
 
 ---
 

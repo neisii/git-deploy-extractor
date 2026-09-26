@@ -4,7 +4,7 @@
 
 > Version: 0.1
 > Status: Draft
-> 기준 문서: REQUIREDMENT.md, core-scenario-diagram.html
+> 기준 문서: REQUIREDMENT.md, docs/core-scenario-diagram.html
 
 ---
 
@@ -227,7 +227,7 @@ IPC 채널 2개만 추가된다: `git:listTrackedFiles`(후보 풀 — HEAD 트�
 
 # 5. 데이터 흐름
 
-핵심 시나리오 10단계(core-scenario-diagram.html)를 모듈 호출 순서로 재구성하면 다음과 같다.
+핵심 시나리오 10단계(docs/core-scenario-diagram.html)를 모듈 호출 순서로 재구성하면 다음과 같다.
 
 ```
 [Renderer] Repository/Branch 선택
