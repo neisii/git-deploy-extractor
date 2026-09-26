@@ -1291,6 +1291,32 @@ UI 변경 단계라 P0~P3의 "동작 불변" 원칙이 더 이상 적용되지 �
     `.gitignore` 추가)입니다. 이번 세션에서 만든 문서 변경은 전부 아직
     커밋하지 않았습니다.**
 
+    **RT-61(2026-09-25)** — 루트의 `*.html` 3개(ambiguity-explainer·
+    core-scenario-diagram·ui-wireframe)를 `git mv`로 `docs/`로 이동. 셋
+    다 다른 파일을 상대 경로로 참조하지 않는 독립 HTML이라 내부 링크
+    깨짐 없음. ARCHITECTURE.md(기준 문서 표기 2곳)·UI_UX_SPEC.md(§0
+    시각 자료 참조 1곳)의 경로만 `docs/` 접두사로 갱신. 커밋 `4618687`.
+
+    **RT-62(2026-09-25)** — `.gitignore`에 `*.swp`/`*.swo`/`*.swn` 추가.
+    `*.swp`가 `.DETAILED_DESIGN.md.swp`처럼 점(dot)으로 시작하는
+    파일명도 무시하는지(git의 fnmatch가 `FNM_PERIOD`를 안 써서 `*`가
+    선행 점도 매치) 임시 git 저장소로 재현 확인 후 추가. `git status
+    --untracked-files=all` 기준 untracked 0개 확인.
+
+    **P5(RT-60~63) 전체 완료(2026-09-25) — REFACTORING_TASKS.md 동결.**
+    문서 자체 규칙("전부 끝나면 상단에 완료 표시하고 동결")대로 사용자
+    확인 후(AskUserQuestion) 상단에 동결 배너 추가 — 이 문서는 이제
+    수정하지 않는다. **앞으로 새 기능/UI 논의·결정은 REQUIREDMENT.md·
+    UI_UX_SPEC.md·DETAILED_DESIGN.md·ARCHITECTURE.md·RISK_ISSUES.md에
+    직접 기록한다** — "정정 (이유, 날짜)"/"추가 (이유, 날짜)" 형식과
+    RISK_ISSUES.md §4 결정 이력 로그를 그대로 쓰면 된다. 리팩토링
+    자체(P0~P5, RT-01~63)는 이걸로 완전히 끝났다. `component-playground.html`
+    목업도 역할 종료로 함께 동결(삭제하지 않음, 과거 결정 배경 참고용).
+
+    **다음 착수 지점**: 특별히 지정된 작업 없음 — 사용자가 새 기능/버그
+    수정을 요청하면 그때부터 시작한다. 착수 전 REQUIREDMENT.md·
+    RISK_ISSUES.md §4(결정 이력)·§8(백로그, 미확정 5건 있음)부터 확인할 것.
+
 먼저 이 순서로 읽어주세요 (짐작하지 말고 실제로 읽어야 합니다):
 
 0. (리팩토링 관련 작업이면) docs/refactoring/REFACTORING_TASKS.md — 위 안내 참고.

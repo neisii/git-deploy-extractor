@@ -6,3 +6,6 @@ out
 *.log*
 test-results
 playwright-report
+*.swp
+*.swo
+*.swn

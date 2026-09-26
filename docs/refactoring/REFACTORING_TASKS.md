@@ -1,8 +1,10 @@
 # Refactoring Tasks
 
-> 상태: **계획 문서 — 아직 코드는 하나도 바뀌지 않았다.** (작성 2026-09-21)
-> 기준 자료: [`component-playground.html`](component-playground.html) — 목표 UI 구조를 직접 조작해 보는 단일 HTML 목업. 실제 앱 코드와 연결돼 있지 않고, 아래 결정은 이 목업에서 사용자와 합의한 내용이다.
-> 관련 문서: RISK_ISSUES.md §8(백로그), REQUIREDMENT.md, HANDOFF.md (REQ-026 등 기존 문서의 미커밋 수정은 폐기됨 — 아래 §6 머리말 참고)
+> **완료(2026-09-25) — 이력 문서, 현행은 정식 문서.** P0~P5(RT-01~RT-63) 전체가 끝났다 — 이 문서는 이제 수정하지 않는다(동결). 앱의 현재 동작·UI/UX·설계는 REQUIREDMENT.md·UI_UX_SPEC.md·DETAILED_DESIGN.md·ARCHITECTURE.md·RISK_ISSUES.md가 단일 원천이다(RT-60으로 전부 병합·동기화 완료, 2026-09-25). 새 기능/UI 논의는 그 정식 문서들에 직접 "정정 (이유, 날짜)"/"추가 (이유, 날짜)" 형식으로 기록하고, RISK_ISSUES.md §4 결정 이력 로그에 남긴다 — 이 문서의 M-x/RT-x 형식을 새로 이어가지 않는다. 아래 본문은 그 결정에 이른 과정(사용자와의 논의, 재현 테스트, 기각한 대안)을 보고 싶을 때만 참고한다.
+>
+> ~~상태: **계획 문서 — 아직 코드는 하나도 바뀌지 않았다.** (작성 2026-09-21)~~
+> 기준 자료: [`component-playground.html`](component-playground.html) — 목표 UI 구조를 직접 조작해 보는 단일 HTML 목업(역할 종료, 실제 앱과 무관하게 이 문서와 함께 동결).
+> 관련 문서: RISK_ISSUES.md §8(백로그), REQUIREDMENT.md, HANDOFF.md
 
 이 문서는 세 가지를 한곳에 모은다. (1) 목업에서 확정한 UI/컴포넌트 결정, (2) 코드 분석에서 나온 버그·구조 문제, (3) 그것을 실행하는 단계별 작업 목록.
 
@@ -517,7 +519,7 @@ D1 AppShell                         레이아웃만
 
 - [x] **RT-60** 문서 동기화(§6) — REQUIREDMENT / UI_UX_SPEC / DETAILED_DESIGN / RISK_ISSUES(§7.5 와이어프레임) / ARCHITECTURE / HANDOFF — **완료(2026-09-25)**. 사용자 요청("RT-60 문서 동기화 진행해")으로 착수, §6 체크리스트를 기준 삼되 이후 결정(특히 REQ-025는 §6이 "폐기/축소"로 적어뒀지만 실제로는 B안으로 부활한 것 등)으로 덮어써진 부분은 최신 M-x 로그·실제 코드와 대조해 바로잡으며 진행. REQUIREDMENT.md(REQ-003/009~026 다수 정정, REQ-026 신규, §8/§9 와이어프레임 재작성), UI_UX_SPEC.md(§1·§2.3·§2.5~2.8·§3·§4·§5 재작성 — 옛 DeployFilesPanel/FileListColumn 구조를 IncludedFilesPane/ExtractTargetsPane/TreeList/팝업 시스템으로), DETAILED_DESIGN.md(§2·§4.3·§8·§9·§17 정정 + §18 신규, §12/§13/§16은 "역사적 기록" 배너 추가), RISK_ISSUES.md(결정 이력 #62~69 추가, §7.5는 REQUIREDMENT.md §8로 이관, §8 백로그 5건 중 3건 해소·2건 부분 해소로 갱신), ARCHITECTURE.md(§3 IPC 계층 구조화 반영, §4.1/4.6/4.8 정정, §4.9 신설, §2.2 모듈 배치 기준 추가), README.md(파일 추출 기준 8·11번 정정, 12번 신규), PRD.md(REQ-010/011 정정) — PRD.md/README.md는 §6 표엔 있었지만 "현행 기준: v0.6.0" 배너가 없던 문서라 배너는 추가하지 않고 본문 내용만 갱신. DOCUMENT_CHECKLIST.md·PHASE_PLAN.md는 §6 결정대로 변경 없음. 각 문서 상단 배너를 "v0.6.0"→"v0.7.0"으로 갱신. HANDOFF.md는 동결하지 않음(RT-61/62가 아직 남아 P5 전체가 끝나지 않음 — §6의 "전부 끝나면 동결"은 이 문서(REFACTORING_TASKS.md) 자체에 해당하는 조항이라, RT-61/62까지 마친 뒤에 적용한다)
 - [x] **RT-61 (L4)** 루트의 `*.html` 3개(ambiguity-explainer, core-scenario-diagram, ui-wireframe)를 `docs/`로 이동 (이 문서와 목업은 `docs/refactoring/`으로 이동 완료) — **완료(2026-09-25)**. `git mv`로 이동(세 파일 다 다른 파일을 상대 경로로 참조하지 않는 독립 HTML이라 내부 링크 깨짐 없음), ARCHITECTURE.md(기준 문서 표기 2곳)·UI_UX_SPEC.md(§0 시각 자료 참조 1곳)의 경로만 `docs/` 접두사로 갱신
-- [ ] **RT-62 (L5)** untracked 파일 정리(~~`resources/icon 복사본.png`~~ 삭제 완료 — 앱 아이콘 교체 작업 중 2026-09-24, 아래 참고, `.gitignore`에 vim 스왑 추가는 아직)
+- [x] **RT-62 (L5)** untracked 파일 정리(~~`resources/icon 복사본.png`~~ 삭제 완료 — 앱 아이콘 교체 작업 중 2026-09-24, 아래 참고, `.gitignore`에 vim 스왑 추가는 아직) — **완료(2026-09-25)**. `.gitignore`에 `*.swp`/`*.swo`/`*.swn` 추가 — 실제로 `*.swp`가 `.DETAILED_DESIGN.md.swp`처럼 점(dot)으로 시작하는 파일명도 무시하는지 임시 git 저장소로 재현 확인 후(git의 fnmatch는 `FNM_PERIOD`를 안 써서 `*`가 선행 점도 매치함) 추가. `git status --untracked-files=all` 기준 untracked 파일 0개로 확인됨 — 이걸로 P5(RT-60~63) 전체 완료
 - [x] **RT-63** 릴리스: P3까지는 v0.6.0과 동작 동일 → 리팩토링 완료 후 별도 버전(예: v0.7.0) 결정(M-6) — **v0.7.0으로 릴리스(2026-09-24)**. 사용자 요청("버전 갱신하고 릴리즈 올리자")으로 RT-60·RT-61·RT-62(vim 스왑) 완료 전에 먼저 진행하기로 확정 — 셋 다 문서·저장소 정리용이라 배포되는 앱 동작에는 영향이 없어, "P5 순서대로"보다 "지금 릴리스"를 우선했다. 이번 릴리스에 담긴 것: M-45~M-58(REQ-016 폐기, B안 검색 부활, 패턴 팝업 이동, 여러 UI 조정, `.DS_Store` 버그 수정, "전체 선택" 위치 이동) + 새 앱 아이콘(goraeng 캐릭터, nearest-neighbor 업스케일 후 LANCZOS 다운샘플로 계단현상 없이 생성). `npm version 0.7.0 --no-git-tag-version`으로 `package.json`/`package-lock.json` 갱신, 태그 전 `typecheck`·`lint`·`npm test`(235개)·`npm run build`·`npx playwright test`(전체 23개) 전부 통과 재확인
 
 ### 5.1 P4 작업 상세 명세
