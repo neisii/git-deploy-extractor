@@ -6,9 +6,14 @@ import {
   missingDependencyAncestorPaths
 } from './addFilesCandidates'
 import type { DependencyCandidate } from '../../../shared/types'
+import type { FilePattern } from './filePattern'
 
 function dep(localPath: string, kind: DependencyCandidate['kind'] = 'class'): DependencyCandidate {
   return { localPath, serverPath: localPath, status: 'added', kind }
+}
+
+function excludePattern(pattern: string): FilePattern {
+  return { pattern, mode: 'exclude', enabled: true }
 }
 
 describe('buildBrowseCandidates', () => {
@@ -18,7 +23,8 @@ describe('buildBrowseCandidates', () => {
     const result = buildBrowseCandidates(
       ['src/FooImpl.java', 'src/Bar.java', 'src/Unrelated.java'],
       missing,
-      new Set()
+      new Set(),
+      []
     )
     expect(result).toEqual([
       { localPath: 'src/FooImpl.java', kind: 'class' },
@@ -31,9 +37,20 @@ describe('buildBrowseCandidates', () => {
     const result = buildBrowseCandidates(
       ['src/FooImpl.java', 'src/Unrelated.java'],
       missing,
-      new Set(['src/FooImpl.java'])
+      new Set(['src/FooImpl.java']),
+      []
     )
     expect(result).toEqual([{ localPath: 'src/Unrelated.java', kind: undefined }])
+  })
+
+  it('정정(2026-09-28) — 활성 제외 패턴에 걸리는 경로는 누락된 의존성이어도 숨긴다', () => {
+    const result = buildBrowseCandidates(
+      ['src/FooImpl.java', 'src/Bar.java', 'src/Unrelated.java'],
+      missing,
+      new Set(),
+      [excludePattern('*.java')]
+    )
+    expect(result).toEqual([])
   })
 })
 
@@ -44,7 +61,8 @@ describe('buildSearchCandidates', () => {
       [],
       new Set(),
       'unrelated',
-      50
+      50,
+      []
     )
     expect(result.candidates).toEqual([{ localPath: 'src/Unrelated.java', kind: undefined }])
     expect(result.truncated).toBe(false)
@@ -56,7 +74,8 @@ describe('buildSearchCandidates', () => {
       [],
       new Set(),
       'Foo*.java',
-      50
+      50,
+      []
     )
     expect(result.candidates.map((c) => c.localPath).sort()).toEqual([
       'src/FooImpl.java',
@@ -66,7 +85,7 @@ describe('buildSearchCandidates', () => {
 
   it('상한을 넘으면 truncated=true와 함께 상위 N개만 반환한다', () => {
     const files = Array.from({ length: 5 }, (_, i) => `src/Match${i}.java`)
-    const result = buildSearchCandidates(files, [], new Set(), 'match', 3)
+    const result = buildSearchCandidates(files, [], new Set(), 'match', 3, [])
     expect(result.candidates).toHaveLength(3)
     expect(result.truncated).toBe(true)
   })
@@ -77,7 +96,20 @@ describe('buildSearchCandidates', () => {
       [],
       new Set(['src/Foo.java']),
       'foo',
-      50
+      50,
+      []
+    )
+    expect(result.candidates).toEqual([{ localPath: 'src/Foo2.java', kind: undefined }])
+  })
+
+  it('정정(2026-09-28) — 활성 제외 패턴에 걸리는 경로는 검색 결과에서도 제외된다', () => {
+    const result = buildSearchCandidates(
+      ['src/Foo.png', 'src/Foo2.java'],
+      [],
+      new Set(),
+      'foo',
+      50,
+      [excludePattern('*.png')]
     )
     expect(result.candidates).toEqual([{ localPath: 'src/Foo2.java', kind: undefined }])
   })
@@ -97,7 +129,8 @@ describe('missingDependencyAncestorPaths', () => {
   it('누락된 의존성 경로의 모든 조상 폴더를 세그먼트마다 하나씩 모은다', () => {
     const set = missingDependencyAncestorPaths(
       [dep('src/main/java/com/acme/repo/FooImpl.java')],
-      new Set()
+      new Set(),
+      []
     )
     expect([...set].sort()).toEqual(
       [
@@ -112,12 +145,19 @@ describe('missingDependencyAncestorPaths', () => {
   })
 
   it('이미 Extract에 있는 의존성은 제외한다', () => {
-    const set = missingDependencyAncestorPaths([dep('a/B.java')], new Set(['a/B.java']))
+    const set = missingDependencyAncestorPaths([dep('a/B.java')], new Set(['a/B.java']), [])
     expect(set.size).toBe(0)
   })
 
   it('루트 바로 아래 파일은 조상이 없다', () => {
-    const set = missingDependencyAncestorPaths([dep('Root.java')], new Set())
+    const set = missingDependencyAncestorPaths([dep('Root.java')], new Set(), [])
+    expect(set.size).toBe(0)
+  })
+
+  it('정정(2026-09-28) — 활성 제외 패턴에 걸리는 의존성은 조상 폴더 기본 펼침 대상에서 제외한다', () => {
+    const set = missingDependencyAncestorPaths([dep('src/main/FooImpl.java')], new Set(), [
+      excludePattern('*.java')
+    ])
     expect(set.size).toBe(0)
   })
 })

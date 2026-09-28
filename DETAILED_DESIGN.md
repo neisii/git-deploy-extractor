@@ -1001,6 +1001,10 @@ extractItems = [
 
 **추가 시 곧바로 Extract 대상으로**: 후보를 클릭하면(의존성이든 일반 파일이든) `deployFiles`에 `included=true`로 바로 들어간다 — "포함된 파일"에는 들어가지 않는다(§18.2, 원래 그 목록에 없던 파일이라 되돌릴 원위치가 없음, × 클릭 시 이 팝업 후보로 복귀).
 
+**정정(2026-09-28) — 파일 패턴 적용**: 활성 제외/포함 패턴(§18.1)에 걸리는 후보는 탐색·결과 두 모드 모두에서 완전히 숨긴다(`lib/addFilesCandidates.ts`의 `buildBrowseCandidates`/`buildSearchCandidates`가 `hiddenByPatterns`를 추가로 거른다, 누락된 의존성 출처 여부와 무관). 기본 펼침에 쓰는 `missingDependencyAncestorPaths`도 패턴에 걸린 의존성은 조상 폴더 강제 펼침 대상에서 제외한다. 원래 REQ-019 시절 "누락된 의존성은 항상 `.java`만 나와 패턴이 적용될 일이 없다"는 근거가, 이 팝업이 HEAD 트리 전체(모든 파일 종류)를 탐색하게 되면서 더 이상 성립하지 않아 확장했다 — REQUIREDMENT.md REQ-026 "적용 범위" 정정 참고.
+
+**정정(2026-09-28) — 인라인 "+ 패턴 추가"(추가 전용)**: 바로 위 정정으로 후보가 조용히 숨겨질 수 있게 되면서, 패턴을 추가하는 순간 목록이 줄어드는 걸 팝업 안에서 바로 보고 싶다는 요청으로 검색창 아래·트리 위에 접이식 추가 전용 입력을 뒀다. 팝업을 닫고 `FilterPatternsPopup`으로 전환하는 헤더 버튼도 한때 만들었으나(팝업 전환 시 검색어·펼침 상태 초기화가 단점), 이 인라인 입력으로 "나가지 않고 추가"라는 핵심 필요가 해소돼 **되돌렸다**(RISK_ISSUES.md 결정 이력 참고 — `Popup.tsx`의 `headerActions` prop도 함께 제거). 두 팝업을 동시에 띄우는 방안도 검토했지만 기각했다 — 팝업 단일 슬롯 구조·백드롭·포커스 트랩을 전부 다중 인스턴스용으로 재설계해야 해 복잡도가 이 문제의 크기에 비해 과하다고 판단했다. 평소엔 "+ 패턴 추가" 한 줄(링크 스타일)만 보이고, 누르면 `PatternQuickAddRow`(신규, `deployFiles/PatternQuickAddRow.tsx`)가 그 자리에 펼쳐진다 — 모드 선택+텍스트 입력+붙여넣기 줄바꿈→쉼표 변환+3초 피드백까지는 `FilterPatternsPopup`의 추가 입력과 동일 로직이지만, 해석 미리보기 오버레이와 기존 패턴 칩 목록(토글/삭제)은 없다(기존 패턴을 토글·삭제하려면 여전히 `IncludedFilesPane` 툴바의 "설정" 버튼으로 `FilterPatternsPopup`을 열어야 한다). 두 컴포넌트 사이에 로직을 공유 추출하지 않고 일부러 각자 둔다 — 작고 독립적인 코드라 공유의 이득보다 `FilterPatternsPopup`의 오버레이 상태와 얽히는 비용이 크다고 판단했다. 데이터는 둘 다 같은 `filePatterns` zustand 상태를 구독하므로, 추가하는 즉시(팝업을 나가지 않아도) `buildBrowseCandidates`/`buildSearchCandidates`가 재계산돼 트리에서 사라진다.
+
 ## 18.6 TreeList 공용 컴포넌트 (RT-40/53)
 
 경로 목록 → 디렉터리 트리로 빌드하는 로직을 모든 목록(포함된 파일/Extract 대상/AddFilesPopup/Deleted/경고)이 공유한다(`components/TreeList.tsx`).

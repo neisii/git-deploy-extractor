@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Popup } from '../Popup'
+import { PatternQuickAddRow } from './PatternQuickAddRow'
 import { useAppStore } from '../../store/appStore'
 import { includedPathsSet } from '../../lib/includedPathsSet'
 import {
@@ -42,6 +43,7 @@ export function AddFilesPopup({ onClose }: AddFilesPopupProps): React.JSX.Elemen
   const headTreeFiles = useAppStore((s) => s.headTreeFiles)
   const manuallyAddedPaths = useAppStore((s) => s.manuallyAddedPaths)
   const missingDependencies = useAppStore((s) => s.missingDependencies)
+  const filePatterns = useAppStore((s) => s.filePatterns)
   const dependencyAnalyzing = useAppStore((s) => s.dependencyAnalyzing)
   const dependencyApplicable = useAppStore((s) => s.dependencyApplicable)
   const dependencyReason = useAppStore((s) => s.dependencyReason)
@@ -52,14 +54,15 @@ export function AddFilesPopup({ onClose }: AddFilesPopupProps): React.JSX.Elemen
   const addAllVisibleDependencies = useAppStore((s) => s.addAllVisibleDependencies)
 
   const [query, setQuery] = useState('')
+  const [patternAddOpen, setPatternAddOpen] = useState(false)
 
   // REQ-021/DR-019 + RT-17(M-36a) — 이미 deployFiles에 있는(출처 무관)
   // 경로는 후보에서 미리 제외한다(숨김, 비활성 표시 아님).
   const includedSet = useMemo(() => includedPathsSet(deployFiles), [deployFiles])
 
   const ancestorPaths = useMemo(
-    () => missingDependencyAncestorPaths(missingDependencies, includedSet),
-    [missingDependencies, includedSet]
+    () => missingDependencyAncestorPaths(missingDependencies, includedSet, filePatterns),
+    [missingDependencies, includedSet, filePatterns]
   )
   const browseDefaultOpen = useCallback(
     (path: string) =>
@@ -70,13 +73,20 @@ export function AddFilesPopup({ onClose }: AddFilesPopupProps): React.JSX.Elemen
   const searchExpansion = useTreeExpansion(ALWAYS_OPEN)
 
   const browseCandidates = useMemo(
-    () => buildBrowseCandidates(headTreeFiles, missingDependencies, includedSet),
-    [headTreeFiles, missingDependencies, includedSet]
+    () => buildBrowseCandidates(headTreeFiles, missingDependencies, includedSet, filePatterns),
+    [headTreeFiles, missingDependencies, includedSet, filePatterns]
   )
   const searchResult = useMemo(
     () =>
-      buildSearchCandidates(headTreeFiles, missingDependencies, includedSet, query, RESULT_LIMIT),
-    [headTreeFiles, missingDependencies, includedSet, query]
+      buildSearchCandidates(
+        headTreeFiles,
+        missingDependencies,
+        includedSet,
+        query,
+        RESULT_LIMIT,
+        filePatterns
+      ),
+    [headTreeFiles, missingDependencies, includedSet, query, filePatterns]
   )
 
   const isSearching = query.trim().length > 0
@@ -171,6 +181,25 @@ export function AddFilesPopup({ onClose }: AddFilesPopupProps): React.JSX.Elemen
           보이는 항목 모두 추가 ({visibleDependencies.length})
         </button>
       </div>
+      {/* 정정(2026-09-28) — 나가지 않고 패턴을 빠르게 추가할 수 있게(§8.2
+          결정 이력), 평소엔 접혀 있다가 필요할 때만 펼치는 토글. "패턴
+          설정"(헤더, 기존 패턴 토글/삭제까지 다룸)과 역할이 다르다. */}
+      {patternAddOpen ? (
+        <div className="add-files-popup__pattern-quick-add">
+          <PatternQuickAddRow />
+          <button type="button" onClick={() => setPatternAddOpen(false)}>
+            접기
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="add-files-popup__pattern-quick-add-toggle"
+          onClick={() => setPatternAddOpen(true)}
+        >
+          + 패턴 추가
+        </button>
+      )}
       <div className="add-files-popup__tree fill-scroll">{treeBody}</div>
       {manuallyAddedPaths.length > 0 && (
         <div className="manual-add-popup__chips">

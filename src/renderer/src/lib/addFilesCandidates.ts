@@ -1,5 +1,7 @@
 import type { DependencyCandidate, JavaDependencyKind } from '../../../shared/types'
 import { matchesFileName } from './matchesFileName'
+import { hiddenByPatterns } from './filePattern'
+import type { FilePattern } from './filePattern'
 
 export interface AddFilesCandidate {
   localPath: string
@@ -18,18 +20,22 @@ function kindByPath(
   return map
 }
 
-// RT-52/53(§5.1 RT-52, U-19·U-20) — AddFilesPopup의 "탐색 모드"(검색어
-// 없음) 후보. HEAD 트리 전체(이미 Extract·변경 파일에 있는 경로는
-// M-36(a) 가정대로 제외)를 그대로 반환한다 — TreeList가 폴더로 묶어
-// 보여준다. 누락된 의존성은 kind로 표시된다.
+// 정정(2026-09-28) — REQ-019 시절 "누락된 의존성은 항상 .java만 나와
+// 패턴이 적용될 일이 없다"는 근거가, RT-52/53으로 이 팝업이 HEAD 트리
+// 전체(모든 파일 종류) 탐색까지 흡수하면서 더 이상 성립하지 않게 됐다
+// (탐색/검색 모드는 .java 한정이 아님) — 활성 제외/포함 패턴에 걸리는
+// 후보는 "포함된 파일"과 동일하게 완전히 숨긴다(추가해도 Extract에서
+// 어차피 제외되는 파일을 미리 숨겨 헛수고를 막는다).
 export function buildBrowseCandidates(
   headTreeFiles: string[],
   missingDependencies: DependencyCandidate[],
-  includedSet: Set<string>
+  includedSet: Set<string>,
+  filePatterns: FilePattern[]
 ): AddFilesCandidate[] {
   const kinds = kindByPath(missingDependencies, includedSet)
   return headTreeFiles
     .filter((path) => !includedSet.has(path))
+    .filter((path) => !hiddenByPatterns(path, filePatterns))
     .map((localPath) => ({ localPath, kind: kinds.get(localPath) }))
 }
 
@@ -39,18 +45,21 @@ export interface SearchCandidatesResult {
 }
 
 // "결과 모드"(검색어 있음) 후보 — 부분 일치(대소문자 무관, `*` 와일드카드
-// 규칙 재사용, §5.1 "와일드카드 규칙 재사용"), 최대 50개.
+// 규칙 재사용, §5.1 "와일드카드 규칙 재사용"), 최대 50개. 패턴 필터링은
+// buildBrowseCandidates와 동일(위 주석 참고).
 export function buildSearchCandidates(
   headTreeFiles: string[],
   missingDependencies: DependencyCandidate[],
   includedSet: Set<string>,
   query: string,
-  resultLimit: number
+  resultLimit: number,
+  filePatterns: FilePattern[]
 ): SearchCandidatesResult {
   const kinds = kindByPath(missingDependencies, includedSet)
   const trimmed = query.trim()
   const matched = headTreeFiles
     .filter((path) => !includedSet.has(path))
+    .filter((path) => !hiddenByPatterns(path, filePatterns))
     .filter((path) => matchesFileName(path, trimmed))
   return {
     candidates: matched
@@ -76,11 +85,13 @@ export function visibleDependencyPaths(candidates: AddFilesCandidate[]): string[
 // 물려받는다) 이 집합에 반드시 포함된다.
 export function missingDependencyAncestorPaths(
   missingDependencies: DependencyCandidate[],
-  includedSet: Set<string>
+  includedSet: Set<string>,
+  filePatterns: FilePattern[]
 ): Set<string> {
   const set = new Set<string>()
   for (const d of missingDependencies) {
     if (includedSet.has(d.localPath)) continue
+    if (hiddenByPatterns(d.localPath, filePatterns)) continue
     const parts = d.localPath.split('/')
     parts.pop()
     let acc = ''

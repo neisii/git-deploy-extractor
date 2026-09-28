@@ -27,8 +27,24 @@ test.afterEach(async () => {
   fixture.cleanup()
 })
 
+// 파일 패턴은 저장소 구분 없이 전역 파일(patterns.json)에 저장되고
+// e2e의 userData가 테스트 실행 사이에도 그대로 남는다 — 아래 새 테스트가
+// 추가한 패턴이 정리 안 되면 다음 테스트(이 파일 포함)로 새어 들어간다
+// (included-files-pane.spec.ts의 clearAllPatterns와 같은 이유).
+async function clearAllPatterns(window: Page): Promise<void> {
+  await window.locator('.filter-pattern-bar').getByRole('button', { name: '설정' }).click()
+  const popup = window.locator('.popup')
+  for (;;) {
+    const removeButton = popup.locator('.chip__remove').first()
+    if ((await removeButton.count()) === 0) break
+    await removeButton.click()
+  }
+  await popup.locator('.popup__header button').click()
+}
+
 test('파일 추가 팝업에서 검색 → 추가 → 칩 표시 → Extract 대상에 반영', async () => {
   await window.getByRole('button', { name: 'Browse...' }).click()
+  await clearAllPatterns(window)
   await expect(window.locator('.commit-row', { hasText: 'add FileB' })).toBeVisible()
 
   await window
@@ -70,8 +86,43 @@ test('파일 추가 팝업에서 검색 → 추가 → 칩 표시 → Extract �
   await expect(addedRow.locator('.extract-row__source-badge')).toHaveText('수동')
 })
 
+test('정정(2026-09-28) — 활성 제외 패턴에 걸리는 파일은 탐색/검색 모드 모두에서 숨겨진다', async () => {
+  await window.getByRole('button', { name: 'Browse...' }).click()
+  await clearAllPatterns(window)
+  await window
+    .locator('.commit-row', { hasText: 'add FileB' })
+    .locator('input[type="checkbox"]')
+    .check()
+  await window.getByRole('button', { name: 'Preview' }).click()
+  await expect(window.locator('.included-row', { hasText: 'FileB.txt' })).toBeVisible()
+
+  // FileA.txt를 제외하는 패턴을 등록한다(§8.1 M-51과 같은 진입점).
+  await window.locator('.filter-pattern-bar').getByRole('button', { name: '설정' }).click()
+  const patternPopup = window.locator('.popup')
+  await expect(patternPopup).toBeVisible()
+  await patternPopup.locator('input[type="text"]').fill('FileA.txt')
+  await patternPopup.getByRole('button', { name: '+추가' }).click()
+  await patternPopup.locator('.popup__header button').click()
+  await expect(patternPopup).toHaveCount(0)
+
+  await window.getByRole('button', { name: '+ 파일 추가' }).click()
+  const popup = window.locator('.popup')
+  await expect(popup).toBeVisible()
+
+  // 탐색 모드(검색어 없음) — FileA.txt가 후보에서 완전히 숨겨진다.
+  await expect(popup.locator('.tree-row--file', { hasText: 'FileA.txt' })).toHaveCount(0)
+
+  // 결과 모드(검색어 있음)도 동일하게 숨겨진다.
+  await popup.locator('input[type="text"]').fill('FileA')
+  await expect(popup.locator('.tree-row--file', { hasText: 'FileA.txt' })).toHaveCount(0)
+
+  await popup.locator('.popup__header button').click()
+  await clearAllPatterns(window)
+})
+
 test('검색어 없이 열면 HEAD 트리 전체를 탐색할 수 있다(RT-53, 이 fixture엔 누락된 의존성 없음)', async () => {
   await window.getByRole('button', { name: 'Browse...' }).click()
+  await clearAllPatterns(window)
   await window
     .locator('.commit-row', { hasText: 'add FileB' })
     .locator('input[type="checkbox"]')
@@ -88,4 +139,33 @@ test('검색어 없이 열면 HEAD 트리 전체를 탐색할 수 있다(RT-53, 
   // 추가"는 비활성이어야 한다.
   await expect(popup.locator('.tree-row--file', { hasText: 'FileA.txt' })).toBeVisible()
   await expect(popup.getByRole('button', { name: /보이는 항목 모두 추가/ })).toBeDisabled()
+})
+
+test('정정(2026-09-28) — 팝업 안 "+ 패턴 추가"로 나가지 않고 패턴을 추가하면 목록이 바로 줄어든다', async () => {
+  await window.getByRole('button', { name: 'Browse...' }).click()
+  await clearAllPatterns(window)
+  await window
+    .locator('.commit-row', { hasText: 'add FileB' })
+    .locator('input[type="checkbox"]')
+    .check()
+  await window.getByRole('button', { name: 'Preview' }).click()
+  await expect(window.locator('.included-row', { hasText: 'FileB.txt' })).toBeVisible()
+
+  await window.getByRole('button', { name: '+ 파일 추가' }).click()
+  const popup = window.locator('.popup')
+  await expect(popup).toBeVisible()
+  await expect(popup.locator('.tree-row--file', { hasText: 'FileA.txt' })).toBeVisible()
+
+  // 기본은 접힌 상태 — 펼쳐야 입력이 나온다.
+  await expect(popup.getByRole('textbox')).toHaveCount(1) // 검색창만
+  await popup.getByRole('button', { name: '+ 패턴 추가' }).click()
+  await popup.locator('.filter-patterns-popup__add-row input[type="text"]').fill('FileA.txt')
+  await popup.getByRole('button', { name: '+추가' }).click()
+
+  // 팝업을 나가지 않고도 트리에서 FileA.txt가 바로 사라진다.
+  await expect(popup.locator('.tree-row--file', { hasText: 'FileA.txt' })).toHaveCount(0)
+  await expect(popup).toBeVisible()
+
+  await popup.locator('.popup__header button').click()
+  await clearAllPatterns(window)
 })
