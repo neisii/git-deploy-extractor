@@ -14,6 +14,7 @@ import type {
   DependencyAnalysisResult,
   DeployPlan,
   ExportTargetValidation,
+  FilePattern,
   ListCommitsParams,
   ListCommitsResult,
   ManualFileEntry,
@@ -47,6 +48,8 @@ export interface IpcChannelMap {
     result: ExportTargetValidation
   }
   'package:export': { params: [params: BuildPackageParams]; result: BuildPackageResult | null }
+  'patterns:load': { params: []; result: FilePattern[] }
+  'patterns:save': { params: [patterns: FilePattern[]]; result: void }
   'update:check': { params: []; result: CheckUpdateResult }
   'update:confirmAndOpen': { params: []; result: boolean }
 }
@@ -71,6 +74,8 @@ export const IPC_CHANNELS: { [K in IpcChannel]: K } = {
   'package:browseExportDir': 'package:browseExportDir',
   'package:validateExportTarget': 'package:validateExportTarget',
   'package:export': 'package:export',
+  'patterns:load': 'patterns:load',
+  'patterns:save': 'patterns:save',
   'update:check': 'update:check',
   'update:confirmAndOpen': 'update:confirmAndOpen'
 }

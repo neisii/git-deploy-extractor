@@ -1,23 +1,17 @@
-// docs/refactoring/REFACTORING_TASKS.md §3.1 — 파일 패턴(제외/포함) 규칙의
-// 순수 함수 구현. component-playground.html의 시연용 구현(globToRe/interpret/
-// matchPattern/hiddenByPatterns)을 타입 있는 모듈로 이식한 것이다.
-//
-// 아직 어디에서도 import하지 않는다(RT-46에서 UI에 배선 예정) — RT-01은
-// P0 안전망 단계이므로 로직만 먼저 테스트와 함께 만들어 두고, 기존
-// excludePatternMatch.ts(REQ-019/DR-018, `*` 단일 세그먼트 한정)는 RT-46에서
-// 이 모듈로 교체된다.
+// 파일 패턴(제외/포함, REQ-026) 규칙의 순수 함수 구현 — 종류 자동 파생
+// (interpret)·매치 판정(matchPattern/hiddenByPatterns). `FilePattern` 타입은
+// Main(patternStore.ts)도 참조해 shared/types.ts로 옮겨졌다(2026-09-28) —
+// 여기서는 재수출만 한다. 매칭 로직 자체는 Main이 필요 없어(Export 대상
+// 필터링은 Renderer가 이미 걸러서 IPC로 넘김) 계속 여기 남는다.
+
+import type { FilePattern } from '../../../shared/types'
+export type { FilePattern } from '../../../shared/types'
 
 export type PatternKind = 'path' | 'package' | 'name'
 
 export interface InterpretedPattern {
   kind: PatternKind
   glob: string
-}
-
-export interface FilePattern {
-  pattern: string
-  mode: 'exclude' | 'include'
-  enabled: boolean
 }
 
 const REGEX_SPECIAL_CHARS = /[.+^${}()|[\]\\]/g

@@ -1317,6 +1317,38 @@ UI 변경 단계라 P0~P3의 "동작 불변" 원칙이 더 이상 적용되지 �
     수정을 요청하면 그때부터 시작한다. 착수 전 REQUIREDMENT.md·
     RISK_ISSUES.md §4(결정 이력)·§8(백로그, 미확정 5건 있음)부터 확인할 것.
 
+    **§8.2 필터 사전 설정 — 파일 기반 저장 구현 완료(2026-09-28, 결정 이력
+    #71, 아직 미커밋/미출시).** 리팩토링(P0~P5) 완료 확정 직후 백로그
+    §8.2를 구체화한 것 — REFACTORING_TASKS.md는 이미 동결됐으므로 이
+    작업 내용은 정식 문서(REQUIREDMENT.md REQ-026, ARCHITECTURE.md §4.9,
+    DETAILED_DESIGN.md §18.1, RISK_ISSUES.md §8.2+결정 이력 #71)에 직접
+    기록했다 — 이 문단은 RT 번호 없는 "동결 이후 첫 기능"의 기록 방식
+    예시로 참고할 것. **핵심**: `FilePattern` 제외/포함 패턴의 저장이
+    `localStorage`에서 Main이 관리하는 파일(`app.getPath('userData')/
+    patterns.json`, 전역 1개)로 옮겨갔다 — 편집 UX(`FilterPatternsPopup`
+    팝업)는 전혀 바뀌지 않았다, 저장 매체만 바뀌었다. 매치 판정 로직
+    (`lib/filePattern.ts`)은 그대로 Renderer 전용 순수 함수로 남는다 —
+    Main은 패턴 매칭을 전혀 모른다(Export 필터링도 여전히 Renderer의
+    `exportPlan.ts`가 `package:export` IPC 호출 전에 끝낸다). 새 파일:
+    `main/patterns/patternStore.ts`(+테스트, `mapping/profileStore.ts`와
+    동일 패턴)·`main/ipc/handlers/patternsFile.ts`(`getPatternsFilePath`)·
+    `main/ipc/handlers/patterns.ts`(`patterns:load`/`patterns:save` IPC).
+    `FilePattern` 타입은 `shared/types.ts`로 이동(RT-23 배치 규칙 — Main·
+    Renderer 양쪽이 참조). `deployFilesSlice.ts`에 `initFilePatterns()`
+    신설(App.tsx 시작 시 호출) — 파일이 비어 있으면(최초 실행) 예전
+    `localStorage`(`gde:excludePatterns`) 값을 `lib/filePatterns.ts`의
+    `loadLegacyFilePatterns()`로 1회만 마이그레이션한다. 설계 논의 중
+    나온 두 갈림길: (1) 저장 위치 — 저장소별 vs 전역 단일 파일 → **전역
+    단일**로 확정(사용자가 "여러 프로젝트 패턴이 섞이는 위험은 감수하는
+    선택 사항"이라고 직접 정리, 오버엔지니어링 방지). (2) 팀 공유 방법 —
+    가져오기/내보내기 UI 신설 vs 파일 그대로 복사 → **파일 복사**로
+    확정(새 UI 불필요). `npm test`(244개, 신규 9건 — `patternStore.test.ts`
+    전부 신규 6건 + `initFilePatterns` 신규 3건)·`typecheck`·`lint`·`build`·
+    `test:e2e`(23개, 기존 `work-area-popups.spec.ts`의 패턴 팝업 시나리오가
+    실제 Electron 프로세스로 파일 왕복까지 검증) 전부 통과. **커밋은 아직
+    안 했다** — 사용자가 명시적으로 요청할 때만 커밋하는 이 저장소의
+    규칙(HANDOFF.md 리팩토링 작업 규칙과 동일)을 그대로 따른다.
+
 먼저 이 순서로 읽어주세요 (짐작하지 말고 실제로 읽어야 합니다):
 
 0. (리팩토링 관련 작업이면) docs/refactoring/REFACTORING_TASKS.md — 위 안내 참고.

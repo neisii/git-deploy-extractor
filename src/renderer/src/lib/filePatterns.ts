@@ -1,14 +1,17 @@
 import type { FilePattern } from './filePattern'
 
-const STORAGE_KEY = 'gde:excludePatterns'
+const LEGACY_STORAGE_KEY = 'gde:excludePatterns'
 
-// RT-46 — RT-01의 lib/excludePatterns.ts(REQ-019/DR-018, ExcludePatternEntry
-// {pattern, enabled})를 대체한다. 저장 키는 기존 그대로 재사용(REQ-019
-// 데이터와 호환)하되, 값 형태를 FilePattern({pattern, mode, enabled})으로
-// 확장했다 — 기존에 저장된 항목은 mode가 없으므로 'exclude'로 마이그레이션.
-export function loadFilePatterns(): FilePattern[] {
+// REQ-026 정정(2026-09-28) — 파일 패턴 저장소가 localStorage에서 Main이
+// 관리하는 파일(patterns.json)로 옮겨갔다. 이 함수는 그 전환의 1회성
+// 마이그레이션 전용이다 — deployFilesSlice의 initFilePatterns()가 파일이
+// 비어 있을 때만(아직 한 번도 마이그레이션 안 한 최초 실행) 호출해
+// 예전 localStorage 값을 읽어 새 파일에 옮겨 쓴다. 옮긴 뒤에는 파일에
+// 데이터가 생기므로 이 함수가 다시 호출될 일이 없다 — 저장(save)은 더
+// 이상 하지 않는다(patterns:save IPC로 대체).
+export function loadLegacyFilePatterns(): FilePattern[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY)
     if (!raw) return []
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
@@ -24,18 +27,8 @@ export function loadFilePatterns(): FilePattern[] {
         pattern: entry.pattern as string,
         enabled: entry.enabled as boolean,
         mode: entry.mode === 'include' ? 'include' : 'exclude'
-        // B안(2026-09-24) — screenOnly 필드 제거. 기존에 저장돼 있던 값은
-        // (릴리스 전 필드라 실사용자 데이터 없음) 그냥 무시된다.
       }))
   } catch {
     return []
-  }
-}
-
-export function saveFilePatterns(patterns: FilePattern[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(patterns))
-  } catch {
-    // 저장 실패는 무시 — 기능에 영향 없음(updateCheckCache.ts와 동일 이유)
   }
 }

@@ -185,3 +185,19 @@ export interface ResolveManualFileRequest {
 // (§10.5 "더 단순한 쪽으로 정한다"에 따른 구현 시점 단순화).
 export type CheckUpdateResult =
   { ok: true; hasUpdate: boolean; latestVersion: string } | { ok: false }
+
+// REQ-026 정정(2026-09-28) — 파일 패턴(제외/포함)을 Renderer의
+// localStorage에서 Main이 관리하는 파일(`patterns.json`, userData 아래
+// 전역 하나)로 옮기면서, Main(IPC 채널 params/result)과 Renderer(스토어
+// 상태) 양쪽이 이 타입을 참조하게 돼 shared로 옮겼다 — ARCHITECTURE.md
+// §2.2 "모듈 배치 기준"(RT-23) 그대로: 양쪽이 참조하는 타입은 shared/.
+// 매칭 로직(interpret/matchPattern/hiddenByPatterns)은 Main이 필요 없어
+// (Export 필터링은 Renderer가 이미 다 걸러서 IPC로 넘김) 그대로
+// renderer/src/lib/filePattern.ts에 남는다 — 이 타입만 재수출한다.
+export type FilePatternMode = 'exclude' | 'include'
+
+export interface FilePattern {
+  pattern: string
+  mode: FilePatternMode
+  enabled: boolean
+}

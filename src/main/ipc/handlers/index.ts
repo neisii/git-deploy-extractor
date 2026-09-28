@@ -4,6 +4,7 @@ import { registerGitHandlers } from './git'
 import { registerMappingHandlers } from './mapping'
 import { registerAnalysisHandlers } from './analysis'
 import { registerPackageHandlers } from './package'
+import { registerPatternsHandlers } from './patterns'
 import { registerUpdateHandlers } from './update'
 
 export { getProfilesDir } from './profilesDir'
@@ -21,5 +22,6 @@ export function registerIpcHandlers(): void {
   registerMappingHandlers()
   registerAnalysisHandlers()
   registerPackageHandlers()
+  registerPatternsHandlers()
   registerUpdateHandlers()
 }

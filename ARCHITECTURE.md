@@ -219,9 +219,11 @@ IPC 채널 2개만 추가된다: `git:listTrackedFiles`(후보 풀 — HEAD 트�
 
 리비전 싱크 문제(내부망에 실제로 뭐가 반영됐는지)는 이 모듈이 풀지 않는다 — 망분리 환경에서 GDE는 그 상태를 원리적으로 관측할 수 없어(RISK_ISSUES.md 결정 이력 #48), 탐지 대신 사용자 판단에 맡기는 것이 이 모듈의 설계 전제다. **정정(2026-09-24, RT-52/53)**: UI는 자동완성 텍스트 입력에서 HEAD 트리 탐색(`AddFilesPopup.tsx`, 옛 `ManualAddPopup.tsx` 대체)으로 바뀌었고, REQ-013 누락된 의존성도 이 팝업 안으로 통합됐다. 자세한 UI/생명주기는 DETAILED_DESIGN.md §18.5 참고.
 
-## 4.9 파일 패턴 관리 (REQ-026, 2026-09-24 신규)
+## 4.9 파일 패턴 관리 (REQ-026, 2026-09-24 신규 / 2026-09-28 저장 방식 정정)
 
-**책임**: 사용자가 등록한 제외/포함 패턴으로 "포함된 파일"/"Extract 대상" 화면 표시와 Export 대상을 걸러낸다. 순수 함수 계층(`src/renderer/src/lib/filePattern.ts`)이며 IPC나 Main Process를 전혀 거치지 않는다 — 매치 판정이 로컬 문자열 비교(글롭→정규식)로 충분해 파일시스템/git 접근이 필요 없기 때문이다. 저장은 Renderer `localStorage`(`gde:filePatterns`, 전역). Package Builder(§4.4)가 Export 시점에 같은 판정 함수를 한 번 더 호출해 최종 대상을 거른다. 알고리즘은 DETAILED_DESIGN.md §18.1 참고.
+**책임**: 사용자가 등록한 제외/포함 패턴으로 "포함된 파일"/"Extract 대상" 화면 표시와 Export 대상을 걸러낸다. 매치 판정은 순수 함수 계층(`src/renderer/src/lib/filePattern.ts`)이며 IPC나 Main Process를 전혀 거치지 않는다 — 로컬 문자열 비교(글롭→정규식)로 충분해 파일시스템/git 접근이 필요 없기 때문이다. Export 대상 필터링도 Main의 Package Builder(§4.4)가 아니라 Renderer의 `exportPlan.ts`가 `package:export` IPC를 호출하기 **전에** 끝낸다 — Main은 이미 걸러진 최종 목록만 받으므로 패턴 매치 로직을 전혀 알 필요가 없다(RT-23 배치 규칙, §2.2).
+
+**정정(2026-09-28, 필터 사전 설정)**: 저장만 Main으로 옮겨졌다. `FilePattern` 타입은 Renderer와 Main(IPC 채널 시그니처) 양쪽이 참조하므로 `src/shared/types.ts`로 이동했고(§2.2 규칙), 실제 파일 I/O는 `src/main/patterns/patternStore.ts`(`loadFilePatterns`/`saveFilePatterns`, `mapping/profileStore.ts`와 동일한 패턴)가 담당한다. 경로는 `app.getPath('userData')/patterns.json`(전역 1개, 저장소별 아님) — `src/main/ipc/handlers/patternsFile.ts`의 `getPatternsFilePath()`. IPC 채널은 `patterns:load`/`patterns:save`(`src/main/ipc/handlers/patterns.ts`) 2개뿐이고 매치 판정은 옮기지 않았다 — 저장 매체만 `localStorage`에서 파일로 바뀐 것이다. 앱 시작 시 Renderer가 `initFilePatterns()`로 로드하고, 파일이 비어 있으면(최초 실행) 예전 `localStorage`(`gde:excludePatterns`) 값을 1회 마이그레이션한다(`lib/filePatterns.ts`의 `loadLegacyFilePatterns()`). 알고리즘은 DETAILED_DESIGN.md §18.1 참고.
 
 ---
 

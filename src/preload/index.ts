@@ -48,6 +48,11 @@ const api = {
     export: (params: IpcChannelMap['package:export']['params'][0]) =>
       invoke(IPC_CHANNELS['package:export'], params)
   },
+  patterns: {
+    load: () => invoke(IPC_CHANNELS['patterns:load']),
+    save: (patterns: IpcChannelMap['patterns:save']['params'][0]) =>
+      invoke(IPC_CHANNELS['patterns:save'], patterns)
+  },
   update: {
     check: () => invoke(IPC_CHANNELS['update:check']),
     confirmAndOpen: () => invoke(IPC_CHANNELS['update:confirmAndOpen'])

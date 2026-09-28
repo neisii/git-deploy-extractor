@@ -955,7 +955,7 @@ function hiddenByPatterns(path: string, patterns: FilePattern[]): boolean {
 
 **종류 파생 규칙**: `/`가 있으면 `path`(경로 전체 매치, REQ-019 원래 문법). 점 구분 식별자 나열이 `.**`로 끝나면(`com.acme.legacy.**`) `pkg` — 내부적으로 `**/com/acme/legacy/**` 경로 패턴으로 변환해서 매치한다(자바 패키지 표기를 경로로 자동 번역 — 같은 패키지의 리소스·테스트 소스까지 함께 잡힘, `.java` 한정 아님). 그 외는 `name`(파일명만 매치, REQ-019 원래 문법). 글롭→정규식 변환(`globToRe`)은 REQ-019 시절과 동일(`*` → `[^/]*`, 특수문자 이스케이프, 전체 앵커).
 
-**저장**: `localStorage`(`gde:filePatterns`) 전역 키, `FilePattern[] = { pattern, mode: 'exclude'|'include', enabled }[]`. 마이그레이션(`lib/filePatterns.ts`)이 v0.6.0의 `excludePatterns`(REQ-019, `mode` 필드 없음 — 전부 `exclude`로 취급)를 읽어 새 스키마로 자동 변환한다.
+**저장(정정, 2026-09-28)**: `FilePattern[] = { pattern, mode: 'exclude'|'include', enabled }[]`은 이제 `localStorage`가 아니라 Main이 관리하는 파일 `app.getPath('userData')/patterns.json`(전역 1개, 저장소별 아님)에 저장된다 — `src/main/patterns/patternStore.ts`의 `loadFilePatterns`/`saveFilePatterns` + IPC 채널 `patterns:load`/`patterns:save`(`src/main/ipc/handlers/patterns.ts`). `FilePattern` 타입 자체도 Main·Renderer 양쪽이 참조해 `src/shared/types.ts`로 옮겼다(매치 로직은 그대로 `lib/filePattern.ts`에 남는다 — RT-23 배치 규칙은 "타입/로직이 Main·Renderer 양쪽에서 쓰이는가"만 보므로, 매치 함수는 Renderer 전용이라 이동 대상이 아니다). 앱 시작 시 `deployFilesSlice.initFilePatterns()`가 파일을 읽고, 파일이 비어 있으면(최초 실행) `lib/filePatterns.ts`의 `loadLegacyFilePatterns()`로 v0.6.0 이후의 옛 `localStorage`(`gde:excludePatterns`) 값을 1회 마이그레이션해 새 파일에 옮겨 쓴다(그 이후엔 파일에 데이터가 있으므로 다시 호출되지 않는다).
 
 ## 18.2 Extract 대상 이동 모델 (REQ-011 정정)
 

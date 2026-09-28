@@ -44,6 +44,10 @@ export interface Api {
     ) => Promise<Result<'package:validateExportTarget'>>
     export: (...args: Params<'package:export'>) => Promise<Result<'package:export'>>
   }
+  patterns: {
+    load: () => Promise<Result<'patterns:load'>>
+    save: (...args: Params<'patterns:save'>) => Promise<Result<'patterns:save'>>
+  }
   update: {
     check: () => Promise<Result<'update:check'>>
     confirmAndOpen: () => Promise<Result<'update:confirmAndOpen'>>

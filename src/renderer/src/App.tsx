@@ -14,12 +14,14 @@ function App(): React.JSX.Element {
   const initProfiles = useAppStore((s) => s.initProfiles)
   const loadAppVersion = useAppStore((s) => s.loadAppVersion)
   const initUpdateCheck = useAppStore((s) => s.initUpdateCheck)
+  const initFilePatterns = useAppStore((s) => s.initFilePatterns)
 
   useEffect(() => {
     void initProfiles()
     void loadAppVersion()
     void initUpdateCheck()
-  }, [initProfiles, loadAppVersion, initUpdateCheck])
+    void initFilePatterns()
+  }, [initProfiles, loadAppVersion, initUpdateCheck, initFilePatterns])
 
   return (
     <div className="app-shell">

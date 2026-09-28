@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { DeployFileStatus, JavaDependencyKind } from '../../../../shared/types'
-import { loadFilePatterns, saveFilePatterns } from '../../lib/filePatterns'
+import { loadLegacyFilePatterns } from '../../lib/filePatterns'
 import { parsePatternList } from '../../lib/filePattern'
 import type { FilePattern } from '../../lib/filePattern'
 import { api } from '../../api'
@@ -48,10 +48,15 @@ export const emptyManualAddState = {
 export interface DeployFilesSlice {
   deployFiles: DeployFileEntry[]
   // REQ-019/DR-018 + RT-46(§3.1) — "포함된 파일"에만 적용(누락된 의존성은
-  // 항상 .java만 나와 무의미). localStorage(gde:excludePatterns)로 동기
-  // 초기화. 제외/포함 두 모드를 갖는다(예전 ExcludePatternEntry는 제외
+  // 항상 .java만 나와 무의미). REQ-026 정정(2026-09-28) — Main이 관리하는
+  // patterns.json에서 initFilePatterns()로 비동기 로드한다(App.tsx 시작
+  // useEffect). 제외/포함 두 모드를 갖는다(예전 ExcludePatternEntry는 제외
   // 전용이었음).
   filePatterns: FilePattern[]
+  // REQ-026 정정(2026-09-28) — patterns.json에서 읽어와 채운다. 파일이
+  // 비어 있으면(최초 실행) loadLegacyFilePatterns()로 예전 localStorage
+  // 값을 1회 마이그레이션한다.
+  initFilePatterns: () => Promise<void>
   // REQ-021/DR-019 — 배포 대상 파일 수동 추가. headTreeFiles는 팝업
   // 자동완성 후보 풀(선택된 Branch의 HEAD 트리 전체, Preview 성공 시
   // best-effort로 갱신), manuallyAddedPaths는 팝업 안 칩 이력 표시 전용이다.
@@ -104,8 +109,21 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
   get
 ) => ({
   deployFiles: [],
-  filePatterns: loadFilePatterns(),
+  filePatterns: [],
   ...emptyManualAddState,
+
+  initFilePatterns: async () => {
+    const fromFile = await api.patterns.load()
+    if (fromFile.length > 0) {
+      set({ filePatterns: fromFile })
+      return
+    }
+    const legacy = loadLegacyFilePatterns()
+    if (legacy.length > 0) {
+      set({ filePatterns: legacy })
+      void api.patterns.save(legacy).catch(() => {})
+    }
+  },
 
   // RT-46(§3.1) — 빈 입력·빈 항목은 무시. 같은 (pattern, mode)가 이미
   // 있으면 새로 추가하지 않고 enabled만 켠다(중복 방지 — 예전에 껐던
@@ -131,7 +149,7 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
           next = [...next, { pattern, mode, enabled: true }]
         }
       }
-      saveFilePatterns(next)
+      void api.patterns.save(next).catch(() => {})
       return { filePatterns: next }
     })
     return { added, activated }
@@ -142,7 +160,7 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
       const next = state.filePatterns.map((p) =>
         p.pattern === pattern && p.mode === mode ? { ...p, enabled: !p.enabled } : p
       )
-      saveFilePatterns(next)
+      void api.patterns.save(next).catch(() => {})
       return { filePatterns: next }
     })
   },
@@ -154,7 +172,7 @@ export const createDeployFilesSlice: StateCreator<AppState, [], [], DeployFilesS
   removeFilePattern: (pattern, mode) => {
     set((state) => {
       const next = state.filePatterns.filter((p) => !(p.pattern === pattern && p.mode === mode))
-      saveFilePatterns(next)
+      void api.patterns.save(next).catch(() => {})
       return { filePatterns: next }
     })
   },
