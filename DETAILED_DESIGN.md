@@ -982,7 +982,7 @@ extractItems = [
 
 **자동 닫힘 트리거**: ① `[Preview]` 클릭 시작 시점(`analyzing`이 켜지는 순간) — 재계산 중 팝업이 가리키던 데이터가 무효해지므로. ② Reload/Browse 시작 시점(`repository.status`가 `'validating'`이 되는 순간). ③ WorkArea 소유 섹션(커밋/배포 대상 파일)이 접힐 때(RT-47) — CommitQueryBar가 접히는 건 무시(그쪽엔 팝업 트리거가 없음).
 
-**크기/접근성**: 720×480 고정, 부모 컨테이너 높이가 그보다 작으면 `min(480px, calc(100% - 20px))`로 클램프(U2). `Esc`로 닫힘, 닫히면 트리거 버튼으로 포커스 복귀, 포커스 트랩 포함(`Popup.tsx` 공용 프리미티브, RT-40).
+**크기/접근성**: **정정(2026-09-28, hotfix)** 880×560(RT-54 720×480에서 확대 — AddFilesPopup 긴 파일명 레이아웃 버그 수정과 함께, 트리·칩·패턴 입력이 한 화면에 들어가기엔 기존 크기가 부족하다는 판단으로 키웠다). 부모 컨테이너 높이가 그보다 작으면 `min(560px, calc(100% - 20px))`로 클램프(U2). `Esc`로 닫힘, 닫히면 트리거 버튼으로 포커스 복귀, 포커스 트랩 포함(`Popup.tsx` 공용 프리미티브, RT-40).
 
 ## 18.4 FilterPatternsPopup — 추가 입력 (RT-46/RT-51)
 
@@ -1004,6 +1004,8 @@ extractItems = [
 **정정(2026-09-28) — 파일 패턴 적용**: 활성 제외/포함 패턴(§18.1)에 걸리는 후보는 탐색·결과 두 모드 모두에서 완전히 숨긴다(`lib/addFilesCandidates.ts`의 `buildBrowseCandidates`/`buildSearchCandidates`가 `hiddenByPatterns`를 추가로 거른다, 누락된 의존성 출처 여부와 무관). 기본 펼침에 쓰는 `missingDependencyAncestorPaths`도 패턴에 걸린 의존성은 조상 폴더 강제 펼침 대상에서 제외한다. 원래 REQ-019 시절 "누락된 의존성은 항상 `.java`만 나와 패턴이 적용될 일이 없다"는 근거가, 이 팝업이 HEAD 트리 전체(모든 파일 종류)를 탐색하게 되면서 더 이상 성립하지 않아 확장했다 — REQUIREDMENT.md REQ-026 "적용 범위" 정정 참고.
 
 **정정(2026-09-28) — 인라인 "+ 패턴 추가"(추가 전용)**: 바로 위 정정으로 후보가 조용히 숨겨질 수 있게 되면서, 패턴을 추가하는 순간 목록이 줄어드는 걸 팝업 안에서 바로 보고 싶다는 요청으로 검색창 아래·트리 위에 접이식 추가 전용 입력을 뒀다. 팝업을 닫고 `FilterPatternsPopup`으로 전환하는 헤더 버튼도 한때 만들었으나(팝업 전환 시 검색어·펼침 상태 초기화가 단점), 이 인라인 입력으로 "나가지 않고 추가"라는 핵심 필요가 해소돼 **되돌렸다**(RISK_ISSUES.md 결정 이력 참고 — `Popup.tsx`의 `headerActions` prop도 함께 제거). 두 팝업을 동시에 띄우는 방안도 검토했지만 기각했다 — 팝업 단일 슬롯 구조·백드롭·포커스 트랩을 전부 다중 인스턴스용으로 재설계해야 해 복잡도가 이 문제의 크기에 비해 과하다고 판단했다. 평소엔 "+ 패턴 추가" 한 줄(링크 스타일)만 보이고, 누르면 `PatternQuickAddRow`(신규, `deployFiles/PatternQuickAddRow.tsx`)가 그 자리에 펼쳐진다 — 모드 선택+텍스트 입력+붙여넣기 줄바꿈→쉼표 변환+3초 피드백까지는 `FilterPatternsPopup`의 추가 입력과 동일 로직이지만, 해석 미리보기 오버레이와 기존 패턴 칩 목록(토글/삭제)은 없다(기존 패턴을 토글·삭제하려면 여전히 `IncludedFilesPane` 툴바의 "설정" 버튼으로 `FilterPatternsPopup`을 열어야 한다). 두 컴포넌트 사이에 로직을 공유 추출하지 않고 일부러 각자 둔다 — 작고 독립적인 코드라 공유의 이득보다 `FilterPatternsPopup`의 오버레이 상태와 얽히는 비용이 크다고 판단했다. 데이터는 둘 다 같은 `filePatterns` zustand 상태를 구독하므로, 추가하는 즉시(팝업을 나가지 않아도) `buildBrowseCandidates`/`buildSearchCandidates`가 재계산돼 트리에서 사라진다.
+
+**hotfix(2026-09-28) — 긴 파일명 레이아웃 깨짐**: 파일명이 매우 길면(예: 80자+) "추가" 버튼까지 레이아웃이 깨지는 버그를 사용자가 제보(Playwright 스크린샷으로 재현: 텍스트가 안 잘리고 그대로 넘쳐 "추가" 버튼이 좁은 폭에 눌려 두 줄로 접힘). 근본 원인은 `overflow:hidden;text-overflow:ellipsis;white-space:nowrap`을 `display:flex` 컨테이너(`.add-files-row__name`, 텍스트+종류 배지를 함께 담음) 자신에 걸어둔 것 — 플렉스 컨테이너는 자식을 개별 flex item으로 다뤄 자기 자신에 건 ellipsis가 적용되지 않는다. `extract-row__name`/`deploy-files-row__local` 쌍이 이미 쓰던 해법과 동일하게, ellipsis를 실제 텍스트 전용 자식(`.add-files-row__filename`, 신규)으로 옮겨 해결했다. 고정을 제거하면 실패하고 복구하면 통과하는 것까지 e2e로 직접 검증(재현 검증). 이 계기로 팝업 표준 크기도 720×480→880×560으로 확대했다(바로 위 "크기/접근성" 정정 참고, 근본 원인과는 별개로 화면이 여유가 부족하다는 판단).
 
 ## 18.6 TreeList 공용 컴포넌트 (RT-40/53)
 

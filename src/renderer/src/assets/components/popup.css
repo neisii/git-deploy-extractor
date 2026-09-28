@@ -18,16 +18,22 @@
   background: rgba(0, 0, 0, 0.35);
 }
 
-/* RT-54(U-14) — 표준 크기 720×480(폭 min(720px, 94%), 높이
-   min(480px, 부모 높이 − 20px)). 예전 480px 고정폭은 RT-15 때 "전체
-   표준 크기는 RT-54 몫"으로 미뤄뒀던 것 — RT-53의 TreeList(폴더
-   들여쓰기+경로 복사+×/추가 버튼)가 480px에선 비좁아 RT-53과 함께
-   먼저 처리한다. `.popup-backdrop`의 padding(16px×2)까지 감안해 부모
-   높이 여유를 20px로 잡았다. */
+/* RT-54(U-14, 720×480) → 핫픽스(2026-09-28)로 880×560으로 확대. 계기는
+   AddFilesPopup에서 파일명이 길면 "추가" 버튼까지 레이아웃이 깨지는
+   버그(근본 원인은 ellipsis 미적용이라 addFilesPopup.css에서 따로
+   고쳤다) — 그 수정과 별개로, 트리·칩·패턴 입력까지 한 화면에 다
+   들어가기엔 720×480이 여유가 부족하다는 사용자 판단으로 크기 자체도
+   키웠다. 폭 min(880px, 94%), 높이 min(560px, 부모 높이 − 20px) — 모든
+   팝업(AddFilesPopup·FilterPatternsPopup·DeletedFilesPopup·
+   WarningsPopup)이 여전히 이 하나의 표준 크기를 공유한다(RT-54 원칙
+   유지, 팝업마다 다른 크기를 두지 않는다). 1200×760 기본 창 기준 폭
+   73%·높이 74%로, 이전(720×480, 60%/63%)보다 커졌지만 창을 꽉 채우지는
+   않는다. `.popup-backdrop`의 padding(16px×2)까지 감안해 부모 높이
+   여유를 20px로 잡은 계산은 그대로 유지. */
 .popup {
-  width: min(720px, 94%);
+  width: min(880px, 94%);
   max-width: 100%;
-  height: min(480px, calc(100% - 20px));
+  height: min(560px, calc(100% - 20px));
   max-height: 100%;
   overflow-y: auto;
   display: flex;

@@ -61,14 +61,33 @@
   flex: 1 1 auto;
 }
 
+/* 핫픽스(2026-09-28) — 파일명이 아주 길면(예: 80자+) "추가" 버튼까지
+   레이아웃이 깨지던 버그. 원인: overflow:hidden+text-overflow:ellipsis를
+   display:flex 컨테이너(.add-files-row__name) 자신에 걸어뒀던 것 —
+   flex 컨테이너는 자기 자식(텍스트+배지)을 개별 flex item으로 다루기
+   때문에 ellipsis가 적용되지 않고 그대로 넘쳐(row 밖으로 텍스트가
+   삐져나가면서 "추가" 버튼 텍스트까지 좁은 폭에 눌려 두 줄로 접힘,
+   Playwright 스크린샷으로 재현 확인). extract-row__name/deploy-files-row__local
+   쌍이 이미 쓰던 것과 같은 해법 — ellipsis는 flex 컨테이너가 아니라
+   그 안의 실제 텍스트 전용 자식(.add-files-row__filename)에만 건다. */
 .add-files-row__name {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
   flex: 1 1 auto;
+}
+
+.add-files-row__filename {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-files-row__add-button {
+  flex: 0 0 auto;
   white-space: nowrap;
 }
 
@@ -83,10 +102,20 @@
    무채색 톤 대신 확실히 눈에 띄는 강조 스타일을 쓴다. 새 색을 만들지 않고
    REQ-017 버전 배지의 강조색(--available)을 그대로 재사용한다 — 이 앱에서
    이미 "주목할 것"의 의미로 쓰이는 색이라 일관성이 맞는다. */
+/* 핫픽스(2026-09-28) — 수동 추가 이력이 늘어날수록 이 영역이 끝없이
+   커져(flex-wrap) 형제인 .add-files-popup__tree(flex:1)의 공간을 잠식,
+   트리 목록 세로 길이가 계속 좁아지는 버그를 재현·수정. 높이를
+   고정 상한(2줄 분량)으로 막고 그 안에서만 자체 스크롤하게 한다 —
+   트리 영역 크기가 이력 개수와 무관하게 항상 일정하게 유지된다.
+   flex-shrink:0으로 다른 형제가 커져도 이 영역 자체가 짜부라지지
+   않게 한다(짜부라지면 칩이 안 보이는 게 아니라 넘친 채로 잘림). */
 .manual-add-popup__chips {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  max-height: 48px;
+  overflow-y: auto;
+  flex-shrink: 0;
 }
 
 .manual-add-popup__chip {

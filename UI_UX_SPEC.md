@@ -42,7 +42,7 @@ AppShell (App.tsx, .app-shell)
 │   │   └── SplitPane
 │   │       ├── IncludedFilesPane        (좌: "포함된 파일" — 아직 Extract로 안 옮긴 변경 파일. 전체 선택+검색+패턴 요약을 한 줄에, TreeList)
 │   │       └── ExtractTargetsPane       (우: "Extract 대상" — 실제 Export될 파일. TreeList, 각 행 ×로 되돌리기 + "모두 되돌리기")
-│   └── PopupHost                     (WorkArea 자식 — openPopup 값에 따라 하나만 렌더링, 720×480 고정+뷰포트 클램프)
+│   └── PopupHost                     (WorkArea 자식 — openPopup 값에 따라 하나만 렌더링, 880×560 고정+뷰포트 클램프(hotfix 2026-09-28, 이전 720×480))
 │       ├── AddFilesPopup               (openPopup==='addFiles' — HEAD 트리 탐색 + 누락된 의존성 통합, REQ-021)
 │       ├── FilterPatternsPopup         (openPopup==='patterns' — 제외/포함 패턴 추가+칩 관리, REQ-026)
 │       ├── DeletedFilesPopup           (openPopup==='deleted' — 삭제 대상 목록, 읽기 전용, DR-007)

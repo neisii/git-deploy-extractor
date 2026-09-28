@@ -1,3 +1,6 @@
+import { execFileSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import { createFixtureRepo, type Fixture } from './support/fixtureRepo'
 import { launchApp } from './support/launchApp'
@@ -168,4 +171,106 @@ test('정정(2026-09-28) — 팝업 안 "+ 패턴 추가"로 나가지 않고 �
 
   await popup.locator('.popup__header button').click()
   await clearAllPatterns(window)
+})
+
+test('핫픽스(2026-09-28) — 수동 추가 이력이 늘어나도 칩 영역은 트리 영역을 잠식하지 않는다', async () => {
+  // 기본 fixture(FileA/FileB)만으로는 후보가 1개뿐이라 wrap을 재현할 수
+  // 없다 — 이 테스트에서만 후보 31개(FileA + M01~M30)로 늘린다(다른
+  // 테스트의 "FileA만 남는다" 가정을 건드리지 않기 위해 beforeEach가
+  // 아니라 여기서 직접 커밋). 실측(720px 팝업 기준) — 9개까지는 자연
+  // wrap만으로도 2줄(44px) 안에 들어가 고정 전후 차이가 안 드러났다.
+  // 30개는 고정 전 5줄(116px, 트리 −124px)까지 벌어져 고정 유무가
+  // 뚜렷이 갈린다(고정 후 48px, 트리 −56px) — 수치는 이 실측을 근거로
+  // 정했다.
+  const extraFiles = Array.from(
+    { length: 30 },
+    (_, i) => `src/M${String(i + 1).padStart(2, '0')}.txt`
+  )
+  for (const path of extraFiles) {
+    writeFileSync(join(fixture.dir, path), 'x\n')
+  }
+  execFileSync('git', ['add', '-A'], { cwd: fixture.dir })
+  execFileSync('git', ['commit', '-q', '-m', 'add extra manual candidates'], { cwd: fixture.dir })
+
+  await window.getByRole('button', { name: 'Browse...' }).click()
+  await clearAllPatterns(window)
+  await window
+    .locator('.commit-row', { hasText: 'add FileB' })
+    .locator('input[type="checkbox"]')
+    .check()
+  await window.getByRole('button', { name: 'Preview' }).click()
+  await expect(window.locator('.included-row', { hasText: 'FileB.txt' })).toBeVisible()
+
+  await window.getByRole('button', { name: '+ 파일 추가' }).click()
+  const popup = window.locator('.popup')
+  await expect(popup).toBeVisible()
+
+  const treeArea = popup.locator('.add-files-popup__tree')
+  const treeHeightBefore = (await treeArea.boundingBox())?.height ?? 0
+
+  for (const path of ['FileA.txt', ...extraFiles.map((p) => p.split('/')[1])]) {
+    await popup.locator('input[type="text"]').fill(path)
+    await popup
+      .locator('.tree-row--file', { hasText: path })
+      .getByRole('button', { name: '추가' })
+      .click()
+  }
+  await popup.locator('input[type="text"]').fill('')
+
+  const chips = popup.locator('.manual-add-popup__chips')
+  await expect(chips).toBeVisible()
+  await expect(chips.locator('.manual-add-popup__chip')).toHaveCount(31)
+
+  // 칩 영역 자체 높이가 CSS 상한(48px)을 넘지 않는다 — 실측상 고정이
+  // 없으면 116px까지 벌어진다(위 주석).
+  const chipsHeight = (await chips.boundingBox())?.height ?? 0
+  expect(chipsHeight).toBeLessThanOrEqual(52)
+
+  // 트리 영역은 칩이 31개로 늘어난 뒤에도 팝업을 처음 열었을 때와 크게
+  // 다르지 않은 높이를 유지한다(실측 −56px, 고정이 없으면 −124px).
+  const treeHeightAfter = (await treeArea.boundingBox())?.height ?? 0
+  expect(treeHeightBefore - treeHeightAfter).toBeLessThanOrEqual(80)
+})
+
+test('핫픽스(2026-09-28) — 파일명이 아주 길어도 행이 줄바꿈 없이 ellipsis로 잘리고 "추가" 버튼이 정상 크기를 유지한다', async () => {
+  // 재현 전 원인: .add-files-row__name(flex 컨테이너) 자신에 ellipsis를
+  // 걸어둬서 실제로는 안 잘리고 그대로 넘쳤다 — 넘친 텍스트가 "추가"
+  // 버튼 폭을 짓눌러 버튼 글자가 두 줄로 접히는 것까지 Playwright
+  // 스크린샷으로 직접 확인 후 고쳤다.
+  const longName = 'A'.repeat(40) + '_VeryLongFileNameForLayoutDebugging_' + 'B'.repeat(40) + '.txt'
+  writeFileSync(join(fixture.dir, `src/${longName}`), 'x\n')
+  execFileSync('git', ['add', '-A'], { cwd: fixture.dir })
+  execFileSync('git', ['commit', '-q', '-m', 'add long name file'], { cwd: fixture.dir })
+
+  await window.getByRole('button', { name: 'Browse...' }).click()
+  await clearAllPatterns(window)
+  await window
+    .locator('.commit-row', { hasText: 'add FileB' })
+    .locator('input[type="checkbox"]')
+    .check()
+  await window.getByRole('button', { name: 'Preview' }).click()
+  await expect(window.locator('.included-row', { hasText: 'FileB.txt' })).toBeVisible()
+
+  await window.getByRole('button', { name: '+ 파일 추가' }).click()
+  const popup = window.locator('.popup')
+  await expect(popup).toBeVisible()
+
+  await popup.locator('input[type="text"]').fill('VeryLong')
+  const row = popup.locator('.tree-row--file', { hasText: 'VeryLongFileNameForLayoutDebugging' })
+  await expect(row).toBeVisible()
+
+  // 행 높이가 TreeList의 고정 한 줄 높이(28px)를 벗어나지 않는다 —
+  // 벗어난다면 텍스트나 버튼이 줄바꿈됐다는 뜻이다.
+  const rowHeight = (await row.boundingBox())?.height ?? 0
+  expect(rowHeight).toBeLessThanOrEqual(30)
+
+  // "추가" 버튼도 한 줄 높이를 유지한다(글자가 두 줄로 접히면 커진다).
+  const addButton = row.getByRole('button', { name: '추가' })
+  const addButtonHeight = (await addButton.boundingBox())?.height ?? 0
+  expect(addButtonHeight).toBeLessThanOrEqual(26)
+
+  // 행이 팝업 폭을 가로로 넘치지 않는다.
+  const rowBox = await row.boundingBox()
+  const popupBox = await popup.boundingBox()
+  expect(rowBox && popupBox && rowBox.width).toBeLessThanOrEqual((popupBox?.width ?? 0) + 1)
 })

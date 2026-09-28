@@ -111,7 +111,7 @@ export function AddFilesPopup({ onClose }: AddFilesPopupProps): React.JSX.Elemen
   const renderLeaf = (candidate: AddFilesCandidate, info: TreeLeafInfo): React.JSX.Element => (
     <span className={candidate.kind ? 'add-files-row add-files-row--missing' : 'add-files-row'}>
       <span className="add-files-row__name">
-        {info.name}
+        <span className="add-files-row__filename">{info.name}</span>
         {candidate.kind && (
           <span className="kind-badge" title={KIND_TITLE[candidate.kind]}>
             {KIND_LABEL[candidate.kind]}
@@ -120,6 +120,7 @@ export function AddFilesPopup({ onClose }: AddFilesPopupProps): React.JSX.Elemen
       </span>
       <button
         type="button"
+        className="add-files-row__add-button"
         onClick={() =>
           candidate.kind
             ? addDependencyToExtract(candidate.localPath)
